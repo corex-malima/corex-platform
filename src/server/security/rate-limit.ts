@@ -22,3 +22,7 @@ export function checkRateLimit(key: string, limit: number, windowMs: number) {
     remaining: Math.max(0, limit - history.length),
   };
 }
+
+export function resetRateLimit(key: string) {
+  buckets.delete(key);
+}

@@ -5,7 +5,6 @@ import crypto from "crypto";
 import { resolveSessionSecret } from "@/lib/session-secret";
 
 const COOKIE_NAME = "wh-session";
-const SECRET = resolveSessionSecret();
 const legacyRoutes = new Set([
   "/auth/sign-in",
   "/sign-in",
@@ -17,10 +16,11 @@ const legacyRoutes = new Set([
 
 function verifyToken(token: string): boolean {
   try {
+    const secret = resolveSessionSecret();
     const [encoded, sig] = token.split(".");
     if (!encoded || !sig) return false;
 
-    const expectedSig = crypto.createHmac("sha256", SECRET).update(encoded).digest();
+    const expectedSig = crypto.createHmac("sha256", secret).update(encoded).digest();
     const providedSig = Buffer.from(sig, "base64url");
     if (providedSig.length !== expectedSig.length || !crypto.timingSafeEqual(providedSig, expectedSig)) {
       return false;

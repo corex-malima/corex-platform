@@ -1,22 +1,22 @@
 services:
-  web_dashboard:
+  web_corex:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: atlas_web_dashboard
+    container_name: corex
     restart: unless-stopped
     env_file:
       - .env
     environment:
       NODE_ENV: production
-      PORT: 3000
+      PORT: 7777
       HOSTNAME: 0.0.0.0
     ports:
-      - "3000:3000"
+      - "7777:7777"
     networks:
-      - atlas_dashboard_net
+      - corex_net
 
 networks:
-  atlas_dashboard_net:
-    name: atlas_dashboard_net
+  corex_net:
+    name: corex_net
     driver: bridge

@@ -10,7 +10,6 @@ import { query } from "./db";
 const COOKIE_NAME = "wh-session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24;
 const allowEnvAdminBypass = process.env.ALLOW_ENV_ADMIN_BYPASS === "true" && process.env.NODE_ENV !== "production";
-const SECRET = resolveSessionSecret();
 
 function hasEnvAdminCredentials() {
   return allowEnvAdminBypass && Boolean(process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD);
@@ -46,6 +45,7 @@ export async function validateCredentials(username: string, password: string): P
 }
 
 export function createToken(username: string): string {
+  const secret = resolveSessionSecret();
   const now = Math.floor(Date.now() / 1000);
   const payload = JSON.stringify({
     sub: username.trim().toLowerCase(),
@@ -54,16 +54,17 @@ export function createToken(username: string): string {
     v: 2,
   });
   const encoded = Buffer.from(payload).toString("base64url");
-  const sig = crypto.createHmac("sha256", SECRET).update(encoded).digest();
+  const sig = crypto.createHmac("sha256", secret).update(encoded).digest();
   return `${encoded}.${sig.toString("base64url")}`;
 }
 
 export function verifyToken(token: string): string | null {
   try {
+    const secret = resolveSessionSecret();
     const [encoded, sig] = token.split(".");
     if (!encoded || !sig) return null;
 
-    const expectedSig = crypto.createHmac("sha256", SECRET).update(encoded).digest();
+    const expectedSig = crypto.createHmac("sha256", secret).update(encoded).digest();
     const providedSig = Buffer.from(sig, "base64url");
     if (providedSig.length !== expectedSig.length || !crypto.timingSafeEqual(providedSig, expectedSig)) {
       return null;
@@ -83,11 +84,17 @@ export async function setSessionCookie(username: string) {
   const jar = await cookies();
   jar.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true",
+    secure: resolveCookieSecure(),
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   });
+}
+
+function resolveCookieSecure() {
+  if (process.env.COOKIE_SECURE === "true") return true;
+  if (process.env.COOKIE_SECURE === "false") return false;
+  return process.env.NODE_ENV === "production";
 }
 
 export async function clearSessionCookie() {
