@@ -1,0 +1,234 @@
+@import "tailwindcss";
+@source "../../src";
+@source not "../../borrar";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-app);
+  --radius-sm: calc(var(--radius-control) - 4px);
+  --radius-md: calc(var(--radius-control) - 2px);
+  --radius-lg: var(--radius-control);
+  --radius-xl: var(--radius-surface);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-success: var(--chart-success);
+  --color-chart-success-bold: var(--chart-success-bold);
+  --color-chart-info: var(--chart-info);
+  --color-chart-info-bold: var(--chart-info-bold);
+  --color-chart-neutral: var(--chart-neutral);
+  --color-chart-warning: var(--chart-warning);
+  --color-chart-danger: var(--chart-danger);
+  --chart-line-primary: var(--chart-line-primary);
+  --chart-line-secondary: var(--chart-line-secondary);
+  --color-chart-info-soft: var(--chart-info-soft);
+  --color-chart-success-soft: var(--chart-success-soft);
+  --color-chart-warning-soft: var(--chart-warning-soft);
+}
+
+:root {
+  --font-app: var(--font-inter);
+  --radius: 1rem;
+  --radius-surface: 24px;
+  --radius-control: 16px;
+  --radius-chip: 999px;
+  --radius-overlay: 28px;
+  --shadow-card: 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-panel: 0 18px 48px -34px rgba(15,23,42,0.16);
+  --shadow-dropdown: 0 24px 80px -32px rgba(15,23,42,0.28);
+  --shadow-overlay: 0 24px 80px -32px rgba(15,23,42,0.45);
+  --shadow-tooltip: 0 22px 60px -28px rgba(15,23,42,0.35);
+  --dashboard-ui-scale: 1;
+  --background: oklch(0.975 0.003 255);
+  --foreground: oklch(0.24 0.018 248);
+  --card: oklch(0.992 0.003 255);
+  --card-foreground: oklch(0.24 0.018 248);
+  --popover: oklch(0.995 0.004 95);
+  --popover-foreground: oklch(0.24 0.018 248);
+  --primary: oklch(0.18 0.01 250);
+  --primary-foreground: oklch(0.985 0.003 95);
+  --secondary: oklch(0.955 0.007 95);
+  --secondary-foreground: oklch(0.30 0.02 248);
+  --muted: oklch(0.955 0.006 255);
+  --muted-foreground: oklch(0.50 0.015 248);
+  --accent: oklch(0.94 0.012 250);
+  --accent-foreground: oklch(0.30 0.02 248);
+  --destructive: oklch(0.62 0.21 28);
+  --border: oklch(0.90 0.004 255);
+  --input: oklch(0.88 0.004 255);
+  --ring: oklch(0.60 0.06 245);
+  --chart-success: oklch(0.89 0.06 155);
+  --chart-success-bold: oklch(0.60 0.12 155);
+  --chart-info: oklch(0.90 0.05 230);
+  --chart-info-bold: oklch(0.60 0.10 230);
+  --chart-neutral: oklch(0.93 0.005 250);
+  --chart-warning: oklch(0.89 0.10 85);
+  --chart-danger: oklch(0.62 0.21 28);
+  --chart-line-primary: oklch(0.22 0.012 250);
+  --chart-line-secondary: oklch(0.42 0.012 250);
+  --chart-info-soft: oklch(0.94 0.03 230);
+  --chart-success-soft: oklch(0.94 0.04 155);
+  --chart-warning-soft: oklch(0.95 0.06 85);
+}
+
+.dark {
+  --background: oklch(0.155 0.006 255);
+  --foreground: oklch(0.95 0.003 95);
+  --card: oklch(0.19 0.006 255);
+  --card-foreground: oklch(0.95 0.003 95);
+  --popover: oklch(0.205 0.008 250);
+  --popover-foreground: oklch(0.95 0.003 95);
+  --primary: oklch(0.93 0.004 95);
+  --primary-foreground: oklch(0.16 0.006 255);
+  --secondary: oklch(0.26 0.008 250);
+  --secondary-foreground: oklch(0.94 0.003 95);
+  --muted: oklch(0.23 0.008 250);
+  --muted-foreground: oklch(0.74 0.012 250);
+  --accent: oklch(0.22 0.008 250);
+  --accent-foreground: oklch(0.95 0.003 95);
+  --destructive: oklch(0.68 0.17 24);
+  --border: oklch(1 0 0 / 0.12);
+  --input: oklch(1 0 0 / 0.16);
+  --ring: oklch(0.70 0.02 245);
+  --chart-success: oklch(0.32 0.05 155);
+  --chart-success-bold: oklch(0.76 0.12 155);
+  --chart-info: oklch(0.30 0.04 230);
+  --chart-info-bold: oklch(0.76 0.10 230);
+  --chart-neutral: oklch(0.27 0.01 250);
+  --chart-warning: oklch(0.38 0.08 85);
+  --chart-danger: oklch(0.72 0.17 24);
+  --chart-line-primary: oklch(0.94 0.003 95);
+  --chart-line-secondary: oklch(0.78 0.01 95);
+  --chart-info-soft: oklch(0.25 0.03 230);
+  --chart-success-soft: oklch(0.25 0.04 155);
+  --chart-warning-soft: oklch(0.27 0.05 85);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
+  .show-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .show-scrollbar::-webkit-scrollbar {
+    display: block;
+    height: 5px;
+    width: 5px;
+  }
+
+  .show-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .show-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 99px;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground font-sans;
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.028em;
+  }
+}
+
+.starter-panel {
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 48px -34px rgba(15, 23, 42, 0.16);
+  border-radius: var(--radius-surface);
+}
+
+.dashboard-scale-shell {
+  min-height: 100vh;
+}
+
+.balanzas-process .djs-container,
+.balanzas-process .djs-container svg {
+  width: 100%;
+  height: 100%;
+}
+
+.balanzas-process .djs-outline,
+.balanzas-process .djs-selection-outline {
+  stroke: color-mix(in oklab, var(--color-primary) 70%, white 30%);
+  stroke-width: 2px;
+}
+
+.balanzas-process .balanzas-node-apertura .djs-visual > :first-child {
+  fill: rgba(191, 219, 254, 0.45) !important;
+  stroke: rgba(14, 116, 144, 0.9) !important;
+  stroke-width: 2.5px !important;
+}
+
+.balanzas-process .balanzas-node-b2 .djs-visual > :first-child {
+  fill: rgba(167, 243, 208, 0.42) !important;
+  stroke: rgba(5, 150, 105, 0.9) !important;
+  stroke-width: 2.5px !important;
+}
+
+.balanzas-process .balanzas-node-b2a .djs-visual > :first-child {
+  fill: rgba(253, 230, 138, 0.42) !important;
+  stroke: rgba(217, 119, 6, 0.92) !important;
+  stroke-width: 2.5px !important;
+}
+
+.balanzas-process .balanzas-node-selected .djs-visual > :first-child {
+  stroke-width: 4px !important;
+  filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.28));
+}
+
+.balanzas-process .balanzas-node-unavailable .djs-visual > :first-child {
+  fill: rgba(226, 232, 240, 0.36) !important;
+  stroke: rgba(100, 116, 139, 0.85) !important;
+  stroke-dasharray: 6 4;
+}
+
+.balanzas-node-overlay {
+  min-width: 156px;
+  max-width: 240px;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.balanzas-node-overlay:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px -22px rgba(15, 23, 42, 0.65);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Next.js Dev Server",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "set PATH=C:\\Users\\erick.rivera\\nodejs\\node;%PATH% && npm run dev"],
+      "port": 3000,
+      "autoPort": true
+    }
+  ]
+}

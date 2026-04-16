@@ -1,0 +1,111 @@
+# CoreX
+
+Dashboard interno en `Next.js 16` para operacion agricola, postcosecha, talento humano y administracion.
+
+## Estado real
+
+El sistema ya no es una plantilla. Hoy tiene:
+
+- autenticacion real con cookie `wh-session`
+- RBAC por recurso para paginas y APIs
+- conexion real a PostgreSQL
+- navegacion y home derivadas desde un catalogo central de modulos
+- dashboards operativos en campo, postcosecha, talento humano y seguridad
+
+### Modulos activos
+
+- `/dashboard/campo`
+- `/dashboard/fenograma`
+- `/dashboard/mortality`
+- `/dashboard/comparacion`
+- `/dashboard/productividad`
+- `/dashboard/programaciones`
+- `/dashboard/postcosecha/balanzas`
+- `/dashboard/postcosecha/administrar-maestros/skus`
+- `/dashboard/postcosecha/planificacion/solver/clasificacion-en-blanco`
+- `/dashboard/talento-humano/composicion-laboral`
+- `/dashboard/talento-humano/demografia-personal`
+- `/dashboard/talento-humano/rotacion-laboral`
+- `/dashboard/admin/seguridad/usuarios`
+
+### Rutas ocultas
+
+Existen rutas reservadas que siguen en el arbol del proyecto, pero ya no aparecen en navegacion ni home hasta estar listas:
+
+- `/dashboard/postcosecha/registros`
+- `/dashboard/postcosecha/planificacion/programaciones`
+- `/dashboard/postcosecha/planificacion/plan-de-trabajo`
+
+## Comandos
+
+```bash
+npm install
+npm run dev
+npm run build
+npm run start
+npm run typecheck
+npm run lint
+npm run test
+```
+
+El servidor de desarrollo usa `next dev --webpack`.
+
+## Variables de entorno
+
+La base soporta dos modos:
+
+### Opcion A
+
+```env
+DATABASE_URL=postgresql://usuario:clave@host:5432/base
+```
+
+### Opcion B
+
+```env
+DATABASE_HOST=host
+DATABASE_PORT=5432
+DATABASE_NAME=base
+DATABASE_USER=usuario
+DATABASE_PASSWORD=clave
+```
+
+Variables importantes adicionales:
+
+- `SESSION_SECRET` obligatorio en produccion
+- `GROQ_API_KEY` para el chatbot contextual
+- `DATABASE_POOL_MAX`
+- `DATABASE_IDLE_TIMEOUT_MS`
+- `SLOW_QUERY_THRESHOLD_MS`
+
+## Arquitectura corta
+
+La frontera actual del proyecto es:
+
+```text
+src/app -> src/modules -> src/shared + src/lib
+```
+
+Piezas importantes:
+
+- `src/config/module-catalog.ts`: fuente de verdad de modulos, visibilidad y metadatos
+- `src/config/sidebar-data.ts`: sidebar derivado desde el catalogo
+- `src/config/dashboard.ts`: contexto de pagina, home y mobile nav derivados desde el catalogo
+- `src/lib/access-control.ts`: recursos RBAC y reglas API explicitas
+- `src/lib/api-auth.ts`: `requirePageAccess()` y `requireAuth()`
+- `src/modules/shared/server-page.tsx`: helper comun para loaders server-side
+
+## Seguridad operativa
+
+- Las paginas `/dashboard/*` requieren sesion valida.
+- Las APIs con `requireAuth()` usan reglas explicitas y `deny by default`.
+- `/api/health/db` es solo `superadmin`.
+- `/api/programaciones/debug` es interno y no se expone en produccion.
+- Los errores API se normalizan a `{ message, error }`.
+
+## Referencias
+
+- `CLAUDE.md`: guia operativa principal del repo
+- `AGENTS.md`: guia para agentes/coding assistants
+- `docs/arquitectura.md`: resumen de arquitectura actual
+- `CHATBOT_SETUP.md`: estado real del chatbot contextual

@@ -1,0 +1,22 @@
+services:
+  web_dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atlas_web_dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "3000:3000"
+    networks:
+      - atlas_dashboard_net
+
+networks:
+  atlas_dashboard_net:
+    name: atlas_dashboard_net
+    driver: bridge
