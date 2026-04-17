@@ -770,6 +770,12 @@ export function CampoLeafletMap({
   );
   const navigationBounds = useMemo(() => getFeatureCollectionBounds(geoData), [geoData]);
 
+  // Memoize popup event handlers to prevent infinite loops in react-leaflet
+  const popupEventHandlers = useMemo(
+    () => ({ remove: () => setClickState(null) }),
+    [],
+  );
+
   const styleFeature = useCallback(
     (feature: Feature | undefined) => {
       const bloquePad = getFeatureBlock(feature);
@@ -889,7 +895,7 @@ export function CampoLeafletMap({
             autoPanPaddingBottomRight={[32, 220]}
             minWidth={232}
             maxWidth={248}
-            eventHandlers={{ remove: () => setClickState(null) }}
+            eventHandlers={popupEventHandlers}
           >
             <div className="min-w-[210px] space-y-2.5 p-1">
               <p className="text-[13px] font-bold text-slate-900 dark:text-white">
