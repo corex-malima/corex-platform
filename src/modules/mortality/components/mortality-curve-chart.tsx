@@ -52,13 +52,17 @@ export const MortalityCurveChart = memo(function MortalityCurveChart({ data }: M
                   return point ? `Día ${label} / ${point.calendarDate}` : `Día ${label}`;
                 }}
                 mapPayload={(payload) =>
-                  payload.map((entry) => ({
-                    label: String(entry.name ?? ""),
-                    value:
-                      entry.name === "Mortandad diaria" || entry.name === "Mortandad acumulada"
-                        ? formatPercent(Number(entry.value))
-                        : formatFlexibleNumber(Number(entry.value)),
-                  }))
+                  payload
+                    .filter((entry, idx, arr) =>
+                      arr.findIndex((e) => e.name === entry.name) === idx
+                    )
+                    .map((entry) => ({
+                      label: String(entry.name ?? ""),
+                      value:
+                        entry.name === "Mortandad diaria" || entry.name === "Mortandad acumulada"
+                          ? formatPercent(Number(entry.value))
+                          : formatFlexibleNumber(Number(entry.value)),
+                    }))
                 }
               />
             }

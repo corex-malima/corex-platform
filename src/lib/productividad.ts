@@ -40,6 +40,7 @@ type ProductividadQueryRow = {
   plants_current: number | string | null;
   initial_plants_cycle: number | string | null;
   reseed_plants_count: number | string | null;
+  dead_plants_count: number | string | null;
   post_weight_kg: number | string | null;
   pct_mortality: number | string | null;
 };
@@ -85,6 +86,7 @@ export type ProductividadRow = {
   plantsCurrentOrInitial: number | null;
   initialPlantsCycle: number | null;
   reseedPlantsCycle: number | null;
+  deadPlantsCycle: number | null;
   postWeightKg: number | null;
   // Calculated metrics
   horaCaja: number | null;
@@ -275,6 +277,7 @@ export async function getProductividadDashboardData(
           coalesce(final_plants_count, 0)   as plants_current,
           coalesce(initial_plants_cycle, 0) as initial_plants_cycle,
           coalesce(reseed_plants_count, 0)  as reseed_plants_count,
+          coalesce(dead_plants_count, 0)    as dead_plants_count,
           pct_mortality
         from ${KARDEX_CYCLE_SOURCE}
         order by cycle_key, valid_from desc nulls last
@@ -340,6 +343,7 @@ export async function getProductividadDashboardData(
         coalesce(k.plants_current, 0)        as plants_current,
         coalesce(k.initial_plants_cycle, 0)  as initial_plants_cycle,
         coalesce(k.reseed_plants_count, 0)   as reseed_plants_count,
+        coalesce(k.dead_plants_count, 0)     as dead_plants_count,
         coalesce(pw.post_weight_kg, 0)       as post_weight_kg
       from hours_agg ha
       join  cycle_profile cp  on cp.cycle_key  = ha.cycle_key
@@ -370,6 +374,7 @@ export async function getProductividadDashboardData(
       const plantsCurrentOrInitial = toNumber(row.plants_current);
       const initialPlantsCycle = toNumber(row.initial_plants_cycle);
       const reseedPlantsCycle = toNumber(row.reseed_plants_count);
+      const deadPlantsCycle = toNumber(row.dead_plants_count);
       const postWeightKg = toNumber(row.post_weight_kg);
       const costArea = cleanText(row.cost_area);
 
@@ -424,6 +429,7 @@ export async function getProductividadDashboardData(
         plantsCurrentOrInitial,
         initialPlantsCycle,
         reseedPlantsCycle,
+        deadPlantsCycle,
         postWeightKg,
         horaCaja,
         cajaCama,
@@ -488,6 +494,7 @@ export async function getProductividadDashboardData(
       plantsCurrent: number | null;
       initialPlantsCycle: number | null;
       reseedPlantsCycle: number | null;
+      deadPlantsCycle: number | null;
     }>();
     for (const row of filtered) {
       const current = cycleTotals.get(row.cycleKey) ?? {
@@ -498,6 +505,7 @@ export async function getProductividadDashboardData(
         plantsCurrent: null,
         initialPlantsCycle: null,
         reseedPlantsCycle: null,
+        deadPlantsCycle: null,
       };
       current.cajas = maxOrNull(current.cajas, row.cajas);
       current.camas30 = maxOrNull(current.camas30, row.camas30);
@@ -506,6 +514,7 @@ export async function getProductividadDashboardData(
       current.plantsCurrent = maxOrNull(current.plantsCurrent, row.plantsCurrentOrInitial);
       current.initialPlantsCycle = maxOrNull(current.initialPlantsCycle, row.initialPlantsCycle);
       current.reseedPlantsCycle = maxOrNull(current.reseedPlantsCycle, row.reseedPlantsCycle);
+      current.deadPlantsCycle = maxOrNull(current.deadPlantsCycle, row.deadPlantsCycle);
       cycleTotals.set(row.cycleKey, current);
     }
 
@@ -516,6 +525,7 @@ export async function getProductividadDashboardData(
     let totalPlantsCurrent = 0;
     let totalInitialPlantsCycle = 0;
     let totalReseedPlantsCycle = 0;
+    let totalDeadPlantsCycle = 0;
 
     for (const totals of cycleTotals.values()) {
       totalCajas += totals.cajas ?? 0;
@@ -525,11 +535,11 @@ export async function getProductividadDashboardData(
       totalPlantsCurrent += totals.plantsCurrent ?? 0;
       totalInitialPlantsCycle += totals.initialPlantsCycle ?? 0;
       totalReseedPlantsCycle += totals.reseedPlantsCycle ?? 0;
+      totalDeadPlantsCycle += totals.deadPlantsCycle ?? 0;
     }
 
-    // Mort%: Σ(muertas) / Σ(inicial + resiembras) — denominador incluye resiembras
+    // Mort%: Σ(dead_plants_count) / Σ(inicial + resiembras) — numerador directo del kardex
     const totalCycleBase = totalInitialPlantsCycle + totalReseedPlantsCycle;
-    const totalLostPlants = totalCycleBase - totalPlantsCurrent;
 
     return {
       generatedAt: new Date().toISOString(),
@@ -546,8 +556,8 @@ export async function getProductividadDashboardData(
         weightedHoraCama: totalCamas30 > 0 ? totalEffectiveHours / totalCamas30 : null,
         weightedTallosPlanta: totalPlantsCurrent > 0 ? totalStems / totalPlantsCurrent : null,
         weightedPesoTalloGramos: totalStems > 0 ? (totalGreenWeightKg * 1000) / totalStems : null,
-        weightedMortalityPct: totalCycleBase > 0 && totalLostPlants >= 0
-          ? (totalLostPlants / totalCycleBase) * 100
+        weightedMortalityPct: totalCycleBase > 0
+          ? (totalDeadPlantsCycle / totalCycleBase) * 100
           : null,
       },
     };

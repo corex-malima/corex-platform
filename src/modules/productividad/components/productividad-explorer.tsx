@@ -114,6 +114,7 @@ type CycleGroup = {
   plantsCurrentOrInitial: number | null;
   initialPlantsCycle: number | null;
   reseedPlantsCycle: number | null;
+  deadPlantsCycle: number | null;
   horaCaja: number | null;
   cajaCama: number | null;
   horaCama: number | null;
@@ -128,9 +129,9 @@ type YearGroup = {
   totalCajas: number;
   totalCamas30: number;
   totalStems: number;
-  // Mortandad directa: Σ(muertas) / Σ(inicial + resiembras)
+  // Mortandad directa: Σ(dead_plants_count) / Σ(inicial + resiembras)
   totalInitialPlusReseeds: number;
-  totalFinalPlants: number;
+  totalDeadPlants: number;
   // Tallos/Planta: solo ciclos con plants_current > 0 (igual que ficha del bloque)
   totalStemsForRatio: number;
   totalPlantsForRatio: number;
@@ -157,6 +158,7 @@ function groupRows(rows: ProductividadRow[]): YearGroup[] {
         plantsCurrentOrInitial: row.plantsCurrentOrInitial,
         initialPlantsCycle: row.initialPlantsCycle,
         reseedPlantsCycle: row.reseedPlantsCycle,
+        deadPlantsCycle: row.deadPlantsCycle,
         horaCaja: null,
         cajaCama: row.cajaCama,
         horaCama: null,
@@ -188,7 +190,7 @@ function groupRows(rows: ProductividadRow[]): YearGroup[] {
         totalCamas30: 0,
         totalStems: 0,
         totalInitialPlusReseeds: 0,
-        totalFinalPlants: 0,
+        totalDeadPlants: 0,
         totalStemsForRatio: 0,
         totalPlantsForRatio: 0,
       });
@@ -202,7 +204,7 @@ function groupRows(rows: ProductividadRow[]): YearGroup[] {
 
     // Mortandad: Σ(muertas) / Σ(inicial + resiembras)
     yg.totalInitialPlusReseeds += (cycle.initialPlantsCycle ?? 0) + (cycle.reseedPlantsCycle ?? 0);
-    yg.totalFinalPlants += cycle.plantsCurrentOrInitial ?? 0;
+    yg.totalDeadPlants += cycle.deadPlantsCycle ?? 0;
 
     // Tallos/Planta: solo ciclos con plantas válidas (igual que ficha del bloque)
     if ((cycle.plantsCurrentOrInitial ?? 0) > 0) {
@@ -542,9 +544,9 @@ function ProductividadTable({
             const yearPesoTallo = yg.totalStems > 0
               ? (yg.totalCajas * 10000) / yg.totalStems
               : null;
-            // Mortandad: Σ(muertas) / Σ(inicial + resiembras)
+            // Mortandad: Σ(dead_plants_count) / Σ(inicial + resiembras)
             const yearMortality = yg.totalInitialPlusReseeds > 0
-              ? ((yg.totalInitialPlusReseeds - yg.totalFinalPlants) / yg.totalInitialPlusReseeds) * 100
+              ? (yg.totalDeadPlants / yg.totalInitialPlusReseeds) * 100
               : null;
 
             return (
