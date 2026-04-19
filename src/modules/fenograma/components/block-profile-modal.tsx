@@ -512,7 +512,6 @@ function HoursCamaOverlay({
 }) {
   const [expandedCostAreas, setExpandedCostAreas] = useState<string[]>([]);
   const [expandedSubCostCenters, setExpandedSubCostCenters] = useState<string[]>([]);
-  const [expandedTypes, setExpandedTypes] = useState<string[]>([]);
   const [expandedActivities, setExpandedActivities] = useState<string[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const totalEffectiveHours = data?.summary.totalEffectiveHours ?? cycle.effectiveHours;
@@ -558,14 +557,6 @@ function HoursCamaOverlay({
   function toggleSubCostCenter(key: string) {
     setExpandedSubCostCenters((current) => (
       current.includes(key) ? current.filter((v) => v !== key) : [...current, key]
-    ));
-  }
-
-  function toggleType(activityType: string) {
-    setExpandedTypes((current) => (
-      current.includes(activityType)
-        ? current.filter((value) => value !== activityType)
-        : [...current, activityType]
     ));
   }
 
@@ -703,7 +694,7 @@ function HoursCamaOverlay({
                                         {subExpanded ? <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
                                         <span className="text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-slate-700 dark:text-white/70 rounded px-1.5 py-0.5">Sub</span>
                                         <span className="font-semibold text-foreground">{sub.subCostCenter}</span>
-                                        <span className="ml-auto text-[10px] text-muted-foreground/60">{sub.activityTypes.length} tipos</span>
+                                        <span className="ml-auto text-[10px] text-muted-foreground/60">{sub.activityTypes.reduce((s, t) => s + t.activities.length, 0)} act.</span>
                                       </button>
                                     </td>
                                     <td className="border-b border-r border-border/40 px-2.5 py-2 text-muted-foreground/40">—</td>
@@ -715,66 +706,42 @@ function HoursCamaOverlay({
                                     <td className="border-b px-2.5 py-2 text-right tabular-nums font-medium">{formatPercent(sub.rendimientoPct)}</td>
                                   </tr>
 
-                                  {subExpanded ? sub.activityTypes.map((activityType) => {
-                                    const typeKey = `${subKey}|${activityType.activityType}`;
-                                    const typeExpanded = expandedTypes.includes(typeKey);
-                                    return (
-                                      <Fragment key={`type-${typeKey}`}>
-                                        {/* L3: Tipo actividad */}
-                                        <tr className="bg-muted/25 hover:bg-muted/40 transition-colors">
-                                          <td className="border-b border-r border-border/40 px-3 py-1.5 pl-12">
-                                            <button type="button" className="flex items-center gap-2 text-left w-full" onClick={() => toggleType(typeKey)}>
-                                              {typeExpanded ? <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" /> : <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
-                                              <span className="font-medium text-foreground">{activityType.activityType}</span>
-                                              <span className="ml-auto text-[10px] text-muted-foreground/60">{activityType.activities.length} act.</span>
-                                            </button>
-                                          </td>
-                                          <td className="border-b border-r border-border/40 px-2.5 py-1.5 text-muted-foreground/40">—</td>
-                                          <td className="border-b border-r border-border/40 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activityType.unitsProduced)}</td>
-                                          <td className="border-b border-r border-border/40 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activityType.actualHours)}</td>
-                                          <td className="border-b border-r border-border/40 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activityType.effectiveHours)}</td>
-                                          <td className="border-b border-r border-border/40 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activityType.effectiveHours / camas30)}</td>
-                                          <td className="border-b border-r border-border/40 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activityType.productivity)}</td>
-                                          <td className="border-b px-2.5 py-1.5 text-right tabular-nums">{formatPercent(activityType.rendimientoPct)}</td>
-                                        </tr>
+                                  {subExpanded ? sub.activityTypes.flatMap((activityType) =>
+                                    activityType.activities.map((activity) => {
+                                      const activityKey = `${subKey}|${activityType.activityType}|${activity.activityId}|${activity.activityName}`;
+                                      const activityExpanded = expandedActivities.includes(activityKey);
+                                      return (
+                                        <Fragment key={`activity-${activityKey}`}>
+                                          {/* L3: Actividad */}
+                                          <tr className="bg-background hover:bg-muted/15 transition-colors">
+                                            <td className="border-b border-r border-border/30 px-3 py-1.5 pl-12">
+                                              <button type="button" className="flex items-center gap-1.5 text-left w-full" onClick={() => toggleActivity(activityKey)}>
+                                                {activityExpanded ? <ChevronDown className="size-3 shrink-0 text-muted-foreground/60" /> : <ChevronRight className="size-3 shrink-0 text-muted-foreground/60" />}
+                                                <span className="text-foreground">{activity.activityName}</span>
+                                              </button>
+                                            </td>
+                                            <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-muted-foreground">{activity.unitOfMeasure || "—"}</td>
+                                            <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.unitsProduced)}</td>
+                                            <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.actualHours)}</td>
+                                            <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.effectiveHours)}</td>
+                                            <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.effectiveHours / camas30)}</td>
+                                            <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.productivity)}</td>
+                                            <td className="border-b px-2.5 py-1.5 text-right tabular-nums">{formatPercent(activity.rendimientoPct)}</td>
+                                          </tr>
 
-                                        {typeExpanded ? activityType.activities.map((activity) => {
-                                          const activityKey = `${typeKey}|${activity.activityId}|${activity.activityName}`;
-                                          const activityExpanded = expandedActivities.includes(activityKey);
-                                          return (
-                                            <Fragment key={`activity-${activityKey}`}>
-                                              {/* L4: Actividad */}
-                                              <tr className="bg-background hover:bg-muted/15 transition-colors">
-                                                <td className="border-b border-r border-border/30 px-3 py-1.5 pl-16">
-                                                  <button type="button" className="flex items-center gap-1.5 text-left w-full" onClick={() => toggleActivity(activityKey)}>
-                                                    {activityExpanded ? <ChevronDown className="size-3 shrink-0 text-muted-foreground/60" /> : <ChevronRight className="size-3 shrink-0 text-muted-foreground/60" />}
-                                                    <span className="text-foreground">{activity.activityName}</span>
-                                                  </button>
-                                                </td>
-                                                <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-muted-foreground">{activity.unitOfMeasure || "—"}</td>
-                                                <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.unitsProduced)}</td>
-                                                <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.actualHours)}</td>
-                                                <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.effectiveHours)}</td>
-                                                <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.effectiveHours / camas30)}</td>
-                                                <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(activity.productivity)}</td>
-                                                <td className="border-b px-2.5 py-1.5 text-right tabular-nums">{formatPercent(activity.rendimientoPct)}</td>
-                                              </tr>
-
-                                              {activityExpanded ? activity.people.map((person) => (
-                                                <HoursCamaPersonRow
-                                                  key={`person-${activityKey}-${person.personId}`}
-                                                  person={person}
-                                                  camas30={camas30}
-                                                  isSelected={selectedPersonId === person.personId}
-                                                  onOpenPerson={setSelectedPersonId}
-                                                />
-                                              )) : null}
-                                            </Fragment>
-                                          );
-                                        }) : null}
-                                      </Fragment>
-                                    );
-                                  }) : null}
+                                          {activityExpanded ? activity.people.map((person) => (
+                                            <HoursCamaPersonRow
+                                              key={`person-${activityKey}-${person.personId}`}
+                                              person={person}
+                                              camas30={camas30}
+                                              isSelected={selectedPersonId === person.personId}
+                                              onOpenPerson={setSelectedPersonId}
+                                            />
+                                          )) : null}
+                                        </Fragment>
+                                      );
+                                    })
+                                  ) : null}
                                 </Fragment>
                               );
                             }) : null}
