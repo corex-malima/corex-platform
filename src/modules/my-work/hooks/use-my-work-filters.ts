@@ -102,9 +102,17 @@ export function taskMatches(task: MyWorkTask, filters: Pick<MyWorkFilters, "sear
   return true;
 }
 
-export function buildCalendarItems(tasks: MyWorkTask[], events: MyWorkEvent[], colorBySpace: Record<string, string>) {
+export function buildCalendarItems(
+  tasks: MyWorkTask[],
+  events: MyWorkEvent[],
+  colorBySpace: Record<string, string>,
+  filters: Pick<MyWorkFilters, "spaceId" | "statusCode" | "priorityCode"> = { spaceId: "all", statusCode: "all", priorityCode: "all" },
+) {
   const taskItems: MyWorkCalendarItem[] = tasks
     .filter((task) => !task.isArchived && !!(task.startAt || task.dueAt))
+    .filter((task) => filters.spaceId === "all" || task.spaceId === filters.spaceId)
+    .filter((task) => filters.statusCode === "all" || task.statusCode === filters.statusCode)
+    .filter((task) => filters.priorityCode === "all" || task.priorityCode === filters.priorityCode)
     .map((task) => ({
       id: `task-${task.id}`,
       kind: "task",
@@ -121,6 +129,7 @@ export function buildCalendarItems(tasks: MyWorkTask[], events: MyWorkEvent[], c
     }));
   const eventItems: MyWorkCalendarItem[] = events
     .filter((event) => !event.isArchived)
+    .filter((event) => filters.spaceId === "all" || event.spaceId === filters.spaceId)
     .map((event) => ({
       id: `event-${event.id}`,
       kind: "event",

@@ -79,7 +79,7 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
     const pivot = task.dueAt ?? task.startAt;
     return pivot?.slice(0, 10) === initialDate && task.statusCode !== "done";
   });
-  const calendarItems = buildCalendarItems(tasks, events, colorBySpace);
+  const calendarItems = buildCalendarItems(tasks, events, colorBySpace, filters);
   const agendaItems = buildAgendaItems(tasks, events, reminders, spaceNameById, filters);
   const summary = buildSummary(tasks, events, reminders, initialDate);
   const selectedDayItems = calendarItems.filter((item) => item.startAt.slice(0, 10) === filters.selectedDate);

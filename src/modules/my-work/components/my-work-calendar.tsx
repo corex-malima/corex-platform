@@ -10,6 +10,19 @@ import { cn } from "@/lib/utils";
 const dayLabels = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"];
 const monthLabels = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
+const COLOR_PILL: Record<string, string> = {
+  slate:   "bg-slate-100   text-slate-800   dark:bg-slate-800   dark:text-slate-200",
+  sky:     "bg-sky-100     text-sky-800     dark:bg-sky-900     dark:text-sky-200",
+  emerald: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+  amber:   "bg-amber-100   text-amber-800   dark:bg-amber-900   dark:text-amber-200",
+  rose:    "bg-rose-100    text-rose-800    dark:bg-rose-900    dark:text-rose-200",
+};
+
+function pillClass(colorToken: string | null | undefined, kind: "task" | "event") {
+  const base = COLOR_PILL[colorToken ?? ""] ?? (kind === "event" ? COLOR_PILL.sky : COLOR_PILL.slate);
+  return base;
+}
+
 function toDateKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
@@ -103,11 +116,11 @@ export function MyWorkCalendar({
                       onOpenItem(item);
                     }}
                     className={cn(
-                      "block truncate rounded-full px-2 py-1 text-[11px]",
-                      item.kind === "event" ? "bg-muted text-foreground" : "bg-primary/10 text-foreground",
+                      "block truncate rounded-full px-2 py-1 text-[11px] font-medium",
+                      pillClass(item.colorToken, item.kind),
                     )}
                   >
-                    {item.title}
+                    {item.kind === "event" ? "● " : "○ "}{item.title}
                   </span>
                 ))}
               </div>
