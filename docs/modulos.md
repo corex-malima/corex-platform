@@ -1,3 +1,5 @@
+> LEGACY / reference only.
+
 # Módulos — Catálogo de referencia
 
 Referencia por módulo activo: propósito, datos, KPIs, archivos clave y endpoints. La fuente de verdad de metadatos (nombre, ícono, href, RBAC) es `src/config/module-catalog.ts`.

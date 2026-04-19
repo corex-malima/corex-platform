@@ -35,6 +35,11 @@ Usar `src/server/security/rate-limit.ts`.
 - Si no existe IP real en produccion, usar fallback estable derivado de headers seguros; no colapsar todo a `local`.
 - Backend actual: memory.
 - Variables preparadas: `RATE_LIMIT_BACKEND`, `REDIS_URL`.
+- Scopes activos por modulo:
+  - `auth:login` (`AUTH_LOGIN_USER_RATE_LIMIT` / `AUTH_LOGIN_IP_RATE_LIMIT`).
+  - `admin:users` (`ADMIN_USERS_RATE_LIMIT`).
+  - `dead-plants-reseed:write` (`DEAD_PLANTS_RESEED_RATE_LIMIT` / `DEAD_PLANTS_RESEED_RATE_LIMIT_WINDOW_MS`) para `POST /api/dead-plants-reseed/capture` y `PATCH /api/dead-plants-reseed/records`.
+  - `chat` (`CHAT_RATE_LIMIT`).
 
 ## Logging
 

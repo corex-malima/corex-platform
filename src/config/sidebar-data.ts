@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   CalendarDays,
+  ClipboardList,
   DatabaseZap,
   Factory,
   Home,
@@ -32,6 +33,7 @@ const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   Postcosecha: Factory,
   "Talento Humano": Users,
   Planificacion: CalendarDays,
+  Registros: ClipboardList,
   "Administrar Maestros": DatabaseZap,
   Solver: Settings,
   Seguridad: Lock,

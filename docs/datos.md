@@ -1,3 +1,5 @@
+> LEGACY / reference only.
+
 # Datos — Schema de Base de Datos
 
 Todo lo que necesitas saber para escribir queries correctas en CoreX: vistas disponibles, naming canon, reglas de negocio implícitas y patrones SQL reutilizables.

@@ -1,3 +1,5 @@
+> LEGACY / reference only.
+
 # Canon simple de nombres para bases modulares en PostgreSQL
 
 ## 1. Objetivo

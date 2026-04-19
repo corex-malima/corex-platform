@@ -113,6 +113,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/comparacion"],
   },
   {
+    pathnamePrefix: "/api/dead-plants-reseed",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/dead-plants-reseed"],
+  },
+  {
     pathnamePrefix: "/api/fenograma",
     policy: "resource-bound",
     requiredResources: ["/dashboard/fenograma"],

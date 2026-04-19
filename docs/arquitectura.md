@@ -1,3 +1,5 @@
+> LEGACY / reference only.
+
 # Arquitectura — CoreX v4
 
 Documento vivo de la arquitectura actual. Reemplaza el archivo homónimo archivado en `legacy/`.

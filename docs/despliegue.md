@@ -61,9 +61,12 @@ Opcion B:
 DATABASE_HOST=host
 DATABASE_PORT=5432
 DATABASE_NAME=base
+CAMP_DATABASE_NAME=db_camp
 DATABASE_USER=usuario
 DATABASE_PASSWORD=clave
 ```
+
+`CAMP_DATABASE_NAME` es requerido para el modulo operativo `/dashboard/dead-plants-reseed`, que escribe en `db_camp.public.camp_fact_dead_plants_cur` y `db_camp.public.camp_fact_reseed_plants_cur`.
 
 ### Seguridad y sesion
 

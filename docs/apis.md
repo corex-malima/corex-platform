@@ -1,3 +1,5 @@
+> LEGACY / reference only.
+
 # APIs — Referencia de Endpoints
 
 Referencia completa de todos los endpoints REST de CoreX v4. Reemplaza el archivo homónimo archivado en `legacy/`.
@@ -321,6 +323,36 @@ Referencia completa de todos los endpoints REST de CoreX v4. Reemplaza el archiv
 ### `POST /api/postcosecha/planificacion/solver/clasificacion-en-blanco/receta`
 **Body:** `PoscosechaClasificacionRecipeInput`  
 **Response:** `{ data: PoscosechaClasificacionRecipePayload }` — receta guardada
+
+---
+
+## Dead Plants / Reseed
+
+**Policy:** `resource-bound` → requiere `/dashboard/dead-plants-reseed`
+**Escritura adicional:** solo `isSuperadmin` o `roleCode === "custom"` (helper `requireDeadPlantsReseedWrite`).
+
+### `GET /api/dead-plants-reseed`
+**Response:** `DeadPlantsReseedInitialData` — bloques activos + últimas cargas por tipo.
+
+### `GET /api/dead-plants-reseed/capture?type&workDate&blockId`
+**Response:** `DeadPlantsReseedCaptureRow[]`
+
+### `POST /api/dead-plants-reseed/capture`
+**Body:** `CreateCaptureInput`
+**Response:** `{ data: CreateCaptureResult }` — status 201
+**Rate limit:** `DEAD_PLANTS_RESEED_RATE_LIMIT` (default 20) / `DEAD_PLANTS_RESEED_RATE_LIMIT_WINDOW_MS` (default 60000) por usuario.
+**Errores:** 409 `DeadPlantsReseedConflictError` si existe captura previa para el bloque/fecha/tipo.
+
+### `GET /api/dead-plants-reseed/loads?type&dateFrom&dateTo&blockId`
+**Response:** `DeadPlantsReseedLoadSummary[]`
+
+### `GET /api/dead-plants-reseed/loads/[runId]?type`
+**Response:** `DeadPlantsReseedLoadDetail`
+
+### `PATCH /api/dead-plants-reseed/records`
+**Body:** `PatchRecordsInput` — invalida registros anteriores (`is_valid = false`) y crea reemplazos con `change_reason`.
+**Response:** `{ data: PatchRecordsResult }`
+**Rate limit:** mismo que `POST /capture`.
 
 ---
 
