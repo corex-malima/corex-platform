@@ -8,7 +8,21 @@ function nullableText(max = 2000) {
   return trimmed.max(max).nullish().transform((value) => value?.trim() || null);
 }
 
-const optionalNullableDateTime = z.string().trim().datetime({ offset: true }).nullable().optional();
+/** Acepta cualquier string parseable como fecha (incluye datetime-local sin offset)
+ *  y lo normaliza a ISO 8601 UTC. */
+function flexibleDateTime() {
+  return z.string().trim().transform((val, ctx) => {
+    if (!val) return null;
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) {
+      ctx.addIssue({ code: "custom", message: "Fecha invalida." });
+      return z.NEVER;
+    }
+    return d.toISOString();
+  });
+}
+
+const optionalNullableDateTime = flexibleDateTime().nullable().optional();
 
 export const notificationPrefsSchema = z.object({
   inAppTaskAssigned: z.boolean().default(DEFAULT_NOTIFICATION_PREFS.inAppTaskAssigned),
@@ -56,8 +70,8 @@ export const createTaskSchema = z.object({
   descriptionText: nullableText(2000),
   statusCode: z.enum(["todo", "in_progress", "blocked", "done"]).default("todo"),
   priorityCode: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-  startAt: z.string().trim().datetime({ offset: true }).nullish().transform((value) => value ?? null),
-  dueAt: z.string().trim().datetime({ offset: true }).nullish().transform((value) => value ?? null),
+  startAt: flexibleDateTime().nullish().transform((value) => value ?? null),
+  dueAt: flexibleDateTime().nullish().transform((value) => value ?? null),
   isStarred: z.boolean().default(false),
 });
 
@@ -84,8 +98,8 @@ export const createEventSchema = z.object({
   linkedTaskId: z.string().uuid().nullish().transform((value) => value ?? null),
   titleText: trimmed.min(1).max(200),
   descriptionText: nullableText(2000),
-  startAt: z.string().trim().datetime({ offset: true }),
-  endAt: z.string().trim().datetime({ offset: true }),
+  startAt: flexibleDateTime(),
+  endAt: flexibleDateTime(),
   allDay: z.boolean().default(false),
   isBusy: z.boolean().default(true),
   locationText: nullableText(255),
@@ -99,8 +113,8 @@ export const updateEventSchema = z.object({
   linkedTaskId: z.string().uuid().nullable().optional(),
   titleText: trimmed.min(1).max(200).optional(),
   descriptionText: nullableText(2000).optional(),
-  startAt: z.string().trim().datetime({ offset: true }).optional(),
-  endAt: z.string().trim().datetime({ offset: true }).optional(),
+  startAt: flexibleDateTime().optional(),
+  endAt: flexibleDateTime().optional(),
   allDay: z.boolean().optional(),
   isBusy: z.boolean().optional(),
   locationText: nullableText(255).optional(),
@@ -114,7 +128,7 @@ export const reminderFiltersSchema = z.object({
 export const createReminderSchema = z.object({
   linkedTaskId: z.string().uuid().nullish().transform((value) => value ?? null),
   linkedEventId: z.string().uuid().nullish().transform((value) => value ?? null),
-  remindAt: z.string().trim().datetime({ offset: true }),
+  remindAt: flexibleDateTime(),
   channelCode: z.enum(["in_app", "email"]).default("in_app"),
   noteText: nullableText(255),
 }).refine((value) => Number(Boolean(value.linkedTaskId)) + Number(Boolean(value.linkedEventId)) === 1, {
@@ -123,7 +137,7 @@ export const createReminderSchema = z.object({
 });
 
 export const updateReminderSchema = z.object({
-  remindAt: z.string().trim().datetime({ offset: true }).optional(),
+  remindAt: flexibleDateTime().optional(),
   channelCode: z.enum(["in_app", "email"]).optional(),
   noteText: nullableText(255).optional(),
   statusCode: z.enum(["pending", "sent", "read", "canceled"]).optional(),
