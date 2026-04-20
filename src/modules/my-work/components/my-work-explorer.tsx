@@ -38,6 +38,7 @@ import type {
 import { ChartSurface } from "@/shared/data-display/chart-surface";
 import { DetailSection, FilterPanel } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
+import { DialogShell } from "@/shared/overlays/dialog-shell";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 
@@ -60,6 +61,7 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
   const [eventDialog, setEventDialog] = useState<EventFormValue | null | undefined>(undefined);
   const [spaceDialog, setSpaceDialog] = useState<SpaceFormValue | null | undefined>(undefined);
   const [reminderDialog, setReminderDialog] = useState<ReminderFormValue | null | undefined>(undefined);
+  const [spacesManagerOpen, setSpacesManagerOpen] = useState(false);
   const { filters, updateFilter, setSegment, setSelectedDate, setVisibleMonth, resetFilters } = useMyWorkFilters(initialDate);
   const actions = useMyWorkActions({
     setSpaces,
@@ -159,9 +161,9 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
               <RefreshCcw className="size-4" aria-hidden="true" />
               Limpiar filtros
             </Button>
-            <Button variant="outline" onClick={() => setSpaceDialog(null)}>
+            <Button variant="outline" onClick={() => setSpacesManagerOpen(true)}>
               <Shapes className="size-4" aria-hidden="true" />
-              Nuevo espacio
+              Espacios
             </Button>
             <Button onClick={() => setTaskDialog(null)}>
               <Plus className="size-4" aria-hidden="true" />
@@ -279,15 +281,23 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
         ) : null}
       </DetailSection>
 
-      <div className="px-4 pb-2 xl:px-6">
-        <SpacesPanel
-          spaces={spaces}
-          onEdit={(value) => setSpaceDialog(value)}
-          onNew={() => setSpaceDialog(null)}
-          onReorder={reorderSpace}
-          onDelete={actions.deleteSpace}
-        />
-      </div>
+      {spacesManagerOpen ? (
+        <DialogShell
+          open={spacesManagerOpen}
+          onClose={() => setSpacesManagerOpen(false)}
+          title="Espacios"
+          description="Gestiona, reordena y crea espacios personales."
+          maxWidth="max-w-2xl"
+        >
+          <SpacesPanel
+            spaces={spaces}
+            onEdit={(value) => setSpaceDialog(value)}
+            onNew={() => setSpaceDialog(null)}
+            onReorder={reorderSpace}
+            onDelete={actions.deleteSpace}
+          />
+        </DialogShell>
+      ) : null}
 
       <TaskFormDialog key={`task-${taskDialog?.id ?? "new"}-${taskDialog === undefined ? "closed" : "open"}`} open={taskDialog !== undefined} spaces={spaces} initialValue={taskDialog ?? null} onClose={() => setTaskDialog(undefined)} onSubmit={actions.saveTask} />
       <EventFormDialog key={`event-${eventDialog?.id ?? "new"}-${eventDialog === undefined ? "closed" : "open"}`} open={eventDialog !== undefined} spaces={spaces} tasks={tasks} initialValue={eventDialog ?? null} onClose={() => setEventDialog(undefined)} onSubmit={actions.saveEvent} onArchive={selectedEvent ? () => actions.archiveEvent(selectedEvent) : undefined} />

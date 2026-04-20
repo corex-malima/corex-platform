@@ -23,6 +23,8 @@ Referencia por módulo activo: propósito, datos, KPIs, archivos clave y endpoin
 | [Administrar SKUs](#administrar-skus) | `/dashboard/postcosecha/administrar-maestros/skus` | Gestión |
 | [Clasificación en Blanco](#clasificacion-en-blanco) | `/dashboard/postcosecha/planificacion/solver/clasificacion-en-blanco` | Gestión |
 | [Usuarios](#usuarios) | `/dashboard/admin/seguridad/usuarios` | Administración |
+| [Mi trabajo](#mi-trabajo) | `/dashboard/mi-trabajo` | Personal |
+| [Mi cuenta](#mi-cuenta) | `/dashboard/mi-cuenta` | Personal |
 
 ---
 
@@ -398,6 +400,74 @@ Vistas `gld.mv_camp_ind_bal_apertura_*` para cada nodo de balanza (BAL1→BAL1C,
 - `GET /api/admin/users/[userId]`
 - `PATCH /api/admin/users/[userId]`
 - `DELETE /api/admin/users/[userId]`
+
+---
+
+## Mi trabajo
+
+**Propósito:** Espacio operativo personal por usuario: tareas, calendario, agenda y recordatorios sobre espacios propios (ej. Personal, Proyecto X).
+
+**Ruta:** `/dashboard/mi-trabajo`
+
+**Archivos clave:**
+- `src/modules/my-work/components/my-work-explorer.tsx`
+- `src/modules/my-work/components/spaces-panel.tsx` — gestor de espacios (dentro de `DialogShell`, abierto desde botón "Espacios" del header)
+- `src/modules/my-work/components/{task,event,space,reminder}-form-dialog.tsx`
+- `src/modules/my-work/hooks/use-my-work-actions.ts`
+- `src/lib/my-work-repository.ts`
+- `src/app/api/me/work/*`
+
+**Fuentes de datos (BD `db_personal_workspace`):**
+- `public.wrk_dim_space_core_scd0` — espacios del usuario
+- `public.wrk_fact_task_core_scd0` — tareas (con `due_at`, `priority_code`, `status_code`, `is_starred`)
+- `public.wrk_fact_event_core_scd0` — eventos (con `linked_task_id` opcional)
+- `public.wrk_fact_reminder_core_scd0` — recordatorios (ligados a tarea o evento)
+- `public.wrk_fact_activity_log_cur` — bitácora de acciones del workspace
+
+**Segmentos UI:** `today`, `list`, `calendar`, `agenda`.
+
+**API endpoints:**
+- `GET/PATCH /api/me/work` (bootstrap)
+- `GET/POST /api/me/work/spaces`, `PATCH/DELETE /api/me/work/spaces/[spaceId]` (soporta `?hard=true` para eliminación permanente de espacios no-default)
+- `GET/POST /api/me/work/tasks`, `PATCH/DELETE /api/me/work/tasks/[taskId]`
+- `GET/POST /api/me/work/events`, `PATCH/DELETE /api/me/work/events/[eventId]`
+- `GET/POST /api/me/work/reminders`, `PATCH /api/me/work/reminders/[reminderId]`
+
+**Notas:**
+- Gestión de espacios vive en un `DialogShell` lanzado desde el header — no panel inline.
+- Solo los espacios no-default pueden eliminarse (hard delete) con confirmación.
+
+---
+
+## Mi cuenta
+
+**Propósito:** Panel compacto de identidad + estado personal. Reemplaza el formulario técnico anterior.
+
+**Ruta:** `/dashboard/mi-cuenta`
+
+**Archivos clave:**
+- `src/modules/my-account/components/my-account-explorer.tsx` — layout 2 columnas `xl:grid-cols-[0.9fr_1.1fr]`
+- `src/modules/my-account/components/identity-card.tsx`
+- `src/modules/my-account/components/operational-summary-card.tsx`
+- `src/modules/my-account/components/recent-access-card.tsx` (empty state honesto)
+- `src/modules/my-account/components/notification-status-card.tsx`
+- `src/modules/my-account/components/profile-preferences-form.tsx` — solo `displayName` + `contactEmail`
+- `src/modules/my-account/components/notification-preferences-form.tsx` — 3 toggles in-app activos, 3 email disabled con badge "Próximamente"
+- `src/lib/my-account-repository.ts`
+- `src/app/api/me/profile/route.ts`
+
+**Fuentes de datos (BD `db_personal_workspace`):**
+- `public.usr_dim_profile_pref_scd0` — perfil del usuario (SCD0, una fila por `auth_user_id`)
+  - Activas en UI: `display_name`, `contact_email` (nuevo), `notification_prefs_jsonb`
+  - Deprecadas (persisten por compat GET/PATCH, no editables): `avatar_url`, `bio_text`, `locale_code`, `timezone_name`, `theme_code`, `default_route`, `default_calendar_view_code`, `default_task_view_code`, `week_start_iso`
+- Resumen operativo → `getMyWorkSummary()` (reusa `wrk_*`)
+- Accesos recientes → **empty state** (sin fuente; pendiente tabla `auth_session_audit_*`)
+
+**API endpoints:**
+- `GET /api/me/profile` — shape completo (compat)
+- `PATCH /api/me/profile` — `profilePatchSchema.partial()` acepta los 12 campos; la UI solo envía 3 campos editables + pass-through
+
+**Migración DB:** `alter table public.usr_dim_profile_pref_scd0 add column if not exists contact_email text;` (idempotente).
 
 ---
 
