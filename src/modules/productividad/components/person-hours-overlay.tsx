@@ -201,48 +201,54 @@ export function PersonHoursOverlay({
     >
           <div className="space-y-8">
             <div className="inline-flex rounded-full border border-border/60 bg-muted/22 p-1">
-              {canSeeInfo ? (
-                <button
-                  type="button"
-                  className={cn(
-                    "rounded-full px-4 py-2 text-sm font-medium transition-colors",
-                    view === "info"
+              <button
+                type="button"
+                disabled={!canSeeInfo}
+                title={canSeeInfo ? undefined : "Sin permiso para este panel"}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                  !canSeeInfo
+                    ? "cursor-not-allowed text-muted-foreground/40"
+                    : view === "info"
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setView("info")}
-                >
-                  Informacion
-                </button>
-              ) : null}
-              {canSeePerformance ? (
-                <button
-                  type="button"
-                  className={cn(
-                    "rounded-full px-4 py-2 text-sm font-medium transition-colors",
-                    view === "performance"
+                )}
+                onClick={() => canSeeInfo && setView("info")}
+              >
+                Informacion
+              </button>
+              <button
+                type="button"
+                disabled={!canSeePerformance}
+                title={canSeePerformance ? undefined : "Sin permiso para este panel"}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                  !canSeePerformance
+                    ? "cursor-not-allowed text-muted-foreground/40"
+                    : view === "performance"
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setView("performance")}
-                >
-                  Rendimiento
-                </button>
-              ) : null}
-              {canSeeMedical ? (
-                <button
-                  type="button"
-                  className={cn(
-                    "rounded-full px-4 py-2 text-sm font-medium transition-colors",
-                    view === "medical"
+                )}
+                onClick={() => canSeePerformance && setView("performance")}
+              >
+                Rendimiento
+              </button>
+              <button
+                type="button"
+                disabled={!canSeeMedical}
+                title={canSeeMedical ? undefined : "Sin permiso para este panel"}
+                className={cn(
+                  "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+                  !canSeeMedical
+                    ? "cursor-not-allowed text-muted-foreground/40"
+                    : view === "medical"
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setView("medical")}
-                >
-                  Ficha medica
-                </button>
-              ) : null}
+                )}
+                onClick={() => canSeeMedical && setView("medical")}
+              >
+                Ficha medica
+              </button>
             </div>
 
             {isLoading ? (
