@@ -11,6 +11,7 @@ import { MyWorkSummaryCards } from "@/modules/my-work/components/my-work-summary
 import { MyWorkTaskTable } from "@/modules/my-work/components/my-work-task-table";
 import { ReminderFormDialog } from "@/modules/my-work/components/reminder-form-dialog";
 import { SpaceFormDialog } from "@/modules/my-work/components/space-form-dialog";
+import { SpacesPanel } from "@/modules/my-work/components/spaces-panel";
 import { TaskFormDialog } from "@/modules/my-work/components/task-form-dialog";
 import { useMyWorkActions } from "@/modules/my-work/hooks/use-my-work-actions";
 import {
@@ -117,6 +118,12 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
       const reminder = reminders.find((candidate) => candidate.id === item.sourceId);
       if (reminder) setReminderDialog(reminder);
     }
+  }
+
+  async function reorderSpace(spaceId: string, newSortOrder: number) {
+    const space = spaces.find((s) => s.id === spaceId);
+    if (!space) return;
+    await actions.saveSpace({ id: space.id, name: space.name, colorToken: space.colorToken, sortOrder: newSortOrder });
   }
 
   function createReminderFor(item: MyWorkAgendaItem | MyWorkCalendarItem | MyWorkTask | MyWorkEvent) {
@@ -271,6 +278,15 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
           </ChartSurface>
         ) : null}
       </DetailSection>
+
+      <div className="px-4 pb-2 xl:px-6">
+        <SpacesPanel
+          spaces={spaces}
+          onEdit={(value) => setSpaceDialog(value)}
+          onNew={() => setSpaceDialog(null)}
+          onReorder={reorderSpace}
+        />
+      </div>
 
       <TaskFormDialog key={`task-${taskDialog?.id ?? "new"}-${taskDialog === undefined ? "closed" : "open"}`} open={taskDialog !== undefined} spaces={spaces} initialValue={taskDialog ?? null} onClose={() => setTaskDialog(undefined)} onSubmit={actions.saveTask} />
       <EventFormDialog key={`event-${eventDialog?.id ?? "new"}-${eventDialog === undefined ? "closed" : "open"}`} open={eventDialog !== undefined} spaces={spaces} tasks={tasks} initialValue={eventDialog ?? null} onClose={() => setEventDialog(undefined)} onSubmit={actions.saveEvent} onArchive={selectedEvent ? () => actions.archiveEvent(selectedEvent) : undefined} />
