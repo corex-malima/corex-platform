@@ -215,6 +215,16 @@ export function useMyWorkActions(state: ActionState) {
     }
   }
 
+  async function deleteSpace(space: MyWorkSpace) {
+    try {
+      await fetchJson<{ ok: true }>(`/api/me/work/spaces/${space.id}?hard=true`, "No se pudo eliminar el espacio.", { method: "DELETE" });
+      state.setSpaces((current) => current.filter((candidate) => candidate.id !== space.id));
+      toast.success("Espacio eliminado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el espacio.");
+    }
+  }
+
   async function toggleTaskDone(task: MyWorkTask) {
     const done = task.statusCode !== "done";
     try {
@@ -255,6 +265,7 @@ export function useMyWorkActions(state: ActionState) {
     archiveTask,
     archiveEvent,
     archiveSpace,
+    deleteSpace,
     toggleTaskDone,
     updateReminderStatus,
   };

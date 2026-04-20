@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 
 import { apiJsonError, handleApiError } from "@/lib/api-error";
 import { updateSpaceSchema } from "@/lib/personal-workspace-schemas";
-import { archiveMyWorkSpace, updateMyWorkSpace } from "@/lib/my-work-repository";
+import { archiveMyWorkSpace, deleteMyWorkSpace, updateMyWorkSpace } from "@/lib/my-work-repository";
 import { enforcePersonalWriteRateLimit, getPersonalApiContext, jsonNoStore } from "@/app/api/me/_shared";
 
 export const dynamic = "force-dynamic";
@@ -37,9 +37,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     if (rateLimitError) return rateLimitError;
 
     const { spaceId } = await context.params;
-    await archiveMyWorkSpace(api.bootstrap.authUserId, spaceId, api.access.username);
+    const hard = new URL(request.url).searchParams.get("hard") === "true";
+
+    if (hard) {
+      await deleteMyWorkSpace(api.bootstrap.authUserId, spaceId, api.access.username);
+    } else {
+      await archiveMyWorkSpace(api.bootstrap.authUserId, spaceId, api.access.username);
+    }
+
     return jsonNoStore({ ok: true });
   } catch (error) {
-    return handleApiError(error, "No se pudo archivar el espacio personal.");
+    return handleApiError(error, "No se pudo eliminar el espacio personal.");
   }
 }

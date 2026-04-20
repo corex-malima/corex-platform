@@ -210,6 +210,19 @@ export async function archiveMyWorkSpace(authUserId: string, spaceId: string, ac
   });
 }
 
+export async function deleteMyWorkSpace(authUserId: string, spaceId: string, actorId: string) {
+  return withPersonalWorkspaceTransaction(async (client) => {
+    const current = await client.query<{ is_default: boolean }>(
+      "select is_default from public.wrk_dim_space_core_scd0 where auth_user_id = $1 and space_id = $2",
+      [authUserId, spaceId],
+    );
+    if (!current.rows[0]) throw new Error("No se encontro el espacio solicitado.");
+    if (current.rows[0].is_default) throw new Error("El espacio personal por defecto no puede eliminarse.");
+    await insertPersonalWorkspaceActivity(client, { authUserId, entityType: "space", entityId: spaceId, actionCode: "space.deleted", payload: { actorId } });
+    await client.query("delete from public.wrk_dim_space_core_scd0 where auth_user_id = $1 and space_id = $2", [authUserId, spaceId]);
+  });
+}
+
 export async function listMyTasks(authUserId: string, filters: TaskFiltersInput = {}, executor: QueryExecutor = directExecutor) {
   const query = buildTaskListQuery(authUserId, filters);
   const { rows } = await executor.query<Record<string, unknown>>(query.text, query.values);

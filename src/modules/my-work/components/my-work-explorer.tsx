@@ -285,6 +285,7 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
           onEdit={(value) => setSpaceDialog(value)}
           onNew={() => setSpaceDialog(null)}
           onReorder={reorderSpace}
+          onDelete={actions.deleteSpace}
         />
       </div>
 

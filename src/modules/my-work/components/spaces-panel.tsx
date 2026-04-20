@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ChevronDown, ChevronUp, Pencil, Plus } from "lucide-react";
+import { Archive, ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/shared/ui/button";
@@ -31,9 +31,10 @@ type Props = {
   onEdit: (value: SpaceFormValue) => void;
   onNew: () => void;
   onReorder: (spaceId: string, newSortOrder: number) => void;
+  onDelete: (space: MyWorkSpace) => void;
 };
 
-export function SpacesPanel({ spaces, onEdit, onNew, onReorder }: Props) {
+export function SpacesPanel({ spaces, onEdit, onNew, onReorder, onDelete }: Props) {
   const active = spaces
     .filter((s) => !s.isArchived)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
@@ -119,6 +120,22 @@ export function SpacesPanel({ spaces, onEdit, onNew, onReorder }: Props) {
             >
               <Pencil className="size-3.5" />
             </button>
+
+            {/* Delete — solo espacios no-default */}
+            {!space.isDefault && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`¿Eliminar el espacio "${space.name}" permanentemente? Las tareas y eventos asociados quedarán sin espacio.`)) {
+                    onDelete(space);
+                  }
+                }}
+                aria-label={`Eliminar ${space.name}`}
+                className="flex size-7 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            )}
           </div>
         ))}
 
