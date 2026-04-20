@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { UserCircle2 } from "lucide-react";
 
+import { Button } from "@/shared/ui/button";
 import { DashboardScaleToggle } from "@/shared/layout/dashboard-scale-toggle";
 import {
   filterMobileNavigationByAccess,
@@ -37,17 +38,19 @@ export function SiteHeader() {
             <DashboardScaleToggle />
             <ModeToggle />
             {access && (access.isSuperadmin || access.allowedResources.includes("/dashboard/mi-cuenta")) ? (
-              <Link
-                href="/dashboard/mi-cuenta"
-                title="Mi cuenta"
-                aria-label="Mi cuenta"
+              <Button
+                asChild
+                variant="outline"
+                size="icon"
                 className={cn(
-                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted/70 hover:text-foreground",
+                  "rounded-full",
                   pathname === "/dashboard/mi-cuenta" && "border-primary text-primary",
                 )}
               >
-                <UserCircle2 className="size-4" aria-hidden="true" />
-              </Link>
+                <Link href="/dashboard/mi-cuenta" title="Mi cuenta" aria-label="Mi cuenta">
+                  <UserCircle2 className="size-4" aria-hidden="true" />
+                </Link>
+              </Button>
             ) : null}
           </div>
         </div>

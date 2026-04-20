@@ -73,7 +73,7 @@ export function DashboardScaleToggle() {
   }
 
   return (
-    <div className="flex items-center gap-1 rounded-full border border-border bg-card p-2 backdrop-blur-sm shadow-lg shadow-black/20">
+    <div className="flex h-11 items-center gap-1 rounded-full border border-border bg-card px-1.5 backdrop-blur-sm shadow-sm">
       <Button
         variant="ghost"
         size="icon"
