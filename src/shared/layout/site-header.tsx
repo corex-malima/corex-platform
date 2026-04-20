@@ -42,7 +42,7 @@ export function SiteHeader() {
                 title="Mi cuenta"
                 aria-label="Mi cuenta"
                 className={cn(
-                  "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted/70 hover:text-foreground",
+                  "inline-flex size-11 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted/70 hover:text-foreground",
                   pathname === "/dashboard/mi-cuenta" && "border-primary text-primary",
                 )}
               >

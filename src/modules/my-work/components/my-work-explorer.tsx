@@ -43,6 +43,7 @@ import { SectionPageShell } from "@/shared/layout/section-page-shell";
 import { DialogShell } from "@/shared/overlays/dialog-shell";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -182,7 +183,7 @@ export function MyWorkExplorer({ initialData }: { initialData: MyWorkInitialData
           <MyWorkSegmentedControl value={filters.segment} onChange={setSegment} />
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="min-w-0 space-y-2">
-              <label className="text-sm font-medium" htmlFor="my-work-search">Buscar</label>
+              <Label htmlFor="my-work-search">Buscar</Label>
               <Input id="my-work-search" placeholder="Tarea, evento o recordatorio" value={filters.search} onChange={(event) => updateFilter("search", event.target.value)} />
             </div>
             <SingleSelectField
