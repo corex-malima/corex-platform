@@ -8,6 +8,7 @@ import type { PoscosechaClasificacionBootData } from "@/lib/postcosecha-clasific
 import { formatInteger, formatPercent } from "@/shared/lib/format";
 import { SolverInputsSection, SolverPrecheckSection } from "@/modules/postcosecha/components/solver-capture-sections";
 import { SolverMetricTile } from "@/modules/postcosecha/components/solver-feedback-states";
+import { SolverModeSelector } from "@/modules/postcosecha/components/solver-mode-selector";
 import { RecipeOverlayLauncher } from "@/modules/postcosecha/components/recipe-overlay-launcher";
 import { SolverResults } from "@/modules/postcosecha/components/solver-results";
 import { SolverShell } from "@/modules/postcosecha/components/solver-shell";
@@ -27,7 +28,10 @@ export function PoscosechaClasificacionEnBlancoExplorer({
     orders,
     availability,
     settings,
-    result,
+    resultBundle,
+    activeMode,
+    activeResult,
+    isResultStale,
     search,
     isRunning,
     isReloading,
@@ -42,7 +46,8 @@ export function PoscosechaClasificacionEnBlancoExplorer({
     resultOrderRowsBySku,
     netStemValuesBySku,
     setSearch,
-    setResult,
+    setActiveMode,
+    clearResults,
     reloadBase,
     updateOrderValue,
     updateAvailabilityDate,
@@ -118,18 +123,28 @@ export function PoscosechaClasificacionEnBlancoExplorer({
 
       <SolverPrecheckSection
         precheck={precheck}
-        result={result}
+        hasResult={resultBundle !== null}
+        isResultStale={isResultStale}
         isRunning={isRunning}
-        onClearResults={() => setResult(null)}
+        onClearResults={clearResults}
         onRun={() => void handleRunSolver()}
       />
 
-      {result ? (
-        <SolverResults
-          result={result}
-          canOpenRecipe={(sku) => (resultOrderRowsBySku.get(sku)?.pedidoResuelto ?? 0) > 0 && netStemValuesBySku.has(sku)}
-          onOpenRecipe={(sku) => void handleOpenRecipe(sku)}
-        />
+      {resultBundle ? (
+        <>
+          <SolverModeSelector
+            runs={resultBundle}
+            activeMode={activeMode}
+            onModeChange={setActiveMode}
+          />
+          {activeResult?.result ? (
+            <SolverResults
+              result={activeResult.result}
+              canOpenRecipe={(sku) => (resultOrderRowsBySku.get(sku)?.pedidoResuelto ?? 0) > 0 && netStemValuesBySku.has(sku)}
+              onOpenRecipe={(sku) => void handleOpenRecipe(sku)}
+            />
+          ) : null}
+        </>
       ) : null}
 
       <RecipeOverlayLauncher

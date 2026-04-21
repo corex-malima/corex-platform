@@ -10,6 +10,37 @@ export const SOLVER_DATE_KEYS = [
 
 export type SolverDateKey = (typeof SOLVER_DATE_KEYS)[number];
 
+export type PoscosechaClasificacionOrderOrigin =
+  | "GV"
+  | "APERTURA"
+  | "PRECLASIFICACION";
+
+export type PoscosechaClasificacionRunMode =
+  | "GV"
+  | "APERTURA"
+  | "PRECLASIFICACION";
+
+export type PoscosechaClasificacionOrderSlot = {
+  key: SolverDateKey;
+  restriction: PoscosechaClasificacionOrderOrigin | null;
+  restrictionMode: "STRICT" | "SOFT";
+};
+
+export type PoscosechaClasificacionLotSlot = {
+  key: SolverDateKey;
+  lotDate: string | null;
+  origin: PoscosechaClasificacionOrderOrigin;
+};
+
+export type PoscosechaClasificacionDateSlot = PoscosechaClasificacionOrderSlot &
+  PoscosechaClasificacionLotSlot;
+
+export const POSCOSECHA_CLASIFICACION_RUN_MODES: PoscosechaClasificacionRunMode[] = [
+  "GV",
+  "APERTURA",
+  "PRECLASIFICACION",
+];
+
 export type PoscosechaClasificacionSettings = {
   desperdicio: number;
 };
@@ -50,6 +81,8 @@ export type PoscosechaClasificacionBootData = {
   skuMaster: PoscosechaSkuRecord[];
   ordersTemplate: PoscosechaClasificacionOrderRow[];
   availabilityTemplate: PoscosechaClasificacionAvailabilityRow[];
+  orderSlots: PoscosechaClasificacionOrderSlot[];
+  lotSlots: PoscosechaClasificacionLotSlot[];
   settings: PoscosechaClasificacionSettings;
   metadata: {
     engine: string;
@@ -133,14 +166,25 @@ export type PoscosechaClasificacionResult = {
   netStemMatrix: PoscosechaClasificacionMatrix;
 };
 
+export type PoscosechaClasificacionModeResult = {
+  mode: PoscosechaClasificacionRunMode;
+  label: string;
+  originScope: string;
+  precheck: PoscosechaClasificacionPrecheck;
+  result: PoscosechaClasificacionResult | null;
+};
+
 export type PoscosechaClasificacionRunInput = {
   orders: PoscosechaClasificacionOrderRow[];
   availability: PoscosechaClasificacionAvailabilityRow[];
   settings: PoscosechaClasificacionSettings;
+  orderSlots?: PoscosechaClasificacionOrderSlot[];
+  lotSlots?: PoscosechaClasificacionLotSlot[];
+  dateSlots?: PoscosechaClasificacionDateSlot[];
 };
 
 export type PoscosechaClasificacionRunPayload = {
-  data: PoscosechaClasificacionResult;
+  data: PoscosechaClasificacionModeResult[];
 };
 
 export type PoscosechaClasificacionRecipeGradeInput = {
@@ -193,6 +237,7 @@ export type PoscosechaClasificacionRecipeSummary = {
   bunchesResueltos: number;
   recetasUsadas: number;
   tallosTotales: number;
+  tallosSinReceta: number;
   pesoIdealBunch: number;
   pesoPromedioReal: number;
   penalidadRango: number;

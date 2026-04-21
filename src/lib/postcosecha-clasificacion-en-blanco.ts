@@ -11,17 +11,25 @@ import type {
   PoscosechaClasificacionAvailabilityRow,
   PoscosechaClasificacionAvailabilitySeed,
   PoscosechaClasificacionBootData,
+  PoscosechaClasificacionDateSlot,
+  PoscosechaClasificacionLotSlot,
+  PoscosechaClasificacionModeResult,
   PoscosechaClasificacionOrderRow,
+  PoscosechaClasificacionOrderOrigin,
+  PoscosechaClasificacionOrderSlot,
   PoscosechaClasificacionPrecheck,
   PoscosechaClasificacionRecipeInput,
   PoscosechaClasificacionRecipeResult,
   PoscosechaClasificacionResult,
+  PoscosechaClasificacionRunMode,
   PoscosechaClasificacionRunInput,
   PoscosechaClasificacionSettings,
   SolverDateKey,
 } from "@/lib/postcosecha-clasificacion-en-blanco-types";
-import { SOLVER_DATE_KEYS } from "@/lib/postcosecha-clasificacion-en-blanco-types";
-import { toNumber } from "@/shared/lib/number-utils";
+import {
+  POSCOSECHA_CLASIFICACION_RUN_MODES,
+  SOLVER_DATE_KEYS,
+} from "@/lib/postcosecha-clasificacion-en-blanco-types";
 
 type SolverBridgeDefaults = {
   settings?: Partial<PoscosechaClasificacionSettings>;
@@ -59,9 +67,10 @@ const BRIDGE_SCRIPT_PATH = resolve(
   "solver_clasificacion_en_blanco_bridge.py",
 );
 
-const DEFAULT_SOLVER_ROOT = resolve(process.cwd(), "..", "solver_poscosecha");
-const DEFAULT_SOLVER_PYTHON = resolve(
-  DEFAULT_SOLVER_ROOT,
+const LEGACY_SOLVER_PYTHON = resolve(
+  process.cwd(),
+  "..",
+  "solver_poscosecha",
   "venv",
   "Scripts",
   "python.exe",
@@ -79,8 +88,13 @@ declare global {
     | undefined;
 }
 
+function toNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function toInteger(value: unknown, fallback = 0) {
-  return Math.round(toNumber(value, fallback) ?? fallback);
+  return Math.round(toNumber(value, fallback));
 }
 
 export function excelRound(value: number, digits = 0) {
@@ -93,7 +107,7 @@ export function excelRound(value: number, digits = 0) {
 function sanitizeSettings(
   input: Partial<PoscosechaClasificacionSettings> | null | undefined,
 ): PoscosechaClasificacionSettings {
-  const desperdicio = Math.min(Math.max(toNumber(input?.desperdicio, DEFAULT_SETTINGS.desperdicio) ?? DEFAULT_SETTINGS.desperdicio, 0), 0.95);
+  const desperdicio = Math.min(Math.max(toNumber(input?.desperdicio, DEFAULT_SETTINGS.desperdicio), 0), 0.95);
 
   return {
     desperdicio: Math.round(desperdicio * 10000) / 10000,
@@ -106,7 +120,7 @@ function normalizeAvailabilitySeeds(
   return seeds
     .map((seed) => ({
       grado: Math.max(toInteger(seed.grado, 0), 1),
-      pesoTalloSeed: Math.max(toNumber(seed.pesoTalloSeed, 0) ?? 0, 0),
+      pesoTalloSeed: Math.max(toNumber(seed.pesoTalloSeed, 0), 0),
     }))
     .filter((seed) => seed.grado > 0)
     .sort((left, right) => left.grado - right.grado);
@@ -123,17 +137,33 @@ function buildFallbackDefaults() {
 }
 
 function ensureSolverEngineAvailable() {
-  const solverPython = process.env.POSTHARVEST_SOLVER_PYTHON ?? DEFAULT_SOLVER_PYTHON;
-
   if (!existsSync(BRIDGE_SCRIPT_PATH)) {
     throw new Error("No se encontro el puente local del solver de clasificacion en blanco.");
   }
 
-  if (!existsSync(solverPython)) {
-    throw new Error("No se encontro el interprete Python del solver de postcosecha.");
+  const envPython = process.env.POSTHARVEST_SOLVER_PYTHON?.trim() ?? "";
+  const localCandidates = [
+    envPython,
+    resolve(process.cwd(), ".venv", "Scripts", "python.exe"),
+    resolve(process.cwd(), ".venv", "bin", "python"),
+    resolve(process.cwd(), "venv", "Scripts", "python.exe"),
+    resolve(process.cwd(), "venv", "bin", "python"),
+    LEGACY_SOLVER_PYTHON,
+    "python",
+    "python3",
+  ].filter(Boolean);
+
+  for (const candidate of localCandidates) {
+    const looksLikePath = candidate.includes("\\") || candidate.includes("/");
+
+    if (!looksLikePath || existsSync(candidate)) {
+      return candidate;
+    }
   }
 
-  return solverPython;
+  throw new Error(
+    "No se encontro un interprete Python compatible para el solver de postcosecha.",
+  );
 }
 
 async function runBridge<T>(
@@ -145,10 +175,7 @@ async function runBridge<T>(
   return new Promise<T>((resolvePromise, rejectPromise) => {
     const child = spawn(solverPython, [BRIDGE_SCRIPT_PATH, command], {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        POSTHARVEST_SOLVER_ROOT: process.env.POSTHARVEST_SOLVER_ROOT ?? DEFAULT_SOLVER_ROOT,
-      },
+      env: process.env,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -240,6 +267,24 @@ export function buildClasificacionOrdersTemplate(
   }));
 }
 
+export function buildClasificacionOrderSlotsTemplate(): PoscosechaClasificacionOrderSlot[] {
+  return [{ key: SOLVER_DATE_KEYS[0], restriction: null, restrictionMode: "SOFT" }];
+}
+
+export function buildClasificacionLotSlotsTemplate(): PoscosechaClasificacionLotSlot[] {
+  return [{ key: SOLVER_DATE_KEYS[0], lotDate: null, origin: "GV" }];
+}
+
+export function buildClasificacionDateSlotsTemplate(): PoscosechaClasificacionDateSlot[] {
+  return [{
+    key: SOLVER_DATE_KEYS[0],
+    lotDate: null,
+    origin: "GV",
+    restriction: null,
+    restrictionMode: "SOFT",
+  }];
+}
+
 export function buildClasificacionAvailabilityTemplate(
   seeds: PoscosechaClasificacionAvailabilitySeed[],
 ): PoscosechaClasificacionAvailabilityRow[] {
@@ -252,6 +297,99 @@ export function buildClasificacionAvailabilityTemplate(
     fecha_4: 0,
     fecha_5: 0,
   }));
+}
+
+function sanitizeOrigin(value: unknown): PoscosechaClasificacionOrderOrigin {
+  return value === "APERTURA" || value === "PRECLASIFICACION" ? value : "GV";
+}
+
+function sanitizeRestriction(value: unknown): PoscosechaClasificacionOrderOrigin | null {
+  return value === "GV" || value === "APERTURA" || value === "PRECLASIFICACION"
+    ? value
+    : null;
+}
+
+function sanitizeRestrictionMode(value: unknown): PoscosechaClasificacionOrderSlot["restrictionMode"] {
+  return value === "STRICT" ? "STRICT" : "SOFT";
+}
+
+function sanitizeOrderSlots(
+  slots: PoscosechaClasificacionOrderSlot[] | PoscosechaClasificacionDateSlot[] | null | undefined,
+): PoscosechaClasificacionOrderSlot[] {
+  const fallback = buildClasificacionOrderSlotsTemplate();
+  const source = Array.isArray(slots) && slots.length > 0 ? slots : fallback;
+  const seen = new Set<string>();
+
+  return source
+    .map((slot) => ({
+      key: (SOLVER_DATE_KEYS as readonly string[]).includes(slot.key)
+        ? (slot.key as SolverDateKey)
+        : SOLVER_DATE_KEYS[0],
+      restriction: sanitizeRestriction(slot.restriction),
+      restrictionMode: sanitizeRestrictionMode(slot.restrictionMode),
+    }))
+    .filter((slot) => {
+      if (seen.has(slot.key)) return false;
+      seen.add(slot.key);
+      return true;
+    });
+}
+
+function sanitizeLotSlots(
+  slots: PoscosechaClasificacionLotSlot[] | PoscosechaClasificacionDateSlot[] | null | undefined,
+): PoscosechaClasificacionLotSlot[] {
+  const fallback = buildClasificacionLotSlotsTemplate();
+  const source = Array.isArray(slots) && slots.length > 0 ? slots : fallback;
+  const seen = new Set<string>();
+
+  return source
+    .map((slot) => ({
+      key: (SOLVER_DATE_KEYS as readonly string[]).includes(slot.key)
+        ? (slot.key as SolverDateKey)
+        : SOLVER_DATE_KEYS[0],
+      lotDate:
+        typeof slot.lotDate === "string" && slot.lotDate.trim().length > 0
+          ? slot.lotDate.trim()
+          : null,
+      origin: sanitizeOrigin(slot.origin),
+    }))
+    .filter((slot) => {
+      if (seen.has(slot.key)) return false;
+      seen.add(slot.key);
+      return true;
+    });
+}
+
+function originMatchesMode(
+  origin: PoscosechaClasificacionOrderOrigin,
+  mode: PoscosechaClasificacionRunMode,
+) {
+  return origin === mode;
+}
+
+function slotCanBeSolvedByMode(
+  slot: PoscosechaClasificacionOrderSlot | undefined,
+  mode: PoscosechaClasificacionRunMode,
+) {
+  if (!slot?.restriction || slot.restrictionMode !== "STRICT") return true;
+  return slot.restriction === mode;
+}
+
+function getRunLabel(mode: PoscosechaClasificacionRunMode) {
+  return mode;
+}
+
+function getRunOriginScope(mode: PoscosechaClasificacionRunMode) {
+  switch (mode) {
+    case "GV":
+      return "Solo GV";
+    case "APERTURA":
+      return "Solo Apertura";
+    case "PRECLASIFICACION":
+      return "Solo Preclasificacion";
+    default:
+      return mode;
+  }
 }
 
 function sanitizeDateValue(value: unknown) {
@@ -302,19 +440,30 @@ export function buildClasificacionPrecheck(
   availability: PoscosechaClasificacionAvailabilityRow[],
   skuMaster: PoscosechaSkuRecord[],
   desperdicio: number,
+  orderSlots?: PoscosechaClasificacionOrderSlot[],
+  lotSlots?: PoscosechaClasificacionLotSlot[],
+  mode: PoscosechaClasificacionRunMode = "GV",
 ): PoscosechaClasificacionPrecheck {
   const masterBySkuId = new Map(skuMaster.map((record) => [record.skuId, record]));
+  const orderSlotMeta = new Map(sanitizeOrderSlots(orderSlots).map((slot) => [slot.key, slot]));
+  const lotSlotMeta = new Map(sanitizeLotSlots(lotSlots).map((slot) => [slot.key, slot]));
+  const orderEligibleKeys = SOLVER_DATE_KEYS.filter((key) => {
+    const slot = orderSlotMeta.get(key);
+    return slotCanBeSolvedByMode(slot, mode);
+  });
+  const availabilityEligibleKeys = SOLVER_DATE_KEYS.filter((key) => {
+    const slot = lotSlotMeta.get(key);
+    return slot ? originMatchesMode(slot.origin, mode) : false;
+  });
 
   let tallosPedidos = 0;
 
   for (const row of orders) {
     const masterRecord = masterBySkuId.get(row.skuId);
 
-    if (!masterRecord) {
-      continue;
-    }
+    if (!masterRecord) continue;
 
-    const totalPedido = SOLVER_DATE_KEYS.reduce(
+    const totalPedido = orderEligibleKeys.reduce(
       (accumulator, key) => accumulator + sanitizeDateValue(row[key]),
       0,
     );
@@ -323,7 +472,14 @@ export function buildClasificacionPrecheck(
   }
 
   const tallosDisponibles = buildClasificacionAvailabilityDerived(
-    availability,
+    availability.map((row) => ({
+      ...row,
+      fecha_1: availabilityEligibleKeys.includes("fecha_1") ? row.fecha_1 : 0,
+      fecha_2: availabilityEligibleKeys.includes("fecha_2") ? row.fecha_2 : 0,
+      fecha_3: availabilityEligibleKeys.includes("fecha_3") ? row.fecha_3 : 0,
+      fecha_4: availabilityEligibleKeys.includes("fecha_4") ? row.fecha_4 : 0,
+      fecha_5: availabilityEligibleKeys.includes("fecha_5") ? row.fecha_5 : 0,
+    })),
     desperdicio,
   ).reduce((accumulator, row) => accumulator + row.tallosNetos, 0);
 
@@ -349,20 +505,12 @@ export function buildClasificacionPrecheck(
     };
   }
 
-  if (diferencia < 0) {
-    return {
-      isValid: false,
-      message:
-        "No se puede ejecutar: los tallos pedidos minimos deben ser al menos iguales a los tallos disponibles.",
-      tallosPedidos,
-      tallosDisponibles,
-      diferencia,
-    };
-  }
-
   return {
     isValid: true,
-    message: "Validacion previa correcta.",
+    message:
+      diferencia < 0
+        ? "Hay mas tallos disponibles que pedidos minimos; el solver usara lo necesario y dejara saldo."
+        : "Validacion previa correcta.",
     tallosPedidos,
     tallosDisponibles,
     diferencia,
@@ -374,7 +522,10 @@ function mapMasterForBridge(skuMaster: PoscosechaSkuRecord[]) {
     sku: record.sku,
     peso_ideal_bunch: toNumber(record.pesoIdealBunch, 0),
     tallos_min: Math.max(toInteger(record.tallosMin, 0), 1),
-    tallos_max: Math.max(toInteger(record.tallosMax, record.tallosMin), toInteger(record.tallosMin, 1)),
+    tallos_max: Math.max(
+      toInteger(record.tallosMax, record.tallosMin),
+      toInteger(record.tallosMin, 1),
+    ),
     peso_min_objetivo: toNumber(record.pesoMinObjetivo, 0),
     peso_max_objetivo: toNumber(record.pesoMaxObjetivo, 0),
     max_grados_objetivo: Math.max(toInteger(record.maxGradosObjetivo, 1), 1),
@@ -391,9 +542,7 @@ function mapOrdersForBridge(
     .map((row) => {
       const masterRecord = masterBySkuId.get(row.skuId);
 
-      if (!masterRecord) {
-        return null;
-      }
+      if (!masterRecord) return null;
 
       return {
         sku: masterRecord.sku,
@@ -427,6 +576,71 @@ function mapAvailabilityForBridge(
     .filter((row) => row.grado > 0);
 }
 
+function filterOrdersByMode(
+  orders: PoscosechaClasificacionOrderRow[],
+  orderSlots: PoscosechaClasificacionOrderSlot[],
+  mode: PoscosechaClasificacionRunMode,
+) {
+  const slotMeta = new Map(orderSlots.map((slot) => [slot.key, slot]));
+  const canUseKey = (key: SolverDateKey) => slotCanBeSolvedByMode(slotMeta.get(key), mode);
+
+  return orders.map((row) => ({
+    ...row,
+    fecha_1: canUseKey("fecha_1") ? row.fecha_1 : 0,
+    fecha_2: canUseKey("fecha_2") ? row.fecha_2 : 0,
+    fecha_3: canUseKey("fecha_3") ? row.fecha_3 : 0,
+    fecha_4: canUseKey("fecha_4") ? row.fecha_4 : 0,
+    fecha_5: canUseKey("fecha_5") ? row.fecha_5 : 0,
+  }));
+}
+
+function filterAvailabilityByMode(
+  availability: PoscosechaClasificacionAvailabilityRow[],
+  lotSlots: PoscosechaClasificacionLotSlot[],
+  mode: PoscosechaClasificacionRunMode,
+) {
+  const slotMeta = new Map(lotSlots.map((slot) => [slot.key, slot]));
+  const canUseKey = (key: SolverDateKey) => {
+    const slot = slotMeta.get(key);
+    return slot ? originMatchesMode(slot.origin, mode) : false;
+  };
+
+  return availability.map((row) => ({
+    ...row,
+    fecha_1: canUseKey("fecha_1") ? row.fecha_1 : 0,
+    fecha_2: canUseKey("fecha_2") ? row.fecha_2 : 0,
+    fecha_3: canUseKey("fecha_3") ? row.fecha_3 : 0,
+    fecha_4: canUseKey("fecha_4") ? row.fecha_4 : 0,
+    fecha_5: canUseKey("fecha_5") ? row.fecha_5 : 0,
+  }));
+}
+
+function subtractSolvedFromRemainingOrders(
+  remainingOrders: PoscosechaClasificacionOrderRow[],
+  result: PoscosechaClasificacionResult | null,
+) {
+  if (!result) return remainingOrders;
+
+  const solvedBySku = new Map(
+    result.orderRows.map((row) => [row.sku, Math.max(toInteger(row.pedidoResuelto, 0), 0)]),
+  );
+
+  return remainingOrders.map((row) => {
+    let pendingSolved = solvedBySku.get(row.sku) ?? 0;
+    const nextRow = { ...row };
+
+    for (const key of SOLVER_DATE_KEYS) {
+      if (pendingSolved <= 0) break;
+      const captured = sanitizeDateValue(nextRow[key]);
+      const consumed = Math.min(captured, pendingSolved);
+      nextRow[key] = captured - consumed;
+      pendingSolved -= consumed;
+    }
+
+    return nextRow;
+  });
+}
+
 export async function getClasificacionEnBlancoBootData(): Promise<PoscosechaClasificacionBootData> {
   const [skuMaster, defaults] = await Promise.all([
     listCurrentPostharvestSkus(),
@@ -437,6 +651,8 @@ export async function getClasificacionEnBlancoBootData(): Promise<PoscosechaClas
     skuMaster,
     ordersTemplate: buildClasificacionOrdersTemplate(skuMaster),
     availabilityTemplate: buildClasificacionAvailabilityTemplate(defaults.availabilitySeeds),
+    orderSlots: buildClasificacionOrderSlotsTemplate(),
+    lotSlots: buildClasificacionLotSlotsTemplate(),
     settings: defaults.settings,
     metadata: {
       engine: "Python + PuLP",
@@ -450,7 +666,7 @@ export async function getClasificacionEnBlancoBootData(): Promise<PoscosechaClas
 
 export async function runClasificacionEnBlancoSolver(
   input: PoscosechaClasificacionRunInput,
-): Promise<PoscosechaClasificacionResult> {
+): Promise<{ runs: PoscosechaClasificacionModeResult[] }> {
   const skuMaster = await listCurrentPostharvestSkus();
 
   if (skuMaster.length === 0) {
@@ -458,23 +674,50 @@ export async function runClasificacionEnBlancoSolver(
   }
 
   const settings = sanitizeSettings(input.settings);
-  const precheck = buildClasificacionPrecheck(
-    input.orders,
-    input.availability,
-    skuMaster,
-    settings.desperdicio,
-  );
+  const orderSlots = sanitizeOrderSlots(input.orderSlots ?? input.dateSlots);
+  const lotSlots = sanitizeLotSlots(input.lotSlots ?? input.dateSlots);
+  let remainingOrders = input.orders.map((row) => ({ ...row }));
+  const runs: PoscosechaClasificacionModeResult[] = [];
 
-  if (!precheck.isValid) {
-    throw new Error(precheck.message);
+  for (const mode of POSCOSECHA_CLASIFICACION_RUN_MODES) {
+    const filteredOrders = filterOrdersByMode(remainingOrders, orderSlots, mode);
+    const filteredAvailability = filterAvailabilityByMode(input.availability, lotSlots, mode);
+    const precheck = buildClasificacionPrecheck(
+      filteredOrders,
+      filteredAvailability,
+      skuMaster,
+      settings.desperdicio,
+      orderSlots,
+      lotSlots,
+      mode,
+    );
+
+    let result: PoscosechaClasificacionResult | null = null;
+
+    if (precheck.isValid) {
+      result = await runBridge<PoscosechaClasificacionResult>("solve", {
+        master: mapMasterForBridge(skuMaster),
+        orders: mapOrdersForBridge(filteredOrders, skuMaster),
+        availability: mapAvailabilityForBridge(filteredAvailability),
+        settings,
+      });
+      remainingOrders = subtractSolvedFromRemainingOrders(remainingOrders, result);
+    }
+
+    runs.push({
+      mode,
+      label: getRunLabel(mode),
+      originScope: getRunOriginScope(mode),
+      precheck,
+      result,
+    });
   }
 
-  return runBridge<PoscosechaClasificacionResult>("solve", {
-    master: mapMasterForBridge(skuMaster),
-    orders: mapOrdersForBridge(input.orders, skuMaster),
-    availability: mapAvailabilityForBridge(input.availability),
-    settings,
-  });
+  if (runs.every((run) => !run.precheck.isValid)) {
+    throw new Error(runs[0]?.precheck.message ?? "No se pudo ejecutar Clasificacion en blanco.");
+  }
+
+  return { runs };
 }
 
 export async function runClasificacionEnBlancoRecipeSolver(

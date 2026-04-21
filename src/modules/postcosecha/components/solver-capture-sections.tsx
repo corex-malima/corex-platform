@@ -142,13 +142,15 @@ export function SolverInputsSection({
 
 export function SolverPrecheckSection({
   precheck,
-  result,
+  hasResult,
+  isResultStale,
   isRunning,
   onClearResults,
   onRun,
 }: {
   precheck: ReturnType<typeof buildClasificacionPrecheck>;
-  result: unknown;
+  hasResult: boolean;
+  isResultStale?: boolean;
   isRunning: boolean;
   onClearResults: () => void;
   onRun: () => void;
@@ -193,13 +195,13 @@ export function SolverPrecheckSection({
             El solver prioriza Fecha 1, luego Fecha 2 y asi sucesivamente antes de optimizar peso y uso de grados.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" onClick={onClearResults} disabled={!result}>
+            <Button type="button" variant="outline" onClick={onClearResults} disabled={!hasResult}>
               <TableProperties className="size-4" />
               Limpiar resultados
             </Button>
             <Button type="button" onClick={onRun} disabled={!precheck.isValid || isRunning}>
               {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
-              Resolver modelo unificado
+              {isResultStale ? "Volver a resolver" : "Resolver modelo unificado"}
             </Button>
           </div>
         </div>

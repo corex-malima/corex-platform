@@ -10,12 +10,16 @@ import {
 } from "@/lib/postcosecha-clasificacion-en-blanco-client";
 import type {
   PoscosechaClasificacionBootData,
+  PoscosechaClasificacionLotSlot,
+  PoscosechaClasificacionModeResult,
+  PoscosechaClasificacionOrderSlot,
   PoscosechaClasificacionRecipePayload,
   PoscosechaClasificacionRecipeResult,
-  PoscosechaClasificacionResult,
+  PoscosechaClasificacionRunMode,
   PoscosechaClasificacionRunPayload,
   SolverDateKey,
 } from "@/lib/postcosecha-clasificacion-en-blanco-types";
+import { POSCOSECHA_CLASIFICACION_RUN_MODES } from "@/lib/postcosecha-clasificacion-en-blanco-types";
 import { buildRecipeInput, orderTotal, toFloat, toInteger } from "@/modules/postcosecha/components/solver-utils";
 
 export function useClasificacionEnBlancoExplorer(
@@ -26,7 +30,11 @@ export function useClasificacionEnBlancoExplorer(
   const [orders, setOrders] = useState(initialData.ordersTemplate);
   const [availability, setAvailability] = useState(initialData.availabilityTemplate);
   const [settings, setSettings] = useState(initialData.settings);
-  const [result, setResult] = useState<PoscosechaClasificacionResult | null>(null);
+  const [orderSlots, setOrderSlots] = useState(initialData.orderSlots);
+  const [lotSlots, setLotSlots] = useState(initialData.lotSlots);
+  const [resultBundle, setResultBundle] = useState<PoscosechaClasificacionModeResult[] | null>(null);
+  const [activeMode, setActiveMode] = useState<PoscosechaClasificacionRunMode>(POSCOSECHA_CLASIFICACION_RUN_MODES[0]);
+  const [isResultStale, setIsResultStale] = useState(false);
   const [search, setSearch] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
@@ -35,6 +43,11 @@ export function useClasificacionEnBlancoExplorer(
   const [recipeError, setRecipeError] = useState<string | null>(null);
   const [isRecipeLoading, setIsRecipeLoading] = useState(false);
   const deferredSearch = useDeferredValue(search);
+
+  const activeResult = useMemo(
+    () => resultBundle?.find((r) => r.mode === activeMode) ?? null,
+    [resultBundle, activeMode],
+  );
 
   const filteredOrders = useMemo(() => {
     const normalized = deferredSearch.trim().toLowerCase();
@@ -48,8 +61,17 @@ export function useClasificacionEnBlancoExplorer(
   );
 
   const precheck = useMemo(
-    () => buildClasificacionPrecheck(orders, availability, bootData.skuMaster, settings.desperdicio),
-    [availability, bootData.skuMaster, orders, settings.desperdicio],
+    () =>
+      buildClasificacionPrecheck(
+        orders,
+        availability,
+        bootData.skuMaster,
+        settings.desperdicio,
+        orderSlots,
+        lotSlots,
+        activeMode,
+      ),
+    [availability, bootData.skuMaster, orders, settings.desperdicio, orderSlots, lotSlots, activeMode],
   );
 
   const ordersWithCapture = useMemo(() => orders.filter((row) => orderTotal(row) > 0).length, [orders]);
@@ -58,12 +80,12 @@ export function useClasificacionEnBlancoExplorer(
     [availabilityDerived],
   );
   const resultOrderRowsBySku = useMemo(
-    () => new Map((result?.orderRows ?? []).map((row) => [row.sku, row])),
-    [result],
+    () => new Map((activeResult?.result?.orderRows ?? []).map((row) => [row.sku, row])),
+    [activeResult],
   );
   const netStemValuesBySku = useMemo(
-    () => new Map((result?.netStemMatrix.rows ?? []).map((row) => [row.sku, row.values])),
-    [result],
+    () => new Map((activeResult?.result?.netStemMatrix.rows ?? []).map((row) => [row.sku, row.values])),
+    [activeResult],
   );
 
   useEffect(() => {
@@ -73,20 +95,24 @@ export function useClasificacionEnBlancoExplorer(
   }, [initialError]);
 
   useEffect(() => {
-    if (!result) {
+    if (!resultBundle) {
       setSelectedRecipeSku(null);
       setRecipeData(null);
       setRecipeError(null);
       setIsRecipeLoading(false);
+      setIsResultStale(false);
     }
-  }, [result]);
+  }, [resultBundle]);
 
   function applyBootData(nextData: PoscosechaClasificacionBootData) {
     setBootData(nextData);
     setOrders(nextData.ordersTemplate);
     setAvailability(nextData.availabilityTemplate);
     setSettings(nextData.settings);
-    setResult(null);
+    setOrderSlots(nextData.orderSlots);
+    setLotSlots(nextData.lotSlots);
+    setResultBundle(null);
+    setIsResultStale(false);
   }
 
   function closeRecipeOverlay() {
@@ -94,6 +120,15 @@ export function useClasificacionEnBlancoExplorer(
     setRecipeData(null);
     setRecipeError(null);
     setIsRecipeLoading(false);
+  }
+
+  function markResultStale() {
+    if (resultBundle) setIsResultStale(true);
+  }
+
+  function clearResults() {
+    setResultBundle(null);
+    setIsResultStale(false);
   }
 
   async function reloadBase() {
@@ -116,7 +151,7 @@ export function useClasificacionEnBlancoExplorer(
     const nextValue = toInteger(value);
     startTransition(() => {
       setOrders((current) => current.map((row) => (row.skuId === skuId ? { ...row, [dateKey]: nextValue } : row)));
-      setResult(null);
+      markResultStale();
     });
   }
 
@@ -124,7 +159,7 @@ export function useClasificacionEnBlancoExplorer(
     const nextValue = toInteger(value);
     startTransition(() => {
       setAvailability((current) => current.map((row) => (row.grado === grado ? { ...row, [dateKey]: nextValue } : row)));
-      setResult(null);
+      markResultStale();
     });
   }
 
@@ -132,19 +167,35 @@ export function useClasificacionEnBlancoExplorer(
     const nextValue = Math.round(toFloat(value) * 100) / 100;
     startTransition(() => {
       setAvailability((current) => current.map((row) => (row.grado === grado ? { ...row, pesoTalloSeed: nextValue } : row)));
-      setResult(null);
+      markResultStale();
     });
+  }
+
+  function updateOrderSlot(key: SolverDateKey, patch: Partial<PoscosechaClasificacionOrderSlot>) {
+    setOrderSlots((current) => current.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)));
+    markResultStale();
+  }
+
+  function updateLotSlot(key: SolverDateKey, patch: Partial<PoscosechaClasificacionLotSlot>) {
+    setLotSlots((current) => current.map((slot) => (slot.key === key ? { ...slot, ...patch } : slot)));
+    markResultStale();
   }
 
   function resetOrders() {
     setOrders(bootData.ordersTemplate);
-    setResult(null);
+    clearResults();
   }
 
   function resetAvailability() {
     setAvailability(bootData.availabilityTemplate);
     setSettings(bootData.settings);
-    setResult(null);
+    clearResults();
+  }
+
+  function resetSlots() {
+    setOrderSlots(bootData.orderSlots);
+    setLotSlots(bootData.lotSlots);
+    clearResults();
   }
 
   function updateDesperdicio(value: string) {
@@ -152,7 +203,7 @@ export function useClasificacionEnBlancoExplorer(
       ...current,
       desperdicio: Math.min(Math.max(toFloat(value), 0), 0.95),
     }));
-    setResult(null);
+    markResultStale();
   }
 
   async function handleRunSolver() {
@@ -164,10 +215,13 @@ export function useClasificacionEnBlancoExplorer(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orders, availability, settings }),
+          body: JSON.stringify({ orders, availability, settings, orderSlots, lotSlots }),
         },
       );
-      setResult(payload.data);
+      setResultBundle(payload.data);
+      setIsResultStale(false);
+      const firstMode = payload.data.find((r) => r.result !== null)?.mode;
+      if (firstMode) setActiveMode(firstMode);
       toast.success("Clasificacion en blanco se resolvio correctamente.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo ejecutar Clasificacion en blanco.");
@@ -185,8 +239,8 @@ export function useClasificacionEnBlancoExplorer(
       return;
     }
 
-    const payload = buildRecipeInput(orderRow, netStemValues, availability);
-    if (!payload) {
+    const recipePayload = buildRecipeInput(orderRow, netStemValues, availability);
+    if (!recipePayload) {
       toast.error("El SKU seleccionado no tiene suficiente informacion para construir la receta.");
       return;
     }
@@ -203,7 +257,7 @@ export function useClasificacionEnBlancoExplorer(
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(recipePayload),
         },
       );
       setRecipeData(response.data);
@@ -219,7 +273,12 @@ export function useClasificacionEnBlancoExplorer(
     orders,
     availability,
     settings,
-    result,
+    orderSlots,
+    lotSlots,
+    resultBundle,
+    activeMode,
+    activeResult,
+    isResultStale,
     search,
     isRunning,
     isReloading,
@@ -234,13 +293,18 @@ export function useClasificacionEnBlancoExplorer(
     resultOrderRowsBySku,
     netStemValuesBySku,
     setSearch,
-    setResult,
+    setActiveMode,
+    clearResults,
+    markResultStale,
     reloadBase,
     updateOrderValue,
     updateAvailabilityDate,
     updateAvailabilityWeight,
+    updateOrderSlot,
+    updateLotSlot,
     resetOrders,
     resetAvailability,
+    resetSlots,
     updateDesperdicio,
     handleRunSolver,
     handleOpenRecipe,

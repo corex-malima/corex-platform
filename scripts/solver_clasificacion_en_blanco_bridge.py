@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,25 +11,43 @@ import pulp
 
 
 DASHBOARD_ROOT = Path(__file__).resolve().parent.parent
-SOLVER_ROOT = Path(
-    os.environ.get(
-        "POSTHARVEST_SOLVER_ROOT",
-        str(DASHBOARD_ROOT.parent / "solver_poscosecha"),
-    )
-).resolve()
 
-if str(SOLVER_ROOT) not in sys.path:
-    sys.path.insert(0, str(SOLVER_ROOT))
+ENGINE_ROOT = Path(__file__).resolve().parent
+
+if str(ENGINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(ENGINE_ROOT))
 
 try:
-    from solver_logic import DATE_COLUMNS, excel_round, load_workbook_defaults, solve_pipeline
+    from postharvest_solver_engine import (
+        DATE_COLUMNS,
+        excel_round,
+        solve_pipeline,
+        stem_overrun_flex_per_bunch,
+        stem_shortfall_flex_per_bunch,
+    )
 except Exception as exc:  # pragma: no cover - runtime bridge
     raise RuntimeError(
-        f"No se pudo importar el motor de solver desde {SOLVER_ROOT}: {exc}"
+        f"No se pudo importar el motor local del solver desde {ENGINE_ROOT}: {exc}"
     ) from exc
 
 
 RECIPE_OBJECTIVE_TOLERANCE = 1e-6
+RECIPE_INTEGRAL_TOLERANCE = 1e-5
+DEFAULT_AVAILABILITY_TEMPLATE = [
+    {"grado": 15, "peso_tallo_seed": 15.0},
+    {"grado": 20, "peso_tallo_seed": 20.0},
+    {"grado": 25, "peso_tallo_seed": 28.62},
+    {"grado": 30, "peso_tallo_seed": 31.15},
+    {"grado": 35, "peso_tallo_seed": 35.27},
+    {"grado": 40, "peso_tallo_seed": 40.25},
+    {"grado": 45, "peso_tallo_seed": 46.91},
+    {"grado": 50, "peso_tallo_seed": 51.21},
+    {"grado": 55, "peso_tallo_seed": 56.89},
+    {"grado": 60, "peso_tallo_seed": 63.08},
+    {"grado": 65, "peso_tallo_seed": 65.65},
+    {"grado": 70, "peso_tallo_seed": 71.36},
+    {"grado": 75, "peso_tallo_seed": 77.38},
+]
 
 
 def read_payload() -> dict[str, Any]:
@@ -65,22 +82,13 @@ def dataframe_records(df: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def build_defaults_payload() -> dict[str, Any]:
-    defaults = load_workbook_defaults()
-    availability_template = defaults.availability[["grado", "peso_tallo_seed"]].copy()
-
     return {
         "settings": {
-            "desperdicio": float(defaults.settings.get("desperdicio", 0.13)),
+            "desperdicio": 0.13,
         },
-        "availability_template": [
-            {
-                "grado": int(row["grado"]),
-                "peso_tallo_seed": float(row["peso_tallo_seed"]),
-            }
-            for _, row in availability_template.iterrows()
-        ],
-        "workbook_path": str(defaults.workbook_path),
-        "master_path": str(defaults.master_path),
+        "availability_template": DEFAULT_AVAILABILITY_TEMPLATE,
+        "workbook_path": None,
+        "master_path": None,
     }
 
 
@@ -237,6 +245,24 @@ def recipe_status(weight: float, weight_min: float, weight_max: float) -> str:
     return "Dentro de objetivo"
 
 
+def recipe_solve_status(
+    problem: pulp.LpProblem,
+    status_code: int,
+    integer_vars: list[pulp.LpVariable],
+) -> str:
+    status = pulp.LpStatus.get(status_code, str(status_code))
+    if status in {"Optimal", "Feasible"}:
+        return status
+    if status == "Not Solved":
+        values = [pulp.value(variable) for variable in integer_vars]
+        if values and all(
+            value is not None and abs(float(value) - round(float(value))) <= RECIPE_INTEGRAL_TOLERANCE
+            for value in values
+        ) and pulp.value(problem.objective) is not None:
+            return status
+    raise RuntimeError(status)
+
+
 def generate_recipe_candidates(
     grade_values: list[dict[str, float]],
     tallos_min: int,
@@ -285,6 +311,147 @@ def generate_recipe_candidates(
     return candidates
 
 
+def build_greedy_recipe_fallback(
+    sku: str,
+    bunches: int,
+    peso_ideal_bunch: float,
+    peso_min_objetivo: float,
+    peso_max_objetivo: float,
+    grade_values: list[dict[str, float]],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    remaining = [int(item["tallosNetos"]) for item in grade_values]
+    remaining_weight = float(
+        sum(int(item["tallosNetos"]) * float(item["pesoTalloSeed"]) for item in grade_values)
+    )
+    chosen: list[dict[str, Any]] = []
+    current_max_deviation = 0.0
+
+    for bunch_index in range(bunches):
+        remaining_bunches = max(bunches - bunch_index, 1)
+        target_weight = remaining_weight / remaining_bunches if remaining_bunches > 0 else peso_ideal_bunch
+        feasible_indexes: list[int] = []
+        for index, candidate in enumerate(candidates):
+            counts = candidate["counts"]
+            if all(int(counts[pos]) <= remaining[pos] for pos in range(len(remaining))):
+                feasible_indexes.append(index)
+
+        if not feasible_indexes:
+            break
+
+        best_index = min(
+            feasible_indexes,
+            key=lambda index: (
+                max(current_max_deviation, float(candidates[index]["deviation_abs"])),
+                abs(float(candidates[index]["peso_por_bunch"]) - target_weight),
+                max(float(candidates[index]["peso_por_bunch"]) - max(target_weight, peso_max_objetivo), 0.0),
+                float(candidates[index]["range_penalty"]),
+                abs(float(candidates[index]["peso_por_bunch"]) - peso_ideal_bunch),
+                -int(candidates[index]["tallos_por_bunch"]),
+            ),
+        )
+        candidate = candidates[best_index]
+        chosen.append(candidate)
+        current_max_deviation = max(current_max_deviation, float(candidate["deviation_abs"]))
+        for pos in range(len(remaining)):
+            remaining[pos] -= int(candidate["counts"][pos])
+        remaining_weight -= float(candidate["peso_por_bunch"])
+
+    grouped: dict[tuple[int, ...], dict[str, Any]] = {}
+    grade_totals = {
+        int(grade_data["grado"]): {
+            "grado": int(grade_data["grado"]),
+            "tallosObjetivo": int(grade_data["tallosNetos"]),
+            "tallosAsignados": 0,
+            "pesoTalloSeed": float(grade_data["pesoTalloSeed"]),
+            "pesoTotal": 0.0,
+        }
+        for grade_data in grade_values
+    }
+
+    for candidate in chosen:
+        key = tuple(int(value) for value in candidate["counts"])
+        bucket = grouped.setdefault(
+            key,
+            {
+                "candidate": candidate,
+                "cantidad": 0,
+            },
+        )
+        bucket["cantidad"] += 1
+
+    final_rows: list[dict[str, Any]] = []
+    for index, (_, bucket) in enumerate(
+        sorted(grouped.items(), key=lambda item: (-int(item[1]["cantidad"]), float(item[1]["candidate"]["deviation_abs"])))
+    ):
+        candidate = bucket["candidate"]
+        quantity = int(bucket["cantidad"])
+        composition = []
+        for grade_position, grade_data in enumerate(grade_values):
+            stems = int(candidate["counts"][grade_position])
+            if stems <= 0:
+                continue
+            peso_tallo = float(grade_data["pesoTalloSeed"])
+            composition.append(
+                {
+                    "grado": int(grade_data["grado"]),
+                    "tallos": stems,
+                    "pesoTalloSeed": peso_tallo,
+                    "pesoTotal": float(stems * peso_tallo),
+                }
+            )
+            grade_totals[int(grade_data["grado"])]["tallosAsignados"] += stems * quantity
+            grade_totals[int(grade_data["grado"])]["pesoTotal"] += stems * quantity * peso_tallo
+
+        final_rows.append(
+            {
+                "recetaId": f"heuristica-{index + 1}",
+                "cantidad": quantity,
+                "tallosPorBunch": int(candidate["tallos_por_bunch"]),
+                "pesoPorBunch": float(candidate["peso_por_bunch"]),
+                "difIdeal": float(candidate["peso_por_bunch"] - peso_ideal_bunch),
+                "estadoPeso": recipe_status(
+                    float(candidate["peso_por_bunch"]),
+                    peso_min_objetivo,
+                    peso_max_objetivo,
+                ),
+                "composicion": composition,
+            }
+        )
+
+    bunches_resueltos = int(sum(int(row["cantidad"]) for row in final_rows))
+    tallos_sin_receta = int(sum(max(value, 0) for value in remaining))
+    peso_promedio_real = (
+        float(
+            sum(float(row["pesoPorBunch"]) * int(row["cantidad"]) for row in final_rows) / bunches_resueltos
+        )
+        if bunches_resueltos > 0
+        else 0.0
+    )
+
+    return {
+        "summary": {
+            "sku": sku,
+            "bunchesObjetivo": bunches,
+            "bunchesResueltos": bunches_resueltos,
+            "recetasUsadas": len(final_rows),
+            "tallosTotales": int(sum(int(item["tallosNetos"]) for item in grade_values)),
+            "tallosSinReceta": tallos_sin_receta,
+            "pesoIdealBunch": peso_ideal_bunch,
+            "pesoPromedioReal": peso_promedio_real,
+            "penalidadRango": float(
+                sum(float(row["cantidad"]) * max(abs(float(row["difIdeal"])), 0.0) for row in final_rows)
+            ),
+            "desvioAbsolutoTotal": float(
+                sum(abs(float(row["difIdeal"])) * int(row["cantidad"]) for row in final_rows)
+            ),
+            "status": "Heuristica parcial" if bunches_resueltos < bunches or tallos_sin_receta > 0 else "Heuristica",
+        },
+        "rows": final_rows,
+        "gradeTotals": list(grade_totals.values()),
+    }
+
+
 def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
     sku = str(payload.get("sku", "")).strip()
     bunches = int(excel_round(payload.get("pedidoResuelto", 0), 0))
@@ -318,8 +485,10 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("No hay tallos netos por grado para construir la receta del SKU.")
 
     tallos_totales = int(sum(int(item["tallosNetos"]) for item in grade_values))
-    tallos_minimos = tallos_min * bunches
-    tallos_maximos = tallos_max * bunches
+    effective_tallos_min = max(int(tallos_min - stem_shortfall_flex_per_bunch(sku)), 1)
+    effective_tallos_max = max(int(tallos_max + stem_overrun_flex_per_bunch(sku)), effective_tallos_min)
+    tallos_minimos = effective_tallos_min * bunches
+    tallos_maximos = effective_tallos_max * bunches
 
     if tallos_totales < tallos_minimos or tallos_totales > tallos_maximos:
         raise RuntimeError(
@@ -328,8 +497,8 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
 
     candidates = generate_recipe_candidates(
         grade_values,
-        tallos_min,
-        tallos_max,
+        effective_tallos_min,
+        effective_tallos_max,
         peso_ideal_bunch,
         peso_min_objetivo,
         peso_max_objetivo,
@@ -347,59 +516,113 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
         index: pulp.LpVariable(f"use_{index}", lowBound=0, upBound=1, cat="Binary")
         for index in range(len(candidates))
     }
+    max_deviation_var = pulp.LpVariable("max_recipe_deviation", lowBound=0)
 
     problem += (
         pulp.lpSum(recipe_vars[index] for index in recipe_vars) == bunches
     ), "recipe_total_bunches"
 
+    unassigned_vars = {
+        grade_position: pulp.LpVariable(f"unassigned_{grade_position}", lowBound=0)
+        for grade_position in range(len(grade_values))
+    }
+
     for grade_position, grade_data in enumerate(grade_values):
+        assigned_expr = pulp.lpSum(
+            candidates[index]["counts"][grade_position] * recipe_vars[index]
+            for index in recipe_vars
+        )
         problem += (
-            pulp.lpSum(
-                candidates[index]["counts"][grade_position] * recipe_vars[index]
-                for index in recipe_vars
-            )
-            == int(grade_data["tallosNetos"])
+            assigned_expr + unassigned_vars[grade_position] == int(grade_data["tallosNetos"])
         ), f"recipe_grade_{grade_data['grado']}"
 
     for index in recipe_vars:
         problem += (
             recipe_vars[index] <= bunches * use_vars[index]
         ), f"recipe_use_link_{index}"
+        problem += (
+            max_deviation_var
+            >= float(candidates[index]["deviation_abs"]) - float(candidates[index]["deviation_abs"]) * (1 - use_vars[index])
+        ), f"recipe_max_deviation_{index}"
 
     range_penalty_expr = pulp.lpSum(
         float(candidates[index]["range_penalty"]) * recipe_vars[index]
         for index in recipe_vars
     )
-    distinct_expr = pulp.lpSum(use_vars[index] for index in use_vars)
     deviation_expr = pulp.lpSum(
         float(candidates[index]["deviation_abs"]) * recipe_vars[index]
         for index in recipe_vars
     )
+    distinct_expr = pulp.lpSum(use_vars[index] for index in use_vars)
+    unassigned_expr = pulp.lpSum(unassigned_vars[grade_position] for grade_position in unassigned_vars)
 
-    solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=30)
+    solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=90)
+    problem.setObjective(unassigned_expr)
+    status_unassigned = problem.solve(solver)
+    try:
+        recipe_solve_status(problem, status_unassigned, list(recipe_vars.values()) + list(use_vars.values()))
+    except RuntimeError as exc:
+        return build_greedy_recipe_fallback(
+            sku=sku,
+            bunches=bunches,
+            peso_ideal_bunch=peso_ideal_bunch,
+            peso_min_objetivo=peso_min_objetivo,
+            peso_max_objetivo=peso_max_objetivo,
+            grade_values=grade_values,
+            candidates=candidates,
+        )
+
+    unassigned_opt = float(pulp.value(unassigned_expr) or 0.0)
+    problem += (
+        unassigned_expr <= unassigned_opt + RECIPE_OBJECTIVE_TOLERANCE
+    ), "recipe_fix_unassigned"
+
     problem.setObjective(range_penalty_expr)
     status_range = problem.solve(solver)
-    if pulp.LpStatus[status_range] not in {"Optimal", "Feasible"}:
-        raise RuntimeError("No se pudo encontrar una receta factible para el SKU seleccionado.")
+    try:
+        recipe_solve_status(problem, status_range, list(recipe_vars.values()) + list(use_vars.values()))
+    except RuntimeError as exc:
+        raise RuntimeError("No se pudo estabilizar el rango objetivo de la receta.") from exc
 
     range_penalty_opt = float(pulp.value(range_penalty_expr) or 0.0)
     problem += (
         range_penalty_expr <= range_penalty_opt + RECIPE_OBJECTIVE_TOLERANCE
     ), "recipe_fix_range_penalty"
 
+    problem.setObjective(max_deviation_var)
+    status_max_deviation = problem.solve(solver)
+    try:
+        recipe_solve_status(problem, status_max_deviation, list(recipe_vars.values()) + list(use_vars.values()))
+    except RuntimeError as exc:
+        raise RuntimeError("No se pudo balancear la peor receta del SKU seleccionado.") from exc
+
+    max_deviation_opt = float(pulp.value(max_deviation_var) or 0.0)
+    problem += (
+        max_deviation_var <= max_deviation_opt + RECIPE_OBJECTIVE_TOLERANCE
+    ), "recipe_fix_max_deviation"
+
+    problem.setObjective(deviation_expr)
+    status_deviation = problem.solve(solver)
+    try:
+        recipe_solve_status(problem, status_deviation, list(recipe_vars.values()) + list(use_vars.values()))
+    except RuntimeError as exc:
+        raise RuntimeError("No se pudo cerrar la receta final del SKU seleccionado.") from exc
+
+    deviation_opt = float(pulp.value(deviation_expr) or 0.0)
+    problem += (
+        deviation_expr <= deviation_opt + RECIPE_OBJECTIVE_TOLERANCE
+    ), "recipe_fix_deviation"
+
     problem.setObjective(distinct_expr)
     status_distinct = problem.solve(solver)
-    if pulp.LpStatus[status_distinct] not in {"Optimal", "Feasible"}:
-        raise RuntimeError("No se pudo estabilizar la receta del SKU con pocas combinaciones.")
+    try:
+        recipe_solve_status(problem, status_distinct, list(recipe_vars.values()) + list(use_vars.values()))
+    except RuntimeError as exc:
+        raise RuntimeError("No se pudo estabilizar la receta del SKU con pocas combinaciones.") from exc
     distinct_opt = float(pulp.value(distinct_expr) or 0.0)
     problem += (
         distinct_expr <= distinct_opt + RECIPE_OBJECTIVE_TOLERANCE
     ), "recipe_fix_distinct"
-
-    problem.setObjective(deviation_expr)
-    status_deviation = problem.solve(solver)
-    if pulp.LpStatus[status_deviation] not in {"Optimal", "Feasible"}:
-        raise RuntimeError("No se pudo cerrar la receta final del SKU seleccionado.")
 
     final_rows: list[dict[str, Any]] = []
     grade_totals = {
@@ -467,10 +690,13 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
         else 0.0
     )
     final_statuses = {
+        pulp.LpStatus[status_unassigned],
         pulp.LpStatus[status_range],
-        pulp.LpStatus[status_distinct],
+        pulp.LpStatus[status_max_deviation],
         pulp.LpStatus[status_deviation],
+        pulp.LpStatus[status_distinct],
     }
+    unassigned_total = float(pulp.value(unassigned_expr) or 0.0)
 
     return {
         "summary": {
@@ -479,11 +705,14 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
             "bunchesResueltos": bunches_resueltos,
             "recetasUsadas": len(final_rows),
             "tallosTotales": tallos_totales,
+            "tallosSinReceta": int(excel_round(unassigned_total, 0)),
             "pesoIdealBunch": peso_ideal_bunch,
             "pesoPromedioReal": peso_promedio_real,
             "penalidadRango": range_penalty_opt,
             "desvioAbsolutoTotal": float(pulp.value(deviation_expr) or 0.0),
-            "status": "Optimal"
+            "status": "Parcial"
+            if unassigned_total > RECIPE_OBJECTIVE_TOLERANCE
+            else "Optimal"
             if final_statuses == {"Optimal"}
             else "Feasible con ajustes",
         },

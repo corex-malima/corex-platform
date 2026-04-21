@@ -42,10 +42,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = (await request.json()) as PoscosechaClasificacionRunInput;
-    const data = await runClasificacionEnBlancoSolver(payload);
+    const { runs } = await runClasificacionEnBlancoSolver(payload);
 
     return NextResponse.json<PoscosechaClasificacionRunPayload>(
-      { data },
+      { data: runs },
       {
         headers: {
           "Cache-Control": "private, no-store",
