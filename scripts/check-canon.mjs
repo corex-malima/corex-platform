@@ -186,6 +186,7 @@ const hugeFileAllowlist = new Set([
   "src/lib/salud.ts",
   "src/lib/fenograma-core.ts",
   "src/lib/postcosecha-balanzas-core.ts",
+  "src/lib/postcosecha-clasificacion-en-blanco.ts",
   "src/lib/talento-humano.ts",
   "src/modules/campo/components/campo-explorer.tsx",
   "src/modules/comparacion/components/comparison-explorer.tsx",

@@ -39,7 +39,12 @@ describe("access control", () => {
       .filter((module) => module.navigationGroup !== "Administracion")
       .map((module) => module.href);
 
-    expect(viewerResources.sort()).toEqual(activeNonAdmin.sort());
+    expect(viewerResources.filter((resource) => resource.startsWith("/dashboard")).sort()).toEqual(activeNonAdmin.sort());
+    expect(viewerResources).toEqual(expect.arrayContaining([
+      "panel:person-sheet.info",
+      "panel:person-sheet.performance",
+      "panel:person-sheet.medical",
+    ]));
     expect(viewerResources).not.toContain("/dashboard/admin/seguridad/usuarios");
   });
 

@@ -28,7 +28,7 @@ El build puede emitir un warning de Turbopack/NFT relacionado con rutas dinamica
 - `src/modules/*` ya no debe importar directamente desde `@/components/dashboard/*`; el canon check falla si reaparece esa frontera rota.
 - Los unicos imports cruzados entre modulos aceptados temporalmente son los que reutilizan overlays/paneles de Fenograma y Mortality mientras se completa la extraccion a piezas shared o de dominio.
 - `src/lib/fenograma.ts` y `src/lib/postcosecha-balanzas.ts` ahora son fachadas temporales. La logica nueva debe ir a `*-core.ts` o a subarchivos de dominio, nunca volver a crecer dentro de la fachada.
-- `block-profile-modal.tsx`, `src/lib/fenograma-core.ts` y `src/lib/postcosecha-balanzas-core.ts` siguen siendo monolitos con plan de split.
+- `block-profile-modal.tsx`, `src/lib/fenograma-core.ts`, `src/lib/postcosecha-balanzas-core.ts` y `src/lib/postcosecha-clasificacion-en-blanco.ts` siguen siendo monolitos con plan de split.
 - `src/modules/fenograma/components/block-profile-primitives.tsx` es una excepcion valida del canon porque mantiene el `MetricPill` clickeable extraido desde el modal de dominio.
 - Colores directos de Leaflet y paletas categoricas de Programaciones son excepciones documentadas.
 

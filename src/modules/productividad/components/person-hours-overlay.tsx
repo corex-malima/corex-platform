@@ -139,13 +139,14 @@ export function PersonHoursOverlay({
   const canSeeMedical     = canAccessResource("panel:person-sheet.medical",     allowedResources, isSuperadmin);
   const defaultView: "info" | "performance" | "medical" = canSeeInfo ? "info" : canSeePerformance ? "performance" : "medical";
   const [view, setView] = useState<"info" | "performance" | "medical">(defaultView);
-
-  // Si el usuario pierde acceso a la vista actual (p.ej. admin bloquea en vivo), reubicar.
-  useEffect(() => {
-    if (view === "info" && !canSeeInfo) setView(defaultView);
-    else if (view === "performance" && !canSeePerformance) setView(defaultView);
-    else if (view === "medical" && !canSeeMedical) setView(defaultView);
-  }, [view, canSeeInfo, canSeePerformance, canSeeMedical, defaultView]);
+  const activeView: "info" | "performance" | "medical" =
+    view === "info" && canSeeInfo
+      ? "info"
+      : view === "performance" && canSeePerformance
+        ? "performance"
+        : view === "medical" && canSeeMedical
+          ? "medical"
+          : defaultView;
 
   const personRequest = buildCycleHoursPersonRequest(cycleKey, personId);
   const {
@@ -209,7 +210,7 @@ export function PersonHoursOverlay({
                   "rounded-full px-4 py-2 text-sm font-medium transition-colors",
                   !canSeeInfo
                     ? "cursor-not-allowed text-muted-foreground/40"
-                    : view === "info"
+                    : activeView === "info"
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                 )}
@@ -225,7 +226,7 @@ export function PersonHoursOverlay({
                   "rounded-full px-4 py-2 text-sm font-medium transition-colors",
                   !canSeePerformance
                     ? "cursor-not-allowed text-muted-foreground/40"
-                    : view === "performance"
+                    : activeView === "performance"
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                 )}
@@ -241,7 +242,7 @@ export function PersonHoursOverlay({
                   "rounded-full px-4 py-2 text-sm font-medium transition-colors",
                   !canSeeMedical
                     ? "cursor-not-allowed text-muted-foreground/40"
-                    : view === "medical"
+                    : activeView === "medical"
                       ? "bg-card text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                 )}
@@ -259,7 +260,7 @@ export function PersonHoursOverlay({
             ) : requestError ? (
               <div className="py-8 text-sm text-destructive">{requestError}</div>
             ) : data ? (
-              view === "info" ? (
+              activeView === "info" ? (
                 <div className="space-y-5">
                   <div className="rounded-2xl border border-border/60 bg-muted/14 px-5 py-5">
                     <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/65">
@@ -319,7 +320,7 @@ export function PersonHoursOverlay({
                     </div>
                   </div>
                 </div>
-              ) : view === "performance" ? (
+              ) : activeView === "performance" ? (
                 <div className="space-y-5">
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
                     <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">

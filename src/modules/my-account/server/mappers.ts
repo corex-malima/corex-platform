@@ -1,5 +1,5 @@
 import type { MyAccountPageData } from "@/lib/personal-workspace-types";
-import type { MyAccountInitialData } from "@/modules/my-account";
+import type { MyAccountInitialData } from "@/modules/my-account/index";
 
 /**
  * Transforma el payload del loader a la forma consumida por el explorer.
