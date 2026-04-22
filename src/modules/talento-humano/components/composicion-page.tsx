@@ -20,7 +20,7 @@ import {
   buildTalentoQueryString,
   type CompositionRow,
 } from "@/modules/talento-humano/components/shared";
-import { Label } from "@/shared/ui/label";
+import { SingleSelectField } from "@/shared/filters/single-select-field";
 
 const activosFetcher = (url: string) =>
   fetchJson<TalentoActivosData>(url, "No se pudo cargar composicion laboral.");
@@ -94,20 +94,16 @@ export function TalentoComposicionPage({ initialData }: { initialData: TalentoAc
             onRefresh={() => mutate()}
             refreshing={isValidating}
             extraControls={
-              <div className="space-y-2">
-                <Label>Tabla por</Label>
-                <select
-                  value={dimensionKey}
-                  onChange={(event) => setDimensionKey(event.target.value as keyof TalentoPersonRecord)}
-                  className="h-11 w-full rounded-[16px] border border-input bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                >
-                  {COMPOSITION_DIMENSIONS.map((dimension) => (
-                    <option key={dimension.key} value={dimension.key}>
-                      {dimension.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SingleSelectField
+                id="composicion-dimension"
+                label="Tabla por"
+                value={dimensionKey}
+                emptyValue={COMPOSITION_DIMENSIONS[0]!.key}
+                emptyLabel={COMPOSITION_DIMENSIONS[0]!.label}
+                options={COMPOSITION_DIMENSIONS.slice(1).map((d) => d.key)}
+                displayValue={(v) => COMPOSITION_DIMENSIONS.find((d) => d.key === v)?.label ?? v}
+                onChange={(v) => setDimensionKey(v as keyof TalentoPersonRecord)}
+              />
             }
             containerless
           />

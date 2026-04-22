@@ -34,6 +34,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { DialogShell } from "@/shared/overlays/dialog-shell";
+import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { formatDate, formatInteger } from "@/shared/lib/format";
 import { ToggleSwitch } from "@/shared/forms/toggle-switch";
 import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
@@ -416,22 +417,21 @@ function UserFormModal({
             </div>
           </FormField>
 
-          <FormField label="Rol">
-            <select
+          <div>
+            <SingleSelectField
+              id="user-role"
+              label="Rol"
               value={roleCode}
-              onChange={(event) => setRoleCode(event.target.value as RoleCode)}
-              className="h-11 w-full rounded-[16px] border border-input bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              {ROLE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              emptyValue={ROLE_OPTIONS[0]!.value}
+              emptyLabel={ROLE_OPTIONS[0]!.label}
+              options={ROLE_OPTIONS.slice(1).map((o) => o.value)}
+              displayValue={(v) => ROLE_OPTIONS.find((o) => o.value === v)?.label ?? v}
+              onChange={(v) => setRoleCode(v as RoleCode)}
+            />
             <p className="pt-1 text-xs text-muted-foreground">
               {ROLE_OPTIONS.find((option) => option.value === roleCode)?.description}
             </p>
-          </FormField>
+          </div>
 
           <FormField label="Estado">
             <div className="flex items-center gap-3 pt-2">

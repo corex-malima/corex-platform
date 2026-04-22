@@ -4,6 +4,7 @@ import { memo, useMemo, useState } from "react";
 import { ArrowDownUp } from "lucide-react";
 
 import { Badge } from "@/shared/ui/badge";
+import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent } from "@/shared/ui/card";
 import { ClickableTableRow } from "@/shared/tables/clickable-table-row";
@@ -405,23 +406,16 @@ export const FenogramaPivotTable = memo(function FenogramaPivotTable({
           </div>
 
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_140px]">
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">
-                Orden
-              </p>
-              <select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as PivotSortKey)}
-                className="flex h-11 w-full rounded-[16px] border border-input bg-background px-4 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50"
-              >
-                {dimensionOptions.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-                <option value="totalStems">Total tallos</option>
-              </select>
-            </div>
+            <SingleSelectField
+              id="fenograma-pivot-sort"
+              label="Orden"
+              value={sortBy}
+              emptyValue={dimensionOptions[0]!.key}
+              emptyLabel={dimensionOptions[0]!.label}
+              options={[...dimensionOptions.slice(1).map((o) => o.key), "totalStems"]}
+              displayValue={(v) => v === "totalStems" ? "Total tallos" : (dimensionOptions.find((o) => o.key === v)?.label ?? v)}
+              onChange={(v) => setSortBy(v as PivotSortKey)}
+            />
 
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">

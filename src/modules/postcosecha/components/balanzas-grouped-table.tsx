@@ -4,6 +4,7 @@ import { memo, useMemo, useState } from "react";
 import { ArrowDownUp } from "lucide-react";
 
 import { Badge } from "@/shared/ui/badge";
+import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent } from "@/shared/ui/card";
 import { cn } from "@/lib/utils";
@@ -180,32 +181,31 @@ export const BalanzasGroupedTable = memo(function BalanzasGroupedTable({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
-              Orden
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as SortKey)}
-                className="flex h-11 w-full rounded-[16px] border border-input bg-background px-4 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50"
-              >
-                <option value="ratio">Macro indicador</option>
-                <option value="source">{node.sourceStage}</option>
-                <option value="target">{node.targetStage}</option>
-                <option value="gap">Brecha</option>
-                <option value="rows">Filas</option>
-                <option value="group">Grupo</option>
-              </select>
-              <Button
-                variant="outline"
-                className="rounded-xl"
-                onClick={() => setSortDirection((current) => current === "asc" ? "desc" : "asc")}
-              >
-                <ArrowDownUp className="size-4" aria-hidden="true" />
-                {sortDirection === "asc" ? "Asc" : "Desc"}
-              </Button>
-            </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <SingleSelectField
+              id="balanzas-sort-by"
+              label="Orden"
+              value={sortBy}
+              emptyValue="ratio"
+              emptyLabel="Macro indicador"
+              options={["source", "target", "gap", "rows", "group"]}
+              displayValue={(v) => {
+                if (v === "source") return node.sourceStage;
+                if (v === "target") return node.targetStage;
+                if (v === "gap") return "Brecha";
+                if (v === "rows") return "Filas";
+                return "Grupo";
+              }}
+              onChange={(v) => setSortBy(v as SortKey)}
+            />
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setSortDirection((current) => current === "asc" ? "desc" : "asc")}
+            >
+              <ArrowDownUp className="size-4" aria-hidden="true" />
+              {sortDirection === "asc" ? "Asc" : "Desc"}
+            </Button>
           </div>
         </div>
 
