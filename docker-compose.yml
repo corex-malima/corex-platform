@@ -14,6 +14,7 @@ services:
       NODE_ENV: production
       PORT: 7777
       HOSTNAME: 0.0.0.0
+      POSTHARVEST_SOLVER_PYTHON: python3
     ports:
       - "7777:7777"
     stop_grace_period: 20s

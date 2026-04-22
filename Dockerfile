@@ -36,7 +36,10 @@ ENV HOSTNAME=0.0.0.0
 
 WORKDIR /app
 
-RUN apk add --no-cache libc6-compat \
+# Python 3 + dependencias del solver de postcosecha (numpy, pandas, pulp)
+RUN apk add --no-cache libc6-compat python3 py3-pip py3-numpy \
+  && pip3 install --no-cache-dir pandas pulp \
+  && ln -sf python3 /usr/bin/python \
   && addgroup -g 1001 -S nodejs \
   && adduser -S nextjs -u 1001 -G nodejs
 
@@ -44,6 +47,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/validate-runtime-env.mjs ./scripts/validate-runtime-env.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/solver_clasificacion_en_blanco_bridge.py ./scripts/solver_clasificacion_en_blanco_bridge.py
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/postharvest_solver_engine.py ./scripts/postharvest_solver_engine.py
 
 USER nextjs
 
