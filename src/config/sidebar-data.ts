@@ -33,6 +33,7 @@ const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   Campo: Sprout,
   Postcosecha: Factory,
   "Talento Humano": Users,
+  Calidad: ClipboardList,
   Planificacion: CalendarDays,
   Registros: ClipboardList,
   Personal: UserCircle2,

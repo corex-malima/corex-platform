@@ -76,6 +76,7 @@ Regla:
 | Fetch cliente | `@/lib/fetch-json` |
 | Formatters | `@/shared/lib/format` |
 | Persistencia local del solver | `src/modules/postcosecha/hooks/use-solver-draft-storage.ts` |
+| Dashboard Calidad / Punto de apertura | `src/lib/calidad-punto-apertura.ts` + `src/modules/calidad/components/punto-apertura-*.tsx` |
 | Utilidades de fecha (ISO, startOfMonth, endOfMonth, addDays) | `@/shared/lib/date-utils` |
 | Pool DB personal workspace | `@/lib/personal-workspace-db` (`queryPersonalWorkspace`, `withPersonalWorkspaceTransaction`) |
 | Schemas Zod perfil / tareas / eventos / recordatorios | `@/lib/personal-workspace-schemas` |
