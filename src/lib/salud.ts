@@ -1,3 +1,5 @@
+﻿import "server-only";
+
 import { query } from "@/lib/db";
 import { cachedAsync } from "@/lib/server-cache";
 import { toNumber } from "@/shared/lib/number-utils";

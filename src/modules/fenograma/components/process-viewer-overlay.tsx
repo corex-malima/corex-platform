@@ -103,17 +103,6 @@ export function ProcessViewerOverlay({
     };
   }, [xmlData]);
 
-  useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
-
   function zoomBy(step: number) {
     if (!viewerRef.current) {
       return;

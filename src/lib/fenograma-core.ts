@@ -1,3 +1,5 @@
+﻿import "server-only";
+
 import { getISOWeek, getISOWeekYear } from "date-fns";
 
 import { query } from "@/lib/db";

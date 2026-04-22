@@ -225,6 +225,7 @@ Excepciones documentadas:
 - `src/lib/fenograma-core.ts` y `src/lib/postcosecha-balanzas-core.ts` siguen siendo monolitos de dominio y deben partirse por loaders/mappers/graph/table/options.
 - `src/proxy.ts` se mantiene: en Next.js 16 actua como Proxy/Middleware y el build lo reporta como tal. No renombrar sin validar auth/login en produccion.
 - Clasificacion en blanco y Talento Humano ya tienen split de modulo; mantener sus barrels/orquestadores pequenos.
+- `src/lib/salud.ts` (~806 lineas) — loader unico de dominio medico con mappers internos; no es candidato a split por coherencia de dominio.
 - El canon UX/UI de explorers principales queda cerrado; nuevas divergencias deben documentarse como excepcion antes de crecer.
 - El build puede emitir warning de Turbopack/NFT por rutas dinamicas del solver de postcosecha; mantenerlo vigilado.
 

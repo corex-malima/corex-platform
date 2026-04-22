@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
-import { LoaderCircle, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { LoaderCircle } from "lucide-react";
 import useSWRImmutable from "swr/immutable";
 
 import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
+import { SheetShell } from "@/shared/overlays/sheet-shell";
 import { fetchJson } from "@/lib/fetch-json";
 import { formatDateSlash, formatInteger, formatDecimal } from "@/shared/lib/format";
 import type {
@@ -296,21 +295,6 @@ function MedicalMarkerOverlay({
   series: ReturnType<typeof buildMarkerSeries>;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    }
-
-    window.addEventListener("keydown", handleEscape, true);
-    return () => window.removeEventListener("keydown", handleEscape, true);
-  }, [onClose]);
-
   const marker = series.marker;
   const recentPoints = series.recentPoints;
   const latestPoint = recentPoints[recentPoints.length - 1] ?? null;
@@ -320,153 +304,124 @@ function MedicalMarkerOverlay({
     : null;
   const safeWorstDrop = worstDrop !== Number.POSITIVE_INFINITY ? worstDrop : null;
 
-  const overlayContent = (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/54 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-6">
-      <button
-        type="button"
-        className="absolute inset-0 border-0 bg-transparent p-0"
-        onClick={onClose}
-        aria-label="Cerrar detalle del analito"
-      />
-      <div className="relative z-10 flex max-h-[min(90dvh,960px)] w-full max-w-sm sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl min-w-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-card shadow-2xl shadow-slate-950/20 mx-auto">
-        <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-muted/20 px-4 py-4 sm:px-6">
-          <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="rounded-full px-3 py-1">
-                Ficha medica
-              </Badge>
-              <Badge variant="secondary" className="rounded-full px-3 py-1">
-                {marker?.name ?? "Analito"}
-              </Badge>
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-2xl font-semibold tracking-tight">
-                {personName}
-              </h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Ultimos {recentPoints.length} resultados validos y su evolucion.
+  return (
+    <SheetShell
+      open={true}
+      title={marker?.name ?? "Analito"}
+      description={`${personName} · Ultimos ${recentPoints.length} resultados validos y su evolucion.`}
+      onClose={onClose}
+      widthClassName="max-w-5xl"
+      headerActions={
+        <Badge variant="outline" className="rounded-full px-3 py-1">
+          Ficha medica
+        </Badge>
+      }
+    >
+      {marker ? (
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              label="Historia util"
+              value={`${recentPoints.length} examenes`}
+            />
+            <SummaryCard
+              label="Ultimo valor"
+              value={`${
+                latestPoint?.value === undefined || latestPoint.value === null
+                  ? "-"
+                  : Number.isInteger(latestPoint.value)
+                    ? formatInteger(latestPoint.value)
+                    : formatDecimal(latestPoint.value)
+              } ${marker.unit}`.trim()}
+            />
+            <SummaryCard
+              label="Cambio reciente"
+              value={formatSignedPercent(latestDelta)}
+              hint="Vs. el control valido anterior"
+            />
+            <SummaryCard
+              label="Direccion"
+              value={resolveDirection(recentPoints)}
+              hint={marker.field === "colinesterasa" ? "Se marca alerta si cae 25% o mas." : undefined}
+            />
+          </div>
+
+          {marker.field === "colinesterasa" ? (
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-4 text-sm text-slate-900">
+              <p className="font-semibold">Control especial de colinesterasa</p>
+              <p className="mt-1">
+                Caida maxima reciente: {formatSignedPercent(safeWorstDrop)}. Si la variacion entre controles
+                consecutivos baja 25% o mas, se muestra en rojo.
               </p>
             </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/65">
+                Evolucion del analito
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Vista flotante del analito seleccionando los ultimos cinco resultados validos.
+              </p>
+            </div>
+            <MarkerTrendChart points={recentPoints} />
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="size-4" />
-          </Button>
-        </div>
 
-        <div className="overflow-y-auto px-4 py-5 sm:px-6">
-          {marker ? (
-            <div className="space-y-5">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <SummaryCard
-                  label="Historia util"
-                  value={`${recentPoints.length} examenes`}
-                />
-                <SummaryCard
-                  label="Ultimo valor"
-                  value={`${
-                    latestPoint?.value === undefined || latestPoint.value === null
-                      ? "-"
-                      : Number.isInteger(latestPoint.value)
-                        ? formatInteger(latestPoint.value)
-                        : formatDecimal(latestPoint.value)
-                  } ${marker.unit}`.trim()}
-                />
-                <SummaryCard
-                  label="Cambio reciente"
-                  value={formatSignedPercent(latestDelta)}
-                  hint="Vs. el control valido anterior"
-                />
-                <SummaryCard
-                  label="Direccion"
-                  value={resolveDirection(recentPoints)}
-                  hint={marker.field === "colinesterasa" ? "Se marca alerta si cae 25% o mas." : undefined}
-                />
-              </div>
-
-              {marker.field === "colinesterasa" ? (
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-4 text-sm text-slate-900">
-                  <p className="font-semibold">Control especial de colinesterasa</p>
-                  <p className="mt-1">
-                    Caida maxima reciente: {formatSignedPercent(safeWorstDrop)}. Si la variacion entre controles
-                    consecutivos baja 25% o mas, se muestra en rojo.
-                  </p>
-                </div>
-              ) : null}
-
-              <div className="space-y-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/65">
-                    Evolucion del analito
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Vista flotante del analito seleccionando los ultimos cinco resultados validos.
-                  </p>
-                </div>
-                <MarkerTrendChart points={recentPoints} />
-              </div>
-
-              <div className="rounded-2xl border border-border/70">
-                <div className="border-b border-border/60 px-4 py-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/65">
-                    Ultimos controles
-                  </p>
-                </div>
-                <div className="overflow-auto">
-                  <table className="min-w-full border-separate border-spacing-0 text-sm">
-                    <thead className="sticky top-0 bg-card/95 backdrop-blur">
-                      <tr>
-                        <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-left font-semibold text-foreground">Fecha</th>
-                        <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-left font-semibold text-foreground">Tipo</th>
-                        <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-right font-semibold text-foreground">Valor</th>
-                        <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-right font-semibold text-foreground">Variacion</th>
-                        <th className="border-b bg-card px-3 py-3 text-left font-semibold text-foreground">Lectura</th>
+          <div className="rounded-2xl border border-border/70">
+            <div className="border-b border-border/60 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/65">
+                Ultimos controles
+              </p>
+            </div>
+            <div className="overflow-auto">
+              <table className="min-w-full border-separate border-spacing-0 text-sm">
+                <thead className="sticky top-0 bg-card/95 backdrop-blur">
+                  <tr>
+                    <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-left font-semibold text-foreground">Fecha</th>
+                    <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-left font-semibold text-foreground">Tipo</th>
+                    <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-right font-semibold text-foreground">Valor</th>
+                    <th className="border-b border-r border-border/60 bg-card px-3 py-3 text-right font-semibold text-foreground">Variacion</th>
+                    <th className="border-b bg-card px-3 py-3 text-left font-semibold text-foreground">Lectura</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...recentPoints].reverse().map((point, index) => {
+                    const isAlert = marker.field === "colinesterasa" && point.deltaPct !== null && point.deltaPct <= -25;
+                    return (
+                      <tr key={`${point.examId}-${point.date}`} className={index % 2 === 0 ? "bg-background/90" : "bg-muted/18"}>
+                        <td className="border-b border-r border-border/40 px-3 py-2.5">{formatDateSlash(point.date)}</td>
+                        <td className="border-b border-r border-border/40 px-3 py-2.5">{point.type}</td>
+                        <td className="border-b border-r border-border/40 px-3 py-2.5 text-right tabular-nums">
+                          {Number.isInteger(point.value) ? formatInteger(point.value) : formatDecimal(point.value)} {marker.unit}
+                        </td>
+                        <td className={cn(
+                          "border-b border-r border-border/40 px-3 py-2.5 text-right tabular-nums",
+                          isAlert ? "font-semibold text-slate-600" : "text-foreground",
+                        )}>
+                          {formatSignedPercent(point.deltaPct)}
+                        </td>
+                        <td className={cn(
+                          "border-b px-3 py-2.5",
+                          isAlert ? "font-semibold text-slate-600" : "text-muted-foreground",
+                        )}>
+                          {isAlert ? "Alerta de caida" : point.marker.status}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {[...recentPoints].reverse().map((point, index) => {
-                        const isAlert = marker.field === "colinesterasa" && point.deltaPct !== null && point.deltaPct <= -25;
-                        return (
-                          <tr key={`${point.examId}-${point.date}`} className={index % 2 === 0 ? "bg-background/90" : "bg-muted/18"}>
-                            <td className="border-b border-r border-border/40 px-3 py-2.5">{formatDateSlash(point.date)}</td>
-                            <td className="border-b border-r border-border/40 px-3 py-2.5">{point.type}</td>
-                            <td className="border-b border-r border-border/40 px-3 py-2.5 text-right tabular-nums">
-                              {Number.isInteger(point.value) ? formatInteger(point.value) : formatDecimal(point.value)} {marker.unit}
-                            </td>
-                            <td className={cn(
-                              "border-b border-r border-border/40 px-3 py-2.5 text-right tabular-nums",
-                              isAlert ? "font-semibold text-slate-600" : "text-foreground",
-                            )}>
-                              {formatSignedPercent(point.deltaPct)}
-                            </td>
-                            <td className={cn(
-                              "border-b px-3 py-2.5",
-                              isAlert ? "font-semibold text-slate-600" : "text-muted-foreground",
-                            )}>
-                              {isAlert ? "Alerta de caida" : point.marker.status}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <div className="py-10 text-sm text-muted-foreground">
-              No se pudo construir la serie del analito seleccionado.
-            </div>
-          )}
+          </div>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div className="py-10 text-sm text-muted-foreground">
+          No se pudo construir la serie del analito seleccionado.
+        </div>
+      )}
+    </SheetShell>
   );
-
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(overlayContent, document.body);
 }
 
 export function PersonMedicalPanel({

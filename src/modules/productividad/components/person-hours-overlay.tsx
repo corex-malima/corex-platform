@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import useSWRImmutable from "swr/immutable";
 
@@ -164,23 +163,7 @@ export function PersonHoursOverlay({
   const displayName = profile?.fullName ?? `Personal ${personId}`;
   const requestError = error instanceof Error ? error.message : null;
 
-  useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key !== "Escape") {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      onClose();
-    }
-
-    window.addEventListener("keydown", handleEscape, true);
-    return () => window.removeEventListener("keydown", handleEscape, true);
-  }, [onClose]);
-
-  const overlayContent = (
+  return (
     <SheetShell
       title={displayName}
       description={profile?.jobTitle ?? "Personal de campo"}
@@ -449,10 +432,4 @@ export function PersonHoursOverlay({
           </div>
     </SheetShell>
   );
-
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(overlayContent, document.body);
 }

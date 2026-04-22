@@ -1,3 +1,5 @@
+﻿import "server-only";
+
 import type { QueryResultRow } from "pg";
 
 import { query } from "@/lib/db";
