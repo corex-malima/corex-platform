@@ -104,6 +104,8 @@ Rutas ocultas:
 5. SWR revalida contra `src/app/api/*`.
 6. Las APIs llaman `src/lib/*` y responden JSON normalizado.
 
+Paginas que necesitan el objeto `access` post-guard (derivar `canWrite`, pasar `username` al mapper) usan `requirePageAccess()` directamente — esto es intencional y correcto, no una violacion del patron. Ejemplos: `mi-cuenta/page.tsx`, `mi-trabajo/page.tsx`, `dead-plants-reseed/page.tsx`.
+
 ## Auth y seguridad
 
 - Sesion por cookie `wh-session`.
