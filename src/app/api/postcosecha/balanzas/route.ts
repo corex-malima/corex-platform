@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
       year: request.nextUrl.searchParams.get("year") ?? undefined,
       month: request.nextUrl.searchParams.get("month") ?? undefined,
       dayName: request.nextUrl.searchParams.get("dayName") ?? undefined,
-      destination: request.nextUrl.searchParams.get("destination") ?? undefined,
       weekMode: request.nextUrl.searchParams.get("weekMode") ?? undefined,
       weekValue: request.nextUrl.searchParams.get("weekValue") ?? undefined,
       dateFrom: request.nextUrl.searchParams.get("dateFrom") ?? undefined,

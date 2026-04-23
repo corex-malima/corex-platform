@@ -17,7 +17,7 @@ import type { BalanzasProcessSelection } from "@/modules/postcosecha/lib/balanza
 import { Button } from "@/shared/ui/button";
 import { fetchJson } from "@/lib/fetch-json";
 import { MultiSelectField } from "@/shared/filters/multi-select-field";
-import { formatMonthNumeric } from "@/shared/lib/format";
+import { formatYearMonth } from "@/shared/lib/format";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
 import { ChartSection, FilterPanel } from "@/shared/layout/filter-panel";
 import { DateField } from "@/shared/filters/date-field";
@@ -43,7 +43,6 @@ function buildQueryString(filters: BalanzasFilters) {
   params.set("year", filters.year);
   params.set("month", filters.month);
   params.set("dayName", filters.dayName);
-  params.set("destination", filters.destination);
   params.set("weekMode", "iso");
   params.set("weekValue", filters.weekValue);
 
@@ -178,7 +177,7 @@ export function BalanzasExplorer({
         }
       >
         <FilterPanel>
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
             <MultiSelectField
               id="balanzas-year"
               label="Años"
@@ -192,7 +191,7 @@ export function BalanzasExplorer({
               value={filters.month}
               options={data.options.months}
               onChange={(value) => updateFilter("month", value)}
-              displayValue={formatMonthNumeric}
+              displayValue={formatYearMonth}
             />
             <MultiSelectField
               id="balanzas-day-name"
@@ -208,14 +207,6 @@ export function BalanzasExplorer({
               options={weekOptions}
               onChange={(value) => updateFilter("weekValue", value)}
               emptyLabel="Ultima disponible"
-            />
-            <MultiSelectField
-              id="balanzas-destination"
-              label="Destino"
-              value={filters.destination}
-              options={data.options.destinations}
-              onChange={(value) => updateFilter("destination", value)}
-              emptyLabel="Todos los destinos"
             />
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(2,minmax(0,1fr))_200px]">

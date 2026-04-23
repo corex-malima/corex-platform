@@ -51,7 +51,6 @@ export type BalanzasFilters = {
   year: string;
   month: string;
   dayName: string;
-  destination: string;
   weekMode: BalanzasWeekMode;
   weekValue: string;
   dateFrom: string;
@@ -64,7 +63,6 @@ export type BalanzasFilterOptions = {
   preWeeks: string[];
   isoWeeks: string[];
   dayNames: string[];
-  destinations: string[];
 };
 
 export type BalanzasLocalFilterOptions = {
@@ -172,7 +170,6 @@ export type BalanzasDashboardData = {
     totalRows: number;
     latestDate: string | null;
     periodLabel: string;
-    destinationLabel: string;
     scopeLabel: string;
     scopeNote: string;
     statusMessage: string | null;
@@ -831,7 +828,6 @@ function serializeFilters(filters: BalanzasFilters) {
     filters.year,
     filters.month,
     filters.dayName,
-    filters.destination,
     filters.weekMode,
     filters.weekValue,
     filters.dateFrom,
@@ -1095,6 +1091,32 @@ function buildTextFieldExpression(
     return null;
   }
 
+  if (key === "isoWeek") {
+    if (aliases.isoWeek) {
+      return `nullif(trim(cast(${quoteIdentifier(aliases.isoWeek)} as text)), '')`;
+    }
+
+    if (aliases.date) {
+      const d = quoteIdentifier(aliases.date);
+      return `lpad((extract(isoyear from ${d}::date) % 100)::int::text, 2, '0') || lpad(extract(week from ${d}::date)::int::text, 2, '0')`;
+    }
+
+    return null;
+  }
+
+  if (key === "dayName") {
+    if (aliases.dayName) {
+      return `nullif(trim(cast(${quoteIdentifier(aliases.dayName)} as text)), '')`;
+    }
+
+    if (aliases.date) {
+      const d = quoteIdentifier(aliases.date);
+      return `case extract(isodow from ${d}::date)::int when 1 then 'Lunes' when 2 then 'Martes' when 3 then 'Miercoles' when 4 then 'Jueves' when 5 then 'Viernes' when 6 then 'Sabado' when 7 then 'Domingo' end`;
+    }
+
+    return null;
+  }
+
   const columnName = aliases[key];
   return columnName ? `nullif(trim(cast(${quoteIdentifier(columnName)} as text)), '')` : null;
 }
@@ -1178,7 +1200,6 @@ async function loadBalanzasFilterOptions(metric: BalanzasMetric): Promise<Balanz
       preWeeks: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "preWeek"), true),
       isoWeeks: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "isoWeek"), true),
       dayNames: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "dayName")),
-      destinations: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "destination")),
     })),
   );
 
@@ -1188,7 +1209,6 @@ async function loadBalanzasFilterOptions(metric: BalanzasMetric): Promise<Balanz
     preWeeks: uniqueSorted(valueSets.flatMap((entry) => entry.preWeeks), true),
     isoWeeks: uniqueSorted(valueSets.flatMap((entry) => entry.isoWeeks), true),
     dayNames: uniqueSorted(valueSets.flatMap((entry) => entry.dayNames)),
-    destinations: uniqueSorted(valueSets.flatMap((entry) => entry.destinations)),
   };
 }
 
@@ -1213,10 +1233,6 @@ function buildFilterSupportIssues(schema: BalanzasViewSchema, filters: BalanzasF
 
   if (hasMultiSelectValue(filters.dayName) && !buildTextFieldExpression(schema, "dayName")) {
     issues.push("Dia");
-  }
-
-  if (hasMultiSelectValue(filters.destination) && !buildTextFieldExpression(schema, "destination")) {
-    issues.push(BALANZAS_DESTINATION_LABEL);
   }
 
   if (filters.weekMode === "iso" && hasMultiSelectValue(filters.weekValue) && !buildTextFieldExpression(schema, "isoWeek")) {
@@ -1248,7 +1264,6 @@ function buildWhereClause(
   const selectedYears = decodeMultiSelectValue(filters.year);
   const selectedMonths = decodeMultiSelectValue(filters.month);
   const selectedDayNames = decodeMultiSelectValue(filters.dayName);
-  const selectedDestinations = decodeMultiSelectValue(filters.destination);
   const selectedWeeks = decodeMultiSelectValue(filters.weekValue);
 
   if (selectedYears.length && yearExpression) {
@@ -1264,11 +1279,6 @@ function buildWhereClause(
   if (selectedDayNames.length && dayNameExpression) {
     values.push(selectedDayNames);
     conditions.push(`${dayNameExpression} = any($${values.length}::text[])`);
-  }
-
-  if (selectedDestinations.length && destinationExpression) {
-    values.push(selectedDestinations);
-    conditions.push(`${destinationExpression} = any($${values.length}::text[])`);
   }
 
   if (node.fixedDestination && destinationExpression) {
@@ -1730,14 +1740,13 @@ function isUnavailableSchemaError(error: unknown) {
 }
 
 export function normalizeBalanzasFilters(
-  rawFilters: Partial<Record<keyof BalanzasFilters, string | undefined>> = {},
+  rawFilters: Partial<Record<keyof BalanzasFilters | "destination", string | undefined>> = {},
 ): BalanzasFilters {
   return {
     metric: normalizeMetric(rawFilters.metric),
     year: normalizeSelectValue(rawFilters.year),
     month: normalizeSelectValue(rawFilters.month),
     dayName: normalizeSelectValue(rawFilters.dayName),
-    destination: normalizeSelectValue(rawFilters.destination),
     weekMode: "iso",
     weekValue: normalizeSelectValue(rawFilters.weekValue),
     dateFrom: normalizeDateValue(rawFilters.dateFrom),
@@ -1777,7 +1786,6 @@ export function createEmptyBalanzasDashboardData(
       preWeeks: [],
       isoWeeks: [],
       dayNames: [],
-      destinations: [],
     },
     summary: {
       totalNodes: BALANZAS_PROCESS_NODES.length,
@@ -1785,7 +1793,6 @@ export function createEmptyBalanzasDashboardData(
       totalRows: 0,
       latestDate: null,
       periodLabel: buildNodePeriodLabel(filters),
-      destinationLabel: filters.destination === "all" ? `Todos | ${BALANZAS_DESTINATION_LABEL}` : filters.destination,
       scopeLabel: BALANZAS_SCOPE_LABEL,
       scopeNote: BALANZAS_SCOPE_NOTE,
       statusMessage,
@@ -1828,7 +1835,6 @@ export async function getBalanzasDashboardData(
             totalRows: readyNodes.reduce((sum, node) => sum + node.rowCount, 0),
             latestDate: latestDates.length ? latestDates[latestDates.length - 1] ?? null : null,
             periodLabel: buildNodePeriodLabel(effectiveFilters),
-            destinationLabel: effectiveFilters.destination === "all" ? `Todos | ${BALANZAS_DESTINATION_LABEL}` : effectiveFilters.destination,
             scopeLabel: BALANZAS_SCOPE_LABEL,
             scopeNote: BALANZAS_SCOPE_NOTE,
             statusMessage: readyNodes.length
