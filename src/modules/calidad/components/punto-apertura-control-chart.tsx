@@ -14,6 +14,7 @@ import {
 
 import { EmptyState } from "@/shared/data-display/empty-state";
 import { formatPercent } from "@/shared/lib/format";
+import { CALIDAD_CHART_COLORS } from "@/lib/calidad-punto-apertura";
 import type { PuntoAperturaRecord } from "@/lib/calidad-punto-apertura";
 
 type ChartPoint = PuntoAperturaRecord & {
@@ -84,15 +85,15 @@ export function PuntoAperturaControlChart({
           />
           <ReferenceLine
             y={meanPct}
-            stroke="#0f766e"
+            stroke={CALIDAD_CHART_COLORS.referenceLine.mean}
             strokeDasharray="6 4"
-            label={{ value: `Media ${meanPct.toFixed(1)}%`, position: "insideTopRight", fill: "#0f766e", fontSize: 12 }}
+            label={{ value: `Media ${meanPct.toFixed(1)}%`, position: "insideTopRight", fill: CALIDAD_CHART_COLORS.referenceLine.mean, fontSize: 12 }}
           />
           <ReferenceLine
             y={lowerLimitPct}
-            stroke="#dc2626"
+            stroke={CALIDAD_CHART_COLORS.referenceLine.limit}
             strokeDasharray="6 4"
-            label={{ value: `Límite ${lowerLimitPct.toFixed(1)}%`, position: "insideBottomRight", fill: "#dc2626", fontSize: 12 }}
+            label={{ value: `Límite ${lowerLimitPct.toFixed(1)}%`, position: "insideBottomRight", fill: CALIDAD_CHART_COLORS.referenceLine.limit, fontSize: 12 }}
           />
           <Scatter
             data={chartData}
@@ -133,8 +134,8 @@ function ControlDot({ cx = 0, cy = 0, payload, onRecordClick }: DotProps) {
         cx={cx}
         cy={cy}
         r={4.5}
-        fill={isOk ? "#10b981" : "#f59e0b"}
-        stroke={isOk ? "#047857" : "#b45309"}
+        fill={isOk ? CALIDAD_CHART_COLORS.status.homogeneous : CALIDAD_CHART_COLORS.status.nonHomogeneous}
+        stroke={isOk ? CALIDAD_CHART_COLORS.status.homogeneousStroke : CALIDAD_CHART_COLORS.status.nonHomogeneousStroke}
         strokeWidth={1.5}
       />
     </g>

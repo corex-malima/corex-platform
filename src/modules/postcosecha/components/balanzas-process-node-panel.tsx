@@ -173,9 +173,11 @@ export function BalanzasProcessNodePanel({
               return (
                 <button
                   key={tab.id}
+                  id={`balanzas-tab-${tab.id}`}
                   type="button"
                   role="tab"
                   aria-selected={isActive}
+                  aria-controls={`balanzas-tabpanel-${tab.id}`}
                   className={cn(
                     "rounded-t-lg border-b-2 px-3 py-2 text-xs font-medium transition-colors",
                     isActive
@@ -190,7 +192,12 @@ export function BalanzasProcessNodePanel({
             })}
           </div>
 
-          <div className="show-scrollbar flex-1 space-y-5 overflow-y-auto px-4 py-4">
+          <div
+            id={`balanzas-tabpanel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`balanzas-tab-${activeTab}`}
+            className="show-scrollbar flex-1 space-y-5 overflow-y-auto px-4 py-4"
+          >
             {activeTab === "resumen" ? (
               <ResumenTab
                 node={node}
@@ -269,6 +276,7 @@ function ResumenTab({
               <button
                 key={child.key}
                 type="button"
+                aria-label={`${child.label} — ${child.fixedDestination ?? child.laneLabel}`}
                 className={cn(
                   "flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition-colors",
                   selection?.nodeKey === child.key

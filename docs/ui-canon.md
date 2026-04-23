@@ -83,6 +83,7 @@ Hacer esta pregunta:
 - Campo/Leaflet puede usar colores directos porque `L.PathOptions` requiere valores concretos
 - Programaciones usa paletas categoricas en `src/config/programaciones-palettes.ts`
 - `.balanzas-process` puede usar colores directos porque el process viewer/BPMN requiere valores concretos por estado
+- `.calidad-punto-apertura` puede usar colores directos porque Recharts SVG (`<circle>`, `<ReferenceLine>`) renderiza fuera del árbol CSS; centralizados en `CALIDAD_CHART_COLORS` en `src/lib/calidad-punto-apertura.ts`
 - Indicadores Balanzas puede usar `ChartSection` sin `ChartSurface` dentro del workspace BPMN cuando la pieza es un layout de 3 paneles (navegacion + canvas + inspector), no una card de chart
 - Comparison puede no usar `KpiGrid`; su layout de batalla es el resumen
 - `MetricPill` de Fenograma es una excepcion de dominio valida y vive en el split del modal

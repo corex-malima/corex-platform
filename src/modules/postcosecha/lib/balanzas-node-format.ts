@@ -1,3 +1,4 @@
+import { matchesMultiSelectValue } from "@/lib/multi-select";
 import { formatDecimal, formatInteger, formatPercent } from "@/shared/lib/format";
 import type {
   BalanzasNodeData,
@@ -134,4 +135,47 @@ export const DEFAULT_NODE_LOCAL_FILTERS: NodeLocalFilters = {
 
 export function createNodeLocalFilters() {
   return { ...DEFAULT_NODE_LOCAL_FILTERS };
+}
+
+export function filterNodeDetailRows(
+  node: BalanzasNodeData | null,
+  filters: NodeLocalFilters,
+  search: string,
+): BalanzasTableRow[] {
+  if (!node) {
+    return [];
+  }
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const { columnMap } = node;
+  const filterChecks: Array<[string, string | null]> = [
+    [filters.destination, columnMap.destination],
+    [filters.grade, columnMap.grade],
+    [filters.lot, columnMap.lot],
+    [filters.hydrationDays, columnMap.hydrationDays],
+    [filters.isoWeek, columnMap.isoWeek],
+    [filters.dayName, columnMap.dayName],
+    [filters.month, columnMap.month],
+    [filters.date, columnMap.date],
+  ];
+
+  return node.rows.filter((row) => {
+    for (const [filterValue, columnKey] of filterChecks) {
+      if (!columnKey) {
+        continue;
+      }
+
+      if (!matchesMultiSelectValue(filterValue, String(row.values[columnKey] ?? ""))) {
+        return false;
+      }
+    }
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return Object.values(row.values).some(
+      (value) => String(value ?? "").toLowerCase().includes(normalizedSearch),
+    );
+  });
 }

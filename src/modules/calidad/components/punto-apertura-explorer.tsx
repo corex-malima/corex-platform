@@ -116,10 +116,10 @@ export function PuntoAperturaExplorer({ initialData }: { initialData: PuntoApert
           <KpiGrid columns={4}>
             <MetricTile label="Registros visibles" value={formatInteger(data.summary.totalRecords)} hint={`${formatInteger(data.summary.totalCycles)} ciclos`} />
             <MetricTile label="Dominante general" value={data.summary.dominantClass} hint={`Media visible: ${formatPercent(data.summary.visibleMeanPct)}`} />
-            <button type="button" className="text-left" onClick={() => setSelectedStatusComposition("homogeneous")}>
+            <button type="button" className="text-left" aria-label="Ver distribución de homogéneos" onClick={() => setSelectedStatusComposition("homogeneous")}>
               <MetricTile label="Homogéneos" value={formatPercent(data.summary.homogeneousPct)} hint={`${formatInteger(data.summary.homogeneousRecords)} registros | Ver distribución`} />
             </button>
-            <button type="button" className="text-left" onClick={() => setSelectedStatusComposition("nonHomogeneous")}>
+            <button type="button" className="text-left" aria-label="Ver distribución de no homogéneos" onClick={() => setSelectedStatusComposition("nonHomogeneous")}>
               <MetricTile
                 label="No homogéneos"
                 value={formatPercent(100 - data.summary.homogeneousPct)}
@@ -174,7 +174,7 @@ export function PuntoAperturaExplorer({ initialData }: { initialData: PuntoApert
               </span>
             ) : null}
             {isValidating ? (
-              <span className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center gap-2" role="status" aria-live="polite">
                 <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                 Actualizando.
               </span>

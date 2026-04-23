@@ -9,13 +9,13 @@ import { BalanzasNodeDetailSheet } from "@/modules/postcosecha/components/balanz
 import {
   createNodeLocalFilters,
   DEFAULT_NODE_LOCAL_FILTERS,
+  filterNodeDetailRows,
   type NodeLocalFilters,
 } from "@/modules/postcosecha/lib/balanzas-node-format";
 import { BalanzasProcessDashboard } from "@/modules/postcosecha/components/balanzas-process-dashboard";
 import type { BalanzasProcessSelection } from "@/modules/postcosecha/lib/balanzas-process-stages";
 import { Button } from "@/shared/ui/button";
 import { fetchJson } from "@/lib/fetch-json";
-import { matchesMultiSelectValue } from "@/lib/multi-select";
 import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
 import { ChartSection, FilterPanel } from "@/shared/layout/filter-panel";
@@ -25,7 +25,6 @@ import type {
   BalanzasDashboardData,
   BalanzasFilters,
   BalanzasNodeData,
-  BalanzasTableRow,
 } from "@/lib/postcosecha-balanzas";
 
 type BalanzasExplorerProps = {
@@ -108,42 +107,10 @@ export function BalanzasExplorer({
     : null;
   const selectedNode = liveSelectedNode ?? stableSelectedNode;
 
-  const filteredDetailRows = useMemo(() => {
-    if (!selectedNode) {
-      return [] as BalanzasTableRow[];
-    }
-
-    const search = detailSearch.trim().toLowerCase();
-
-    return selectedNode.rows.filter((row) => {
-      const filterChecks: Array<[string, string | null]> = [
-        [detailFilters.destination, selectedNode.columnMap.destination],
-        [detailFilters.grade, selectedNode.columnMap.grade],
-        [detailFilters.lot, selectedNode.columnMap.lot],
-        [detailFilters.hydrationDays, selectedNode.columnMap.hydrationDays],
-        [detailFilters.isoWeek, selectedNode.columnMap.isoWeek],
-        [detailFilters.dayName, selectedNode.columnMap.dayName],
-        [detailFilters.month, selectedNode.columnMap.month],
-        [detailFilters.date, selectedNode.columnMap.date],
-      ];
-
-      for (const [filterValue, columnKey] of filterChecks) {
-        if (!columnKey) {
-          continue;
-        }
-
-        if (!matchesMultiSelectValue(filterValue, String(row.values[columnKey] ?? ""))) {
-          return false;
-        }
-      }
-
-      if (!search) {
-        return true;
-      }
-
-      return Object.values(row.values).some((value) => String(value ?? "").toLowerCase().includes(search));
-    });
-  }, [detailFilters, detailSearch, selectedNode]);
+  const filteredDetailRows = useMemo(
+    () => filterNodeDetailRows(selectedNode, detailFilters, detailSearch),
+    [selectedNode, detailFilters, detailSearch],
+  );
 
   function updateFilter<Key extends keyof BalanzasFilters>(
     key: Key,

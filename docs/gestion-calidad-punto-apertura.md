@@ -98,13 +98,27 @@ Al hacer click en un punto o fila se abre un `DialogShell` con:
 
 ## Archivos principales
 
-- `src/lib/calidad-punto-apertura.ts`
-- `src/app/api/calidad/punto-apertura/route.ts`
-- `src/app/(dashboard)/dashboard/calidad/punto-apertura/page.tsx`
-- `src/modules/calidad/components/punto-apertura-page.tsx`
-- `src/modules/calidad/components/punto-apertura-explorer.tsx`
-- `src/modules/calidad/components/punto-apertura-control-chart.tsx`
-- `src/modules/calidad/components/punto-apertura-record-overlay.tsx`
+- `src/lib/calidad-punto-apertura.ts` — tipos, filtros, loader, mapper, `CALIDAD_CHART_COLORS`
+- `src/app/api/calidad/punto-apertura/route.ts` — API protegida
+- `src/app/(dashboard)/dashboard/calidad/punto-apertura/page.tsx` — page server
+- `src/modules/calidad/components/punto-apertura-page.tsx` — wrapper de cliente
+- `src/modules/calidad/components/punto-apertura-explorer.tsx` — orquestador principal
+- `src/modules/calidad/components/punto-apertura-control-chart.tsx` — carta de control Recharts
+- `src/modules/calidad/components/punto-apertura-record-overlay.tsx` — dialog de detalle por registro
+- `src/modules/calidad/components/punto-apertura-status-composition.tsx` — panel y dialog de composicion por estado (Homogeneo / No homogeneo)
+
+## Tokens de color
+
+Los colores del chart estan centralizados en `CALIDAD_CHART_COLORS` (exportado desde `src/lib/calidad-punto-apertura.ts`):
+
+```typescript
+CALIDAD_CHART_COLORS.status.homogeneous         // puntos Homogeneo
+CALIDAD_CHART_COLORS.status.nonHomogeneous      // puntos No homogeneo
+CALIDAD_CHART_COLORS.referenceLine.mean         // linea de media macro
+CALIDAD_CHART_COLORS.referenceLine.limit        // linea de limite inferior
+```
+
+Excepcion documentada en `docs/ui-canon.md` → `.calidad-punto-apertura`: Recharts SVG renderiza fuera del arbol CSS, requiere valores hex concretos.
 
 ## Seguridad
 
@@ -120,7 +134,20 @@ El acceso a pagina usa `loadProtectedPageData` con el recurso:
 /dashboard/calidad/punto-apertura
 ```
 
+## Tests
+
+- `src/lib/__tests__/calidad-punto-apertura.test.ts` — cubre `normalizePuntoAperturaFilters`, `buildStatusComposition` y `CALIDAD_CHART_COLORS`
+
 ## Control de cambios
+
+### 2026-04-23 - Version 0.2.0
+
+Auditoria canonica:
+
+- Accesibilidad WCAG: `aria-label` en botones KPI interactivos, `role="status"` + `aria-live="polite"` en spinner.
+- Colores centralizados en `CALIDAD_CHART_COLORS`; excepcion documentada en `ui-canon.md`.
+- Tests unitarios para filtros, composicion de estado y constante de colores.
+- Documentacion actualizada: `StatusCompositionDialog`, tokens, tests.
 
 ### 2026-04-22 - Version 0.1.0
 
