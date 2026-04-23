@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@pdf-canon/*": [
+        "./pdf-canon/*"
       ]
     },
     "target": "ES2017"

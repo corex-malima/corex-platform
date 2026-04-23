@@ -33,7 +33,8 @@ export type CanonTemplateKey =
   | "memorando"
   | "acta_minuta"
   | "ficha_resumen"
-  | "anexo_tecnico";
+  | "anexo_tecnico"
+  | "orden_trabajo_clasificacion";
 
 export type GeneratePdfPayload = {
   /**

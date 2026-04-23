@@ -41,7 +41,9 @@ ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 python3-pip python3-numpy python3-pandas \
+  && apt-get install -y --no-install-recommends \
+     python3 python3-pip python3-numpy python3-pandas \
+     texlive-latex-extra texlive-fonts-recommended texlive-lang-spanish \
   && pip3 install --no-cache-dir --break-system-packages pulp \
   && ln -sf python3 /usr/bin/python \
   && rm -rf /var/lib/apt/lists/* \
@@ -54,6 +56,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/validate-runtime-env.mjs ./scripts/validate-runtime-env.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/solver_clasificacion_en_blanco_bridge.py ./scripts/solver_clasificacion_en_blanco_bridge.py
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/postharvest_solver_engine.py ./scripts/postharvest_solver_engine.py
+COPY --from=builder --chown=nextjs:nodejs /app/pdf-canon ./pdf-canon
 
 USER nextjs
 
