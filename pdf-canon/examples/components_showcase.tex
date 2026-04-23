@@ -1,0 +1,274 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{COMPONENTES}
+\SetDocTitle{Catálogo Visual de Componentes Canon}
+\SetDocCode{ANX-SYS-001}
+\SetDocArea{Sistema Documental}
+\SetDocAuthor{Equipo CoreX}
+\SetDocDate{\today}
+\SetDocUnit{Tecnología \& Sistemas}
+\SetContactUnit{Soporte Documental}
+\SetContactMembers{%
+  Andrea Morales & Coordinadora & andrea.morales@empresa.com \\
+  Luis Samaniego & Técnico PDF  & luis.samaniego@empresa.com%
+}
+\SetContactNote{Para consultas sobre implementación web del sistema canon.}
+
+\begin{document}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Jerarquía tipográfica}
+
+\subsection{Subtítulo de sección (subsection)}
+
+\subsubsection{Subsubtítulo de detalle (subsubsection)}
+
+Texto de cuerpo normal con tono institucional: el desempeño operativo de la semana
+reportó un nivel de cumplimiento superior al umbral establecido en el plan de trabajo,
+con 97 de 100 lotes procesados dentro del tiempo objetivo.  Los indicadores de
+productividad se mantuvieron estables y no se registraron incidencias críticas.
+
+\medskip
+\textbf{Negrita}: énfasis en términos clave y valores que requieren atención.
+
+\medskip
+\textit{Cursiva}: citas, términos técnicos o referencias documentales internas.
+
+\medskip
+\texttt{Monospace}: rutas de archivo, códigos de sistema, identificadores.
+Ejemplo en línea: \CodePath{/api/balanzas/reporte?semana=17\&anio=2026}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Ambientes de párrafo}
+
+\subsection{Párrafo ejecutivo}
+
+\begin{ParrafoEjecutivo}
+Durante la semana 17-2026 se procesaron \textbf{842\,000 tallos} en el centro de
+postcosecha, registrando un rendimiento de clasificación del \textbf{96.3\,\%} frente
+al objetivo del 95\,\%.  El indicador de merma se situó en 2.1\,\%, dentro del rango
+aceptable.  No se reportaron paros de línea no programados ni incidentes de seguridad.
+\end{ParrafoEjecutivo}
+
+\subsection{Párrafo metodológico}
+
+\begin{ParrafoMetodologico}
+Los datos presentados fueron extraídos del sistema ERP en el intervalo comprendido
+entre el 2026-04-14 00:00:00 y el 2026-04-20 23:59:59 (UTC-5).  La agregación se
+realizó por turno, área y variedad mediante la vista \texttt{v\_bal\_semana}.
+Los totales parciales se reconciliarán con el sistema de nómina al cierre de ciclo.
+\end{ParrafoMetodologico}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Tablas}
+
+\subsection{Tabla corta — tabular estándar}
+
+\begin{table}[H]
+  \centering
+  \caption{Resumen de rendimiento por área — Semana 17-2026}
+  \begin{tabular}{l r r r}
+    \toprule
+    \textbf{Área} & \textbf{Ingreso} & \textbf{Salida} & \textbf{Rend.\,\%} \\
+    \midrule
+    Apertura       & 280\,400 & 271\,300 & 96.8 \\
+    Clasificación  & 271\,300 & 261\,200 & 96.3 \\
+    Empaque        & 261\,200 & 257\,900 & 98.7 \\
+    \midrule
+    \textbf{Total} & \textbf{812\,900} & \textbf{790\,400} & \textbf{97.2} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Tabla ancha — adjustbox}
+
+\begin{table}[H]
+  \centering
+  \caption{Detalle de mermas por variedad, turno y causa — Semana 17-2026}
+  \begin{adjustbox}{max width=\linewidth}
+  \begin{tabular}{l l l r r r r}
+    \toprule
+    \textbf{Variedad} & \textbf{Turno} & \textbf{Causa} &
+    \textbf{Ingreso} & \textbf{Merma} & \textbf{Merma\,\%} & \textbf{Meta\,\%} \\
+    \midrule
+    Freedom   & Mañana & Tallo quebrado       & 48\,200 & 820  & 1.7 & 2.0 \\
+    Freedom   & Tarde  & Botón abierto        & 41\,500 & 995  & 2.4 & 2.0 \\
+    Explorer  & Mañana & Daño mecánico        & 35\,100 & 490  & 1.4 & 2.0 \\
+    Explorer  & Tarde  & Longitud fuera rango & 31\,900 & 768  & 2.4 & 2.0 \\
+    Vendela   & Mañana & Mancha botrytis      & 27\,300 & 628  & 2.3 & 2.0 \\
+    Vendela   & Tarde  & Tallo quebrado       & 24\,800 & 397  & 1.6 & 2.0 \\
+    Mondial   & Mañana & Botón abierto        & 22\,100 & 353  & 1.6 & 2.0 \\
+    Mondial   & Tarde  & Longitud fuera rango & 19\,400 & 504  & 2.6 & 2.0 \\
+    \midrule
+    \multicolumn{3}{l}{\textbf{Total}} &
+      \textbf{250\,300} & \textbf{4\,955} & \textbf{1.98} & 2.0 \\
+    \bottomrule
+  \end{tabular}
+  \end{adjustbox}
+\end{table}
+
+\subsection{Tabla larga — longtable}
+
+\begin{center}
+\begin{longtable}{@{} l r r r r @{}}
+  \caption{Registro de lotes procesados — Semana 17-2026} \\
+  \toprule
+  \textbf{Lote} & \textbf{Ingreso} & \textbf{Salida} & \textbf{Merma} & \textbf{Rend.\,\%} \\
+  \midrule
+  \endfirsthead
+  \toprule
+  \textbf{Lote} & \textbf{Ingreso} & \textbf{Salida} & \textbf{Merma} & \textbf{Rend.\,\%} \\
+  \midrule
+  \endhead
+  \midrule
+  \multicolumn{5}{r}{\small\itshape Continúa\ldots} \\
+  \endfoot
+  \bottomrule
+  \endlastfoot
+  LOT-2026-1401 & 12\,400 & 12\,016 & 384 & 96.9 \\
+  LOT-2026-1402 & 11\,800 & 11\,446 & 354 & 97.0 \\
+  LOT-2026-1403 & 13\,200 & 12\,804 & 396 & 97.0 \\
+  LOT-2026-1404 & 10\,900 & 10\,573 & 327 & 97.0 \\
+  LOT-2026-1405 & 14\,500 & 14\,065 & 435 & 97.0 \\
+  LOT-2026-1406 & 11\,100 & 10\,767 & 333 & 97.0 \\
+  LOT-2026-1407 & 12\,700 & 12\,319 & 381 & 97.0 \\
+  LOT-2026-1408 &  9\,800 &  9\,506 & 294 & 97.0 \\
+  LOT-2026-1409 & 15\,200 & 14\,744 & 456 & 97.0 \\
+  LOT-2026-1410 & 11\,500 & 11\,155 & 345 & 97.0 \\
+  LOT-2026-1411 & 10\,300 &  9\,991 & 309 & 97.0 \\
+  LOT-2026-1412 & 13\,600 & 13\,192 & 408 & 97.0 \\
+  LOT-2026-1413 & 12\,000 & 11\,640 & 360 & 97.0 \\
+  LOT-2026-1414 & 14\,100 & 13\,677 & 423 & 97.0 \\
+  LOT-2026-1415 & 11\,700 & 11\,349 & 351 & 97.0 \\
+  \midrule
+  \textbf{Total} & \textbf{184\,800} & \textbf{179\,244} & \textbf{5\,556} & \textbf{97.0} \\
+\end{longtable}
+\end{center}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Figuras}
+
+\subsection{Figura con ruta válida}
+
+\FiguraConFallback[0.82\linewidth]{../assets/placeholder_chart.pdf}%
+  {Distribución de tallos por variedad — Semana 17 (fuente: ERP CoreX)}
+
+\subsection{Figura con ruta inválida (activa el placeholder automático)}
+
+\FiguraConFallback[0.72\linewidth]{../assets/no_existe.pdf}%
+  {Gráfico de mermas por turno — pendiente de generación}
+
+\FiguraPlaceholder[0.60\linewidth]{Diagrama de flujo del proceso — en elaboración}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Cajas canónicas}
+
+\ObservationBox[Observación operativa]{%
+  El turno tarde del día 2026-04-15 presentó un incremento del 18\,\% en merma
+  por «botón abierto» respecto a la semana anterior.  Se asocia a la llegada de
+  lotes de variedad Freedom con mayor madurez de campo.
+}
+
+\KeyFindingBox[Hallazgo clave]{%
+  El rendimiento de empaque del turno mañana superó el umbral de 98.5\,\% por primera
+  vez en el ciclo 2026, alcanzando 98.7\,\%.  Confirma la efectividad del ajuste de
+  calibración implantado el 2026-04-10.
+}
+
+\WarningBox[Alerta de calidad]{%
+  Se detectaron dos lotes (LOT-2026-1408, LOT-2026-1411) con merma superior al 3.0\,\%
+  por causa «botrytis».  Requieren revisión de cadena de frío en origen.
+}
+
+\NoteInline{Nota:} Los datos de BAL2 del turno madrugada del 2026-04-17 no están
+disponibles por mantenimiento. Se imputarán con promedio de los 3 días anteriores.
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Código}
+
+\begin{CodeBlock}
+-- Consulta de totales semanales
+SELECT
+    area,
+    SUM(tallos_ingreso) AS ingreso,
+    SUM(tallos_salida)  AS salida,
+    ROUND(
+        SUM(tallos_salida)::numeric
+        / NULLIF(SUM(tallos_ingreso), 0) * 100, 1
+    ) AS rendimiento_pct
+FROM v_bal_semana
+WHERE semana = 17 AND anio = 2026
+GROUP BY area ORDER BY area;
+\end{CodeBlock}
+
+Endpoint: \CodePath{/api/balanzas/rendimiento?semana=17\&anio=2026}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{KPIs (FichaKPI)}
+
+\begin{center}
+\begin{tabular}{ccc}
+  \FichaKPI{Tallos procesados}{842\,000}{semana 17-2026} &
+  \FichaKPI{Rendimiento}{96.3\,\%}{meta: 95.0\,\%} &
+  \FichaKPI{Merma total}{2.1\,\%}{límite: 3.0\,\%} \\[1.4em]
+  \FichaKPI{Paros no prog.}{0}{sin incidentes} &
+  \FichaKPI{Lotes}{15 / 15}{100\,\% completados} &
+  \FichaKPI{Ciclo prom.}{4.2 min}{meta: ≤ 4.5 min} \\
+\end{tabular}
+\end{center}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Listas}
+
+\subsection{Hallazgos}
+
+\begin{itemize}
+  \item El 96.3\,\% de tallos cumplió los criterios de calidad del protocolo vigente.
+  \item Las variedades de tallo corto presentaron mayor incidencia de «botón abierto».
+  \item El tiempo promedio de ciclo en apertura fue 4.2 min (meta: ≤ 4.5 min).
+  \item No se registraron paros ni incidentes de seguridad industrial.
+\end{itemize}
+
+\subsection{Recomendaciones}
+
+\begin{enumerate}
+  \item Revisar madurez de lotes Freedom antes del ingreso a clasificación.
+  \item Evaluar ajuste del umbral de merma para variedades de tallo corto.
+  \item Programar calibración preventiva del sistema BAL1 antes de semana 19.
+  \item Documentar el procedimiento de imputación de datos faltantes.
+\end{enumerate}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Bloques de documento}
+
+\subsection{MemoBlock}
+
+\MemoBlock%
+  {Gerencia General}%
+  {Coordinación de Operaciones}%
+  {Ejemplo de bloque memo para solicitudes y memorandos}%
+  {MEM-OPS-000}
+
+\subsection{AsistentesBlock y AcuerdosList}
+
+\begin{AsistentesBlock}
+  Asistente Uno  & Cargo A & asistente1@empresa.com \\
+  Asistente Dos  & Cargo B & asistente2@empresa.com \\
+\end{AsistentesBlock}
+
+\begin{AcuerdosList}
+  \item \textbf{Responsable — Fecha:} Descripción del primer acuerdo.
+  \item \textbf{Responsable — Fecha:} Descripción del segundo acuerdo.
+\end{AcuerdosList}
+
+%%═══════════════════════════════════════════════════════════════════════
+\section{Firma y contacto}
+
+\SignatureBlock{Andrea Morales}{Coordinadora de Soporte Documental}
+
+\sectionrule
+
+\ContactSignature
+
+\end{document}

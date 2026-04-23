@@ -1,0 +1,78 @@
+\documentclass{../base/canon}
+
+%% ── Metadatos — sobreescribir al usar este template ──────────────────
+\input{../base/canon_variables}
+\SetDocType{INFORME EJECUTIVO}
+\SetDocTitle{Título del Informe Ejecutivo}
+\SetDocCode{INF-XXX-000}
+\SetDocArea{Área Emisora}
+\SetDocAuthor{Autor del Informe}
+\SetDocDate{\today}
+
+\begin{document}
+
+%% ── Resumen ejecutivo ────────────────────────────────────────────────
+\section{Resumen ejecutivo}
+
+\begin{ParrafoEjecutivo}
+Describir aquí los resultados principales del período en lenguaje no técnico.
+Incluir los indicadores clave y la conclusión principal en máximo 3 oraciones.
+\end{ParrafoEjecutivo}
+
+%% ── KPIs principales ─────────────────────────────────────────────────
+\section{Indicadores clave}
+
+\begin{center}
+\begin{tabular}{ccc}
+  \FichaKPI{Indicador 1}{0}{nota} &
+  \FichaKPI{Indicador 2}{0\,\%}{meta: 0\,\%} &
+  \FichaKPI{Indicador 3}{0}{límite: 0} \\
+\end{tabular}
+\end{center}
+
+%% ── Resultados del período ────────────────────────────────────────────
+\section{Resultados del período}
+
+\begin{table}[H]
+  \centering
+  \caption{Resumen de resultados}
+  \begin{tabular}{l r r r}
+    \toprule
+    \textbf{Categoría} & \textbf{Real} & \textbf{Meta} & \textbf{Var.\,\%} \\
+    \midrule
+    Categoría A & 0 & 0 & 0.0 \\
+    Categoría B & 0 & 0 & 0.0 \\
+    \midrule
+    \textbf{Total} & \textbf{0} & \textbf{0} & \textbf{0.0} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+%% ── Hallazgos ────────────────────────────────────────────────────────
+\section{Hallazgos}
+
+\begin{itemize}
+  \item Primer hallazgo del período.
+  \item Segundo hallazgo del período.
+  \item Tercer hallazgo del período.
+\end{itemize}
+
+%% ── Observaciones ────────────────────────────────────────────────────
+\ObservationBox[Observación]{
+  Texto de la observación principal del período.
+}
+
+%% ── Recomendaciones ──────────────────────────────────────────────────
+\section{Recomendaciones}
+
+\begin{enumerate}
+  \item Primera recomendación con responsable y fecha sugerida.
+  \item Segunda recomendación con responsable y fecha sugerida.
+\end{enumerate}
+
+%% ── Firma y contacto ─────────────────────────────────────────────────
+\SignatureBlock{Nombre Apellido}{Cargo del Responsable}
+
+\ContactSignature
+
+\end{document}

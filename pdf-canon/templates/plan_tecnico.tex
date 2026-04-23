@@ -1,0 +1,74 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{PLAN TÉCNICO}
+\SetDocTitle{Plan Técnico — Nombre del Proyecto}
+\SetDocCode{PLN-TEC-000}
+\SetDocArea{Tecnología \& Sistemas}
+\SetDocAuthor{Arquitecto / Responsable}
+\SetDocDate{\today}
+
+\begin{document}
+
+\section{Justificación}
+
+\begin{ParrafoEjecutivo}
+Describir el problema o necesidad que motiva este plan técnico y el beneficio esperado.
+\end{ParrafoEjecutivo}
+
+\section{Alcance}
+
+\begin{itemize}
+  \item Lo que \textbf{incluye} este plan.
+  \item Lo que \textbf{no incluye} (fuera de alcance).
+\end{itemize}
+
+\section{Diseño técnico}
+
+\begin{ParrafoMetodologico}
+Describir la arquitectura de la solución: componentes involucrados, flujo de datos,
+integraciones y decisiones de diseño relevantes.
+\end{ParrafoMetodologico}
+
+\subsection{Diagrama o esquema}
+
+\FiguraPlaceholder[0.85\linewidth]{Diagrama de arquitectura — pendiente}
+
+\section{Fases de implementación}
+
+\begin{table}[H]
+  \centering
+  \caption{Cronograma por fases}
+  \begin{adjustbox}{max width=\linewidth}
+  \begin{tabular}{l l l l r}
+    \toprule
+    \textbf{Fase} & \textbf{Descripción} & \textbf{Inicio} & \textbf{Fin} & \textbf{Días} \\
+    \midrule
+    Fase 1 & Análisis y diseño         & 2026-05-01 & 2026-05-07  & 7  \\
+    Fase 2 & Desarrollo                & 2026-05-08 & 2026-05-21  & 14 \\
+    Fase 3 & Pruebas y validación      & 2026-05-22 & 2026-05-28  & 7  \\
+    Fase 4 & Despliegue y monitoreo    & 2026-05-29 & 2026-06-04  & 7  \\
+    \bottomrule
+  \end{tabular}
+  \end{adjustbox}
+\end{table}
+
+\section{Riesgos técnicos}
+
+\WarningBox[Riesgos identificados]{
+  Describir los riesgos técnicos de mayor impacto y sus planes de mitigación.
+}
+
+\section{Criterios de aceptación}
+
+\begin{enumerate}
+  \item Criterio técnico de éxito 1 — con métrica medible.
+  \item Criterio técnico de éxito 2 — con métrica medible.
+  \item Sin regresiones en funcionalidad existente.
+\end{enumerate}
+
+\SignatureBlock{Nombre Apellido}{Responsable Técnico}
+
+\ContactSignature
+
+\end{document}

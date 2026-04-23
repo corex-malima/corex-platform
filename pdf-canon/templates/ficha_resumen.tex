@@ -1,0 +1,44 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{FICHA RESUMEN}
+\SetDocTitle{Título de la Ficha Resumen}
+\SetDocCode{FIC-XXX-000}
+\SetDocArea{Área}
+\SetDocAuthor{Autor}
+\SetDocDate{\today}
+
+\begin{document}
+
+\section{Indicadores clave}
+
+\begin{center}
+\begin{tabular}{ccc}
+  \FichaKPI{Indicador 1}{0}{período} &
+  \FichaKPI{Indicador 2}{0\,\%}{meta: 0\,\%} &
+  \FichaKPI{Indicador 3}{0}{límite: 0} \\[1.4em]
+  \FichaKPI{Indicador 4}{0}{referencia} &
+  \FichaKPI{Indicador 5}{0\,\%}{meta: 0\,\%} &
+  \FichaKPI{Indicador 6}{0}{unidad} \\
+\end{tabular}
+\end{center}
+
+\section{Nota de contexto}
+
+\begin{ParrafoEjecutivo}
+Una o dos oraciones de contexto para quien lee esta ficha sin haber visto el
+informe completo. Indicar el período y cualquier condición relevante.
+\end{ParrafoEjecutivo}
+
+\ObservationBox[Observación]{
+  Observación o alerta más relevante del período resumido en esta ficha.
+}
+
+\sectionrule
+
+\begin{center}
+  {\footnotesize\color{CanonMuted}
+    Ficha generada el \@docdate{} — para el informe completo consultar \texttt{\@doccode}}
+\end{center}
+
+\end{document}

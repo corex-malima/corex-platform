@@ -1,0 +1,72 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{REPORTE TÉCNICO}
+\SetDocTitle{Título del Reporte Técnico}
+\SetDocCode{REP-TEC-000}
+\SetDocArea{Tecnología \& Sistemas}
+\SetDocAuthor{Autor Técnico}
+\SetDocDate{\today}
+
+\begin{document}
+
+\section{Contexto técnico}
+
+\begin{ParrafoMetodologico}
+Describir el sistema, componente o proceso analizado. Incluir versiones, entorno
+(producción/staging), período de observación y herramientas utilizadas.
+\end{ParrafoMetodologico}
+
+\section{Hallazgos}
+
+\KeyFindingBox[Hallazgo principal]{
+  Descripción concisa del hallazgo técnico más relevante.
+}
+
+\begin{itemize}
+  \item Hallazgo técnico 1.
+  \item Hallazgo técnico 2.
+\end{itemize}
+
+\WarningBox[Alerta crítica]{
+  Describir aquí cualquier condición que requiera acción inmediata.
+}
+
+\section{Evidencia técnica}
+
+\subsection{Consulta / Comando ejecutado}
+
+\begin{CodeBlock}
+-- Consulta o comando que generó la evidencia
+SELECT * FROM tabla WHERE condicion = true;
+\end{CodeBlock}
+
+Ruta del endpoint o archivo: \CodePath{/ruta/del/recurso}
+
+\subsection{Resultado}
+
+\begin{table}[H]
+  \centering
+  \caption{Resultado de la verificación}
+  \begin{tabular}{l l r}
+    \toprule
+    \textbf{Elemento} & \textbf{Estado} & \textbf{Valor} \\
+    \midrule
+    Elemento A & OK    & 0 \\
+    Elemento B & Error & 0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Recomendaciones técnicas}
+
+\begin{enumerate}
+  \item Acción correctiva 1 — responsable, fecha estimada.
+  \item Acción correctiva 2 — responsable, fecha estimada.
+\end{enumerate}
+
+\SignatureBlock{Nombre Apellido}{Ingeniero de Sistemas}
+
+\ContactSignature
+
+\end{document}

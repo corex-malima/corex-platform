@@ -44,6 +44,9 @@ react-doctor-report.txt
 # vercel
 .vercel
 
+# Claude Code worktrees (internal, no commitear)
+.claude/worktrees/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

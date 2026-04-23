@@ -1,0 +1,68 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{PLAN DE TRABAJO}
+\SetDocTitle{Plan de Trabajo — Período}
+\SetDocCode{PLN-XXX-000}
+\SetDocArea{Área}
+\SetDocAuthor{Responsable}
+\SetDocDate{\today}
+
+\begin{document}
+
+\section{Objetivo del período}
+
+\begin{ParrafoEjecutivo}
+Describir el objetivo principal del período y los entregables esperados.
+\end{ParrafoEjecutivo}
+
+\section{Actividades planificadas}
+
+\begin{table}[H]
+  \centering
+  \caption{Actividades del período}
+  \begin{adjustbox}{max width=\linewidth}
+  \begin{tabular}{l l l c l}
+    \toprule
+    \textbf{Actividad} & \textbf{Responsable} & \textbf{Fecha límite} & \textbf{Prioridad} & \textbf{Estado} \\
+    \midrule
+    Actividad 1 & Responsable A & 2026-04-30 & Alta    & Pendiente \\
+    Actividad 2 & Responsable B & 2026-05-05 & Media   & En curso  \\
+    Actividad 3 & Responsable A & 2026-05-10 & Normal  & Pendiente \\
+    \bottomrule
+  \end{tabular}
+  \end{adjustbox}
+\end{table}
+
+\section{Recursos requeridos}
+
+\begin{itemize}
+  \item Recurso humano: descripción de perfiles necesarios.
+  \item Recursos técnicos: herramientas, accesos o equipos.
+  \item Tiempo estimado total: X horas.
+\end{itemize}
+
+\section{Riesgos identificados}
+
+\begin{table}[H]
+  \centering
+  \caption{Registro de riesgos}
+  \begin{tabular}{p{5cm} c c p{5cm}}
+    \toprule
+    \textbf{Riesgo} & \textbf{Probabilidad} & \textbf{Impacto} & \textbf{Mitigación} \\
+    \midrule
+    Descripción del riesgo 1 & Media & Alto & Plan de contingencia. \\
+    Descripción del riesgo 2 & Baja  & Medio & Medida preventiva.  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\ObservationBox[Dependencias]{
+  Describir dependencias con otras áreas o sistemas que pueden afectar la ejecución.
+}
+
+\SignatureBlock{Nombre Apellido}{Responsable del Plan}
+
+\ContactSignature
+
+\end{document}

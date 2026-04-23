@@ -1,0 +1,91 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{INFORME EJECUTIVO}
+\SetDocTitle{Rendimiento Operativo Postcosecha — Semana 17-2026}
+\SetDocCode{INF-OPS-017}
+\SetDocArea{Operaciones / Postcosecha}
+\SetDocAuthor{Jefe de Operaciones}
+\SetDocDate{2026-04-22}
+\SetContactUnit{Jefatura de Operaciones}
+\SetContactMembers{%
+  Carlos Mendoza   & Jefe de Operaciones  & c.mendoza@empresa.com   \\
+  Patricia Suárez  & Calidad Postcosecha  & p.suarez@empresa.com%
+}
+\SetContactNote{Para consultas sobre este informe contactar antes de las 16:00.}
+
+\begin{document}
+
+\section{Resumen ejecutivo}
+
+\begin{ParrafoEjecutivo}
+La semana 17-2026 cerró con \textbf{842\,000 tallos procesados} y un rendimiento
+general de clasificación del \textbf{96.3\,\%}, superando el objetivo del 95.0\,\%.
+La merma total se mantuvo en 2.1\,\%, dentro del rango aceptable.
+No se registraron paros de línea no programados ni incidentes de seguridad industrial.
+\end{ParrafoEjecutivo}
+
+\section{Indicadores clave}
+
+\begin{center}
+\begin{tabular}{ccc}
+  \FichaKPI{Tallos procesados}{842\,000}{semana 17-2026} &
+  \FichaKPI{Rendimiento general}{96.3\,\%}{meta: 95.0\,\%} &
+  \FichaKPI{Merma total}{2.1\,\%}{límite: 3.0\,\%} \\[1.4em]
+  \FichaKPI{Lotes completados}{15 / 15}{100\,\% programados} &
+  \FichaKPI{Ciclo promedio}{4.2 min}{meta: ≤ 4.5 min} &
+  \FichaKPI{Paros no prog.}{0}{sin incidentes} \\
+\end{tabular}
+\end{center}
+
+\section{Resultados por área}
+
+\begin{table}[H]
+  \centering
+  \caption{Rendimiento por área de proceso — Semana 17-2026}
+  \begin{tabular}{l r r r r}
+    \toprule
+    \textbf{Área} & \textbf{Ingreso} & \textbf{Salida} & \textbf{Merma} & \textbf{Rend.\,\%} \\
+    \midrule
+    Apertura       & 280\,400 & 271\,300 & 9\,100 & 96.8 \\
+    Clasificación  & 271\,300 & 261\,200 & 10\,100 & 96.3 \\
+    Empaque        & 261\,200 & 257\,900 & 3\,300 & 98.7 \\
+    \midrule
+    \textbf{Total} & \textbf{812\,900} & \textbf{790\,400} & \textbf{22\,500} & \textbf{97.2} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Hallazgos}
+
+\begin{itemize}
+  \item El rendimiento de empaque alcanzó 98.7\,\%, el mejor valor del ciclo 2026.
+  \item Las variedades Freedom y Vendela concentraron el 68\,\% de la merma total
+        por causa «botón abierto».
+  \item El turno tarde del día 15-abr presentó un incremento puntual de merma del
+        18\,\% respecto al promedio de la semana; se identificó y corrigió en turno.
+\end{itemize}
+
+\ObservationBox[Observación de calidad]{
+  Dos lotes (LOT-2026-1408, LOT-2026-1411) registraron merma por «botrytis» superior
+  al 3.0\,\%. Se notificó al área de campo para revisión de condiciones de cosecha
+  en las zonas de origen correspondientes.
+}
+
+\section{Recomendaciones}
+
+\begin{enumerate}
+  \item Implementar revisión adicional de madurez en lotes de variedad Freedom antes
+        de ingreso a clasificación — \textit{Responsable: Supervisión Turno Mañana,
+        a partir de la semana 18}.
+  \item Evaluar ajuste del umbral de merma por «botón abierto» para variedades de
+        tallo corto — \textit{Responsable: Jefatura de Calidad, plazo: 2026-04-30}.
+  \item Revisar condiciones de cadena de frío en origen de los lotes con botrytis —
+        \textit{Responsable: Coordinación de Campo, plazo: 2026-04-25}.
+\end{enumerate}
+
+\SignatureBlock{Carlos Mendoza}{Jefe de Operaciones Postcosecha}
+
+\ContactSignature
+
+\end{document}

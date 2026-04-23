@@ -218,6 +218,86 @@ Excepciones documentadas:
 - Todo formatter numerico nuevo debe usar `@/shared/lib/format.ts`.
 - No crear explorers nuevos en `src/components/dashboard/`.
 
+## Sistema canon de PDF
+
+El directorio `pdf-canon/` contiene un sistema completo de plantillas LaTeX institucionales.
+Cuando el usuario pida generar un PDF — un botón de impresión, un reporte, un acta, cualquier documento — **usar siempre este sistema**.
+
+### Flujo de trabajo
+
+1. El usuario describe el documento en lenguaje natural.
+2. Elegir el template correcto de `pdf-canon/templates/`.
+3. Escribir el `.tex` usando **solo** los componentes del canon (ver abajo).
+4. El usuario compila con `pdflatex` o el script `pdf-canon/scripts/build_pdf.sh`.
+
+### Templates disponibles
+
+| Necesidad del usuario | Template a usar |
+|---|---|
+| Informe ejecutivo, resultados de semana | `informe_ejecutivo.tex` |
+| Análisis con tablas largas, estadísticas | `informe_estadistico.tex` |
+| Reporte técnico, incidentes, validaciones | `reporte_tecnico.tex` |
+| Plan de actividades con responsables | `plan_trabajo.tex` |
+| Plan de implementación técnica | `plan_tecnico.tex` |
+| Solicitud formal entre áreas | `solicitud_formal.tex` |
+| Comunicación interna corta | `memorando.tex` |
+| Registro de reunión con acuerdos | `acta_minuta.tex` |
+| Una página de KPIs resumidos | `ficha_resumen.tex` |
+| Datos de soporte de otro documento | `anexo_tecnico.tex` |
+
+### Componentes LaTeX disponibles (no inventar otros)
+
+```
+\SetDocTitle, \SetDocCode, \SetDocArea, \SetDocAuthor, \SetDocDate  → metadatos
+\SetDocLogo, \SetDocUnit                                             → branding
+\SetContactUnit, \SetContactMembers, \SetContactNote                → bloque contacto
+
+\begin{ParrafoEjecutivo}   → párrafo resumen para gerencia
+\begin{ParrafoMetodologico}→ descripción técnica de fuentes
+
+\ObservationBox[título]{texto}   → observación con borde lateral gris
+\KeyFindingBox[título]{texto}    → hallazgo clave con borde oscuro
+\WarningBox[título]{texto}       → alerta con borde rojo
+\NoteInline{Etiqueta:} texto     → nota corta inline
+
+\FichaKPI{etiqueta}{valor}{nota} → KPI en caja — usar en tabla 3×N
+\MemoBlock{para}{de}{asunto}{ref}→ bloque Para/De/Asunto/Ref
+\begin{AsistentesBlock}          → tabla de asistentes en actas
+\begin{AcuerdosList}             → lista numerada de acuerdos
+
+\FiguraConFallback[ancho]{ruta}{caption}  → figura con placeholder si ruta no existe
+\FiguraPlaceholder[ancho]{descripcion}    → placeholder explícito
+
+\CodePath{ruta/o/endpoint}       → ruta inline en monospace
+\begin{CodeBlock} ... \end{CodeBlock}    → bloque de código
+
+\SignatureBlock{nombre}{cargo}   → bloque de firma
+\ContactSignature                → bloque de contacto (usa \SetContact*)
+\sectionrule                     → separador horizontal
+
+tabular + booktabs (\toprule, \midrule, \bottomrule)   → tablas cortas
+longtable + booktabs                                    → tablas que paginan
+\begin{adjustbox}{max width=\linewidth}                 → tablas anchas
+```
+
+### Reglas
+
+- **No crear estilos nuevos.** Todo lo que se necesita está en `canon.cls`.
+- **No usar colores hex directos.** Usar `CanonInk`, `CanonMuted`, `CanonRule`, `CanonSoft`, `CanonSoftLine`, `CanonRed`, `CanonAccent`.
+- El encabezado se genera automáticamente — no llamar `\CanonHeader` manualmente.
+- Cada documento necesita `\SetDocTitle` y `\SetDocCode` como mínimo.
+- Ver ejemplos reales en `pdf-canon/examples/` antes de crear desde cero.
+
+### Integración web (Next.js)
+
+Si el usuario pide un botón que genere el PDF desde la app:
+- API route usa `generateCanonicalPdf()` de `pdf-canon/scripts/generate_pdf_service.ts`
+- El template recibe datos dinámicos via `dataTexContent` (comandos `\SetDoc*` + macros)
+- Retornar con `pdfBufferToResponse(pdf, "nombre.pdf")`
+- Requiere `pdflatex` en el servidor (agregar `texlive-latex-extra` al Dockerfile si se activa)
+
+Documentación completa: `pdf-canon/docs/`
+
 ## Deuda arquitectonica conocida
 
 - `src/components/dashboard/` queda reducido a `module-placeholder.tsx`. No crear archivos nuevos alli.

@@ -1,0 +1,85 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{INFORME ESTADÍSTICO}
+\SetDocTitle{Título del Informe Estadístico}
+\SetDocCode{INF-XXX-000}
+\SetDocArea{Área Emisora}
+\SetDocAuthor{Autor}
+\SetDocDate{\today}
+
+\begin{document}
+
+\section{Resumen}
+
+\begin{ParrafoEjecutivo}
+Resumen del análisis estadístico en lenguaje accesible para dirección.
+\end{ParrafoEjecutivo}
+
+\section{Metodología}
+
+\begin{ParrafoMetodologico}
+Describir fuente de datos, período de extracción, sistema origen, vista o consulta
+utilizada, y cualquier supuesto o imputación aplicada.
+\end{ParrafoMetodologico}
+
+\section{Resultados}
+
+\subsection{Tabla resumen}
+
+\begin{table}[H]
+  \centering
+  \caption{Distribución por categoría}
+  \begin{tabular}{l r r r r}
+    \toprule
+    \textbf{Categoría} & \textbf{N} & \textbf{Media} & \textbf{Min} & \textbf{Max} \\
+    \midrule
+    Categoría A & 0 & 0.0 & 0 & 0 \\
+    Categoría B & 0 & 0.0 & 0 & 0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Tabla detallada}
+
+\begin{center}
+\begin{longtable}{@{} l r r r r @{}}
+  \caption{Detalle por registro} \\
+  \toprule
+  \textbf{ID} & \textbf{Valor 1} & \textbf{Valor 2} & \textbf{Valor 3} & \textbf{Total} \\
+  \midrule
+  \endfirsthead
+  \toprule
+  \textbf{ID} & \textbf{Valor 1} & \textbf{Valor 2} & \textbf{Valor 3} & \textbf{Total} \\
+  \midrule
+  \endhead
+  \midrule
+  \multicolumn{5}{r}{\small\itshape Continúa\ldots} \\
+  \endfoot
+  \bottomrule
+  \endlastfoot
+  Reg-001 & 0 & 0 & 0 & 0 \\
+  Reg-002 & 0 & 0 & 0 & 0 \\
+\end{longtable}
+\end{center}
+
+\section{Figura}
+
+\FiguraConFallback[0.82\linewidth]{../assets/grafico.pdf}{Gráfico del análisis}
+
+\section{Hallazgos estadísticos}
+
+\KeyFindingBox[Hallazgo principal]{
+  Descripción del hallazgo estadístico más relevante del análisis.
+}
+
+\begin{itemize}
+  \item Hallazgo 1.
+  \item Hallazgo 2.
+\end{itemize}
+
+\SignatureBlock{Nombre Apellido}{Analista de Datos}
+
+\ContactSignature
+
+\end{document}

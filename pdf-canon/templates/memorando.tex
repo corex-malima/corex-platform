@@ -1,0 +1,41 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{MEMORANDO}
+\SetDocTitle{Asunto del Memorando}
+\SetDocCode{MEM-XXX-000}
+\SetDocArea{Área Emisora}
+\SetDocAuthor{Emisor}
+\SetDocDate{\today}
+
+\begin{document}
+
+\MemoBlock%
+  {Destinatario(s) — Cargo(s)}%
+  {Nombre del emisor — Área}%
+  {Asunto del memorando en una línea}%
+  {MEM-XXX-000}
+
+\section{Instrucción / Comunicación}
+
+Texto principal del memorando. Usar lenguaje claro, directo y sin ambigüedades.
+Un memorando estándar no debe superar una página.
+
+\begin{enumerate}
+  \item Primera instrucción o punto de comunicación.
+  \item Segunda instrucción o punto de comunicación.
+  \item Tercera instrucción o punto de comunicación, si aplica.
+\end{enumerate}
+
+\ObservationBox[Vigencia]{
+  Indicar desde cuándo aplica esta instrucción y si tiene fecha de vencimiento.
+}
+
+\NoteInline{Acuse de recibo:} Confirmar recepción respondiendo a este documento
+con copia al área emisora antes del \textbf{[fecha límite]}.
+
+\SignatureBlock{Nombre Apellido}{Cargo del Emisor}
+
+\ContactSignature
+
+\end{document}

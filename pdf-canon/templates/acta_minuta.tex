@@ -1,0 +1,67 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{ACTA DE REUNIÓN}
+\SetDocTitle{Acta — Nombre de la Reunión}
+\SetDocCode{ACT-XXX-000}
+\SetDocArea{Área Convocante}
+\SetDocAuthor{Secretario de Acta}
+\SetDocDate{\today}
+
+\begin{document}
+
+\begin{table}[H]
+  \begin{tabular}{@{}ll@{}}
+    \textbf{Fecha:}    & \@docdate \\
+    \textbf{Hora:}     & 00:00 -- 00:00 \\
+    \textbf{Lugar:}    & Sala de reuniones / Videoconferencia \\
+    \textbf{Objetivo:} & Objetivo principal de la reunión \\
+  \end{tabular}
+\end{table}
+
+\section{Asistentes}
+
+\begin{AsistentesBlock}
+  Nombre Asistente 1 & Cargo 1 & correo1@empresa.com \\
+  Nombre Asistente 2 & Cargo 2 & correo2@empresa.com \\
+  Nombre Asistente 3 & Cargo 3 & correo3@empresa.com \\
+\end{AsistentesBlock}
+
+\section{Temas tratados}
+
+\begin{enumerate}
+  \item \textbf{Tema 1.} Descripción del tema abordado y decisión tomada.
+  \item \textbf{Tema 2.} Descripción del tema abordado y decisión tomada.
+  \item \textbf{Tema 3.} Descripción del tema abordado y decisión tomada.
+\end{enumerate}
+
+\section{Acuerdos y compromisos}
+
+\begin{AcuerdosList}
+  \item \textbf{[Responsable] — [Fecha]:} Descripción del acuerdo o compromiso.
+  \item \textbf{[Responsable] — [Fecha]:} Descripción del acuerdo o compromiso.
+  \item \textbf{[Responsable] — [Fecha]:} Descripción del acuerdo o compromiso.
+\end{AcuerdosList}
+
+\ObservationBox[Próxima reunión]{
+  Indicar fecha, hora y lugar de la próxima reunión de seguimiento, si se acordó.
+}
+
+\section{Cierre}
+
+La reunión concluyó a las \textbf{00:00}. Los participantes se comprometen a
+cumplir los acuerdos en los plazos establecidos.
+
+\vspace{10pt}
+\noindent
+\begin{minipage}{0.45\linewidth}
+  \SignatureBlock{Nombre — Convocante}{Cargo del Convocante}
+\end{minipage}
+\hfill
+\begin{minipage}{0.45\linewidth}
+  \SignatureBlock{Nombre — Secretario}{Secretario de Acta}
+\end{minipage}
+
+\ContactSignature
+
+\end{document}

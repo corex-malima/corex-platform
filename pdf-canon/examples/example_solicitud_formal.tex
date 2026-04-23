@@ -1,0 +1,81 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{SOLICITUD FORMAL}
+\SetDocTitle{Solicitud de Acceso a Datos Históricos ERP}
+\SetDocCode{PET-OPS-005}
+\SetDocArea{Operaciones}
+\SetDocAuthor{Coordinación de Operaciones}
+\SetDocDate{2026-04-22}
+
+\begin{document}
+
+\MemoBlock%
+  {Ing. Roberto Flores — Jefe de Tecnología \& Sistemas}%
+  {Lcda. Patricia Suárez — Coordinación de Operaciones}%
+  {Acceso de consulta a registros de balanzas 2023--2025}%
+  {PET-OPS-005}
+
+\section{Antecedentes}
+
+El equipo de Operaciones se encuentra desarrollando un modelo de análisis de
+tendencias de rendimiento para el período 2023--2026.  Actualmente el acceso
+al sistema CoreX solo permite consultar datos desde 2025-01-01; los registros
+históricos de balanzas (BAL1, BAL2) correspondientes a 2023 y 2024 se encuentran
+archivados en el esquema \texttt{postcosecha\_hist} de la base de datos de producción.
+
+\section{Objeto de la solicitud}
+
+Se solicita acceso de \textbf{solo lectura} al esquema \texttt{postcosecha\_hist}
+para los usuarios:
+
+\begin{itemize}
+  \item \texttt{p.suarez} — Coordinación de Operaciones
+  \item \texttt{c.mendoza} — Jefatura de Operaciones
+\end{itemize}
+
+El acceso requerido es a las vistas \texttt{v\_bal\_semana\_hist} y
+\texttt{v\_rendimiento\_variedad\_hist} únicamente.
+
+\section{Fundamentación}
+
+\begin{itemize}
+  \item El análisis de tendencias requiere al menos 36 meses de datos para
+        producir resultados estadísticamente significativos.
+  \item Los datos del período 2023--2024 son necesarios para calibrar el modelo
+        de predicción de mermas que se presentará en el comité de gerencia del
+        2026-05-15.
+  \item El acceso de solo lectura a vistas no implica riesgo de modificación o
+        eliminación de datos históricos.
+\end{itemize}
+
+\section{Plazo solicitado}
+
+Acceso requerido a partir del \textbf{2026-04-28}, con duración de \textbf{90 días}
+renovables según necesidad operativa.
+
+\ObservationBox[Política de uso]{
+  Los datos accedidos serán utilizados exclusivamente para el análisis de tendencias
+  interno.  No se exportarán a sistemas externos ni se compartirán con terceros
+  sin autorización escrita del Jefe de Tecnología.
+}
+
+\section{Compromisos del solicitante}
+
+\begin{enumerate}
+  \item El acceso se utilizará exclusivamente para las consultas de análisis
+        de tendencias descritas en este documento.
+  \item Se notificará al área de Tecnología si la necesidad cesa antes del plazo
+        acordado para revocar el acceso de forma oportuna.
+  \item Se cumplirán los procedimientos de seguridad de la información vigentes
+        en la organización.
+\end{enumerate}
+
+Agradezco su atención y quedo a disposición para coordinar la configuración del
+acceso según los procedimientos internos del área de Tecnología.
+
+\SignatureBlock{Patricia Suárez}{Coordinación de Operaciones Postcosecha}
+
+\ContactSignature
+
+\end{document}

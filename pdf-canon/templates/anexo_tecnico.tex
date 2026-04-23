@@ -1,0 +1,56 @@
+\documentclass{../base/canon}
+
+\input{../base/canon_variables}
+\SetDocType{ANEXO TÉCNICO}
+\SetDocTitle{Título del Anexo Técnico}
+\SetDocCode{ANX-TEC-000}
+\SetDocArea{Área Técnica}
+\SetDocAuthor{Autor}
+\SetDocDate{\today}
+
+\begin{document}
+
+\NoteInline{Documento de soporte de:} \texttt{[CÓDIGO-DOC-PRINCIPAL]} —
+\textit{[Título del documento principal]}.
+
+\section{Contenido del anexo}
+
+\begin{ParrafoMetodologico}
+Describir qué contiene este anexo y cómo se relaciona con el documento principal.
+Incluir fuente de datos, período y método de obtención.
+\end{ParrafoMetodologico}
+
+\section{Datos detallados}
+
+\begin{center}
+\begin{longtable}{@{} l l r r r @{}}
+  \caption{Detalle de registros del anexo} \\
+  \toprule
+  \textbf{ID} & \textbf{Descripción} & \textbf{Val. 1} & \textbf{Val. 2} & \textbf{Total} \\
+  \midrule
+  \endfirsthead
+  \toprule
+  \textbf{ID} & \textbf{Descripción} & \textbf{Val. 1} & \textbf{Val. 2} & \textbf{Total} \\
+  \midrule
+  \endhead
+  \midrule
+  \multicolumn{5}{r}{\small\itshape Continúa\ldots} \\
+  \endfoot
+  \bottomrule
+  \endlastfoot
+  ANX-001 & Descripción registro 1 & 0 & 0 & 0 \\
+  ANX-002 & Descripción registro 2 & 0 & 0 & 0 \\
+\end{longtable}
+\end{center}
+
+\section{Código fuente / Consultas}
+
+\begin{CodeBlock}
+-- Consulta o script que generó los datos de este anexo
+SELECT id, descripcion, valor1, valor2
+FROM tabla_fuente
+WHERE condicion = true
+ORDER BY id;
+\end{CodeBlock}
+
+\end{document}
