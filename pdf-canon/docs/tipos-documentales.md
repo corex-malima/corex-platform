@@ -14,6 +14,7 @@
 | `ACT` | Acta / Minuta | `acta_minuta.tex` | Participantes de reunión |
 | `FIC` | Ficha resumen | `ficha_resumen.tex` | Cualquier audiencia |
 | `ANX` | Anexo técnico | `anexo_tecnico.tex` | Referenciado desde otro doc |
+| `OT` | Orden de trabajo | `orden_trabajo_clasificacion.tex` | Equipo operativo (Clasificación) |
 
 ---
 
@@ -114,3 +115,17 @@ dashboards impresos, briefs de reunión o adjuntos de correo ejecutivo.
 principal. No se distribuye de forma independiente.
 
 **Elementos clave:** Longtables, figuras, código. Sin resumen ejecutivo.
+
+---
+
+## OT — Orden de trabajo
+
+**Cuándo usarlo:** Instrucción operativa para ejecución de trabajo de campo o
+planta. Generada automáticamente por el solver. No requiere firma manual.
+
+**Estructura típica:**
+1. Resumen del solver (tabla indicadores)
+2. Prioridad de cumplimiento (longtable por fecha)
+3. Orden por SKU (longtable con peso y sobrepeso)
+
+**Longitud:** Variable; una sección por origen/corrida del solver.

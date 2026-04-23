@@ -187,3 +187,28 @@ export function formatDateTime(
 
   return normalizeIntlText(formatter.format(date));
 }
+
+// ── Formatters de mes para filtros ───────────────────────────────────────────
+
+const MONTH_NAMES_ES: Record<string, string> = {
+  "1": "Enero", "2": "Febrero", "3": "Marzo", "4": "Abril",
+  "5": "Mayo", "6": "Junio", "7": "Julio", "8": "Agosto",
+  "9": "Septiembre", "10": "Octubre", "11": "Noviembre", "12": "Diciembre",
+};
+
+const MONTH_NAMES_ES_PADDED: Record<string, string> = {
+  "01": "Enero", "02": "Febrero", "03": "Marzo", "04": "Abril",
+  "05": "Mayo", "06": "Junio", "07": "Julio", "08": "Agosto",
+  "09": "Septiembre", "10": "Octubre", "11": "Noviembre", "12": "Diciembre",
+};
+
+/** Convierte mes numérico ("1"–"12") al nombre en español. Uso: filtros de productividad. */
+export function formatMonthNumeric(value: string): string {
+  return MONTH_NAMES_ES[value] ?? value;
+}
+
+/** Convierte "YYYY-MM" al formato "Nombre Año" (e.g. "2026-04" → "Abril 2026"). Uso: filtros de calidad. */
+export function formatYearMonth(value: string): string {
+  const [yyyy, mm] = value.split("-");
+  return mm && MONTH_NAMES_ES_PADDED[mm] ? `${MONTH_NAMES_ES_PADDED[mm]} ${yyyy}` : value;
+}

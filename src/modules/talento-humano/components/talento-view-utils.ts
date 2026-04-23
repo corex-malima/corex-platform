@@ -8,7 +8,7 @@ export const TALENTO_WEEKS = generateAvailableWeeks(2024);
 
 export const TALENTO_WEEK_OPTIONS = TALENTO_WEEKS.map((week) => ({
   value: week,
-  label: formatWeekLabel(week),
+  label: week,
 }));
 
 export const BAR_COLORS = [

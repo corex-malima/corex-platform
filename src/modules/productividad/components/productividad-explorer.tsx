@@ -17,7 +17,7 @@ import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { DetailSection, FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
-import { formatDecimal, formatHours, formatInteger, formatPercent } from "@/shared/lib/format";
+import { formatDecimal, formatHours, formatInteger, formatMonthNumeric, formatPercent } from "@/shared/lib/format";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import type { BlockModalRow } from "@/lib/fenograma";
@@ -52,17 +52,6 @@ function buildQueryString(filters: ProductividadFilters): string {
   params.set("status", filters.status);
   params.set("costArea", filters.costArea);
   return params.toString();
-}
-
-// ── Month name helper ─────────────────────────────────────────────────────────
-const MONTH_NAMES: Record<string, string> = {
-  "1": "Enero", "2": "Febrero", "3": "Marzo", "4": "Abril",
-  "5": "Mayo", "6": "Junio", "7": "Julio", "8": "Agosto",
-  "9": "Septiembre", "10": "Octubre", "11": "Noviembre", "12": "Diciembre",
-};
-
-function formatMonthOption(value: string) {
-  return MONTH_NAMES[value] ?? value;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -675,7 +664,7 @@ export function ProductividadExplorer({ initialData }: { initialData: Productivi
         <FilterPanel>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
             <MultiSelectField id="prod-year" label="Año" value={filters.year} options={data.options.years} onChange={(value) => updateFilter("year", value)} />
-            <MultiSelectField id="prod-month" label="Mes" value={filters.month} options={data.options.months} onChange={(value) => updateFilter("month", value)} displayValue={formatMonthOption} />
+            <MultiSelectField id="prod-month" label="Mes" value={filters.month} options={data.options.months} onChange={(value) => updateFilter("month", value)} displayValue={formatMonthNumeric} />
             <MultiSelectField id="prod-area" label="Área" value={filters.area} options={data.options.areas} onChange={(value) => updateFilter("area", value)} />
             <MultiSelectField id="prod-sp-type" label="Tipo SP" value={filters.spType} options={data.options.spTypes} onChange={(value) => updateFilter("spType", value)} />
             <MultiSelectField id="prod-variety" label="Variedad" value={filters.variety} options={data.options.varieties} onChange={(value) => updateFilter("variety", value)} />

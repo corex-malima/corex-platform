@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       month: request.nextUrl.searchParams.get("month") ?? undefined,
       year: request.nextUrl.searchParams.get("year") ?? undefined,
       dominantClass: request.nextUrl.searchParams.get("dominantClass") ?? undefined,
+      bloque: request.nextUrl.searchParams.get("bloque") ?? undefined,
     });
 
     const data = await getPuntoAperturaDashboardData(filters);

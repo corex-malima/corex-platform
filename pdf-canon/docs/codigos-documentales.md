@@ -22,6 +22,7 @@ Ejemplo: `INF-OPS-042`
 | `ACT` | Acta o Minuta |
 | `FIC` | Ficha resumen |
 | `ANX` | Anexo técnico |
+| `OT` | Orden de trabajo |
 
 ---
 
@@ -39,6 +40,7 @@ Tres letras mayúsculas que identifican el área emisora.
 | `RHH` | Recursos Humanos |
 | `GER` | Gerencia General |
 | `SYS` | Sistema (uso interno de herramientas) |
+| `CLAS` | Clasificación / Postcosecha-Planificación |
 
 Pueden crearse nuevos códigos de área con aprobación del responsable documental.
 
@@ -63,3 +65,18 @@ eliminados. Las revisiones del mismo documento conservan el código y añaden
 | `MEM-GER-001` | Memorando de instrucción de cierre excepcional |
 | `ACT-OPS-028` | Acta de revisión operativa semanal |
 | `ANX-SYS-001` | Catálogo visual de componentes canon |
+
+---
+
+## Códigos auto-generados (timestamp)
+
+Algunos documentos generados automáticamente por el sistema usan un código
+basado en timestamp en lugar del correlativo estándar:
+
+```
+OT-CLAS-YYYYMMDD
+```
+
+Ejemplo: `OT-CLAS-20260423`. No forman parte de la secuencia correlativa
+`[TIPO]-[AREA]-[###]` y no se registran en el índice documental. Son
+identificadores de instancia para trazabilidad de la sesión de exportación.

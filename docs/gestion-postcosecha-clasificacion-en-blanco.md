@@ -34,7 +34,7 @@ El front respeta el canon del proyecto:
    - `GV`
    - `APERTURA`
    - `PRECLASIFICACION`
-5. La UI permite revisar resultados por modo, abrir receta por SKU y exportar una vista imprimible para guardar como PDF.
+5. La UI permite revisar resultados por modo, abrir receta por SKU y exportar una Orden de Trabajo en PDF (generada server-side con LaTeX Canon).
 
 ## Persistencia local
 
@@ -90,6 +90,6 @@ Discovery de Python:
 
 ## Notas operativas
 
-- La exportacion PDF actual usa una vista imprimible del navegador para no introducir dependencias PDF que rompan build.
+- La exportación PDF usa LaTeX Canon (`pdf-canon/templates/orden_trabajo_clasificacion.tex`) vía `POST /api/postcosecha/planificacion/solver/clasificacion-en-blanco/pdf`. Requiere `texlive-latex-extra texlive-fonts-recommended texlive-lang-spanish` en el runner Docker.
 - El precheck cliente y server deben mantenerse alineados. Si cambia la regla de cobertura o slots, se actualizan ambos lados en la misma tarea.
 - Las ediciones de SKU desde el solver actualizan el maestro local del explorer y marcan resultados como obsoletos.

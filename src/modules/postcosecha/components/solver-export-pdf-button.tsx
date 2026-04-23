@@ -7,12 +7,6 @@ import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import type { PoscosechaClasificacionModeResult } from "@/lib/postcosecha-clasificacion-en-blanco-types";
 
-function buildFilename() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `orden_trabajo_clasificacion_en_blanco_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}.pdf`;
-}
-
 export function SolverExportPdfButton({
   runs,
 }: {
@@ -40,11 +34,15 @@ export function SolverExportPdfButton({
         throw new Error(data.message ?? "Error al generar el PDF");
       }
 
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match?.[1] ?? `orden_trabajo_clasificacion_en_blanco_${Date.now()}.pdf`;
+
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = buildFilename();
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       link.remove();

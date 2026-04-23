@@ -1224,7 +1224,7 @@ function buildFilterSupportIssues(schema: BalanzasViewSchema, filters: BalanzasF
   }
 
   if ((filters.dateFrom || filters.dateTo) && !buildDateFieldExpression(schema)) {
-    issues.push("A\u00f1o");
+    issues.push("Fecha");
   }
 
   return issues;

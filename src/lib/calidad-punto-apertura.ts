@@ -12,6 +12,7 @@ export type PuntoAperturaFilters = {
   month: string;
   year: string;
   dominantClass: string;
+  bloque: string;
 };
 
 export type PuntoAperturaStatus = "Homogeneo" | "No homogeneo";
@@ -55,6 +56,7 @@ export type PuntoAperturaOptions = {
   months: string[];
   years: string[];
   dominantClasses: string[];
+  bloques: string[];
 };
 
 export type PuntoAperturaDashboardData = {
@@ -86,6 +88,7 @@ type OptionsRow = {
   months: string[] | null;
   years: string[] | null;
   dominant_classes: string[] | null;
+  bloques: string[] | null;
 };
 
 type RecordRow = {
@@ -119,6 +122,7 @@ export const defaultPuntoAperturaFilters: PuntoAperturaFilters = {
   month: "all",
   year: "all",
   dominantClass: "all",
+  bloque: "all",
 };
 
 export function normalizePuntoAperturaFilters(input: Partial<PuntoAperturaFilters> = {}): PuntoAperturaFilters {
@@ -129,6 +133,7 @@ export function normalizePuntoAperturaFilters(input: Partial<PuntoAperturaFilter
     month: normalizeSelect(input.month),
     year: normalizeSelect(input.year),
     dominantClass: normalizeSelect(input.dominantClass),
+    bloque: normalizeSelect(input.bloque),
   };
 }
 
@@ -278,7 +283,8 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
       array(select distinct sp_type from filtered where sp_type is not null order by sp_type) as sp_types,
       array(select distinct record_month from filtered where record_month is not null order by record_month desc) as months,
       array(select distinct record_year from filtered where record_year is not null order by record_year desc) as years,
-      array(select distinct dominant_class from filtered where dominant_class is not null order by dominant_class) as dominant_classes
+      array(select distinct dominant_class from filtered where dominant_class is not null order by dominant_class) as dominant_classes,
+      array(select distinct nullif(t2.bloque, '') from ${SOURCE_TABLE} t2 where nullif(t2.bloque, '') is not null order by 1) as bloques
   `);
 
   const row = result.rows[0];
@@ -289,6 +295,7 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
     months: row?.months ?? [],
     years: row?.years ?? [],
     dominantClasses: row?.dominant_classes ?? [],
+    bloques: row?.bloques ?? [],
   };
 }
 
@@ -322,6 +329,7 @@ export async function getPuntoAperturaDashboardData(
     sqlArrayFilter("u", "record_month", decodeMultiSelectValue(filters.month), params),
     sqlArrayFilter("u", "record_year", decodeMultiSelectValue(filters.year), params),
     sqlArrayFilter("u", "dominante_clase", decodeMultiSelectValue(filters.dominantClass), params),
+    sqlArrayFilter("u", "bloque", decodeMultiSelectValue(filters.bloque), params),
   ].filter(Boolean);
 
   const sql = `

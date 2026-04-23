@@ -1,6 +1,7 @@
 import { formatDecimal, formatInteger, formatPercent } from "@/shared/lib/format";
 import type { PoscosechaClasificacionModeResult } from "@/lib/postcosecha-clasificacion-en-blanco-types";
 
+// Backslash must be escaped first — escaping it last would double-escape the sequences added below.
 function toLatexSafe(value: unknown): string {
   return String(value ?? "")
     .replace(/\\/g, "\\textbackslash{}")

@@ -20,7 +20,7 @@ import { MetricTile } from "@/shared/data-display/metric-tile";
 import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { ChartSection, DetailSection, FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
-import { formatInteger, formatPercent } from "@/shared/lib/format";
+import { formatInteger, formatPercent, formatYearMonth } from "@/shared/lib/format";
 import type {
   PuntoAperturaDashboardData,
   PuntoAperturaFilters,
@@ -46,6 +46,7 @@ function buildQueryString(filters: PuntoAperturaFilters) {
   params.set("month", filters.month);
   params.set("year", filters.year);
   params.set("dominantClass", filters.dominantClass);
+  params.set("bloque", filters.bloque);
   return params.toString();
 }
 
@@ -98,13 +99,14 @@ export function PuntoAperturaExplorer({ initialData }: { initialData: PuntoApert
         icon={<Activity className="size-6" aria-hidden="true" />}
       >
         <FilterPanel>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MultiSelectField id="pa-week" label="Semana ISO" value={filters.isoWeek} options={data.options.isoWeeks} onChange={(value) => updateFilter("isoWeek", value)} />
             <MultiSelectField id="pa-year" label="Año" value={filters.year} options={data.options.years} onChange={(value) => updateFilter("year", value)} />
-            <MultiSelectField id="pa-month" label="Mes registro" value={filters.month} options={data.options.months} onChange={(value) => updateFilter("month", value)} />
+            <MultiSelectField id="pa-month" label="Mes registro" value={filters.month} options={data.options.months} onChange={(value) => updateFilter("month", value)} displayValue={formatYearMonth} />
             <MultiSelectField id="pa-area" label="Área" value={filters.area} options={data.options.areas} onChange={(value) => updateFilter("area", value)} />
             <MultiSelectField id="pa-sp-type" label="Tipo SP" value={filters.spType} options={data.options.spTypes} onChange={(value) => updateFilter("spType", value)} />
             <MultiSelectField id="pa-dominant" label="Dominante" value={filters.dominantClass} options={data.options.dominantClasses} onChange={(value) => updateFilter("dominantClass", value)} />
+            <MultiSelectField id="pa-bloque" label="Bloque" value={filters.bloque} options={data.options.bloques} onChange={(value) => updateFilter("bloque", value)} />
             <div className="flex items-end">
               <Button variant="outline" className="w-full" onClick={resetFilters}>
                 <RefreshCcw className="size-4" aria-hidden="true" />

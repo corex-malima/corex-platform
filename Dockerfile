@@ -43,7 +43,7 @@ WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
      python3 python3-pip python3-numpy python3-pandas \
-     texlive-latex-extra texlive-fonts-recommended texlive-lang-spanish \
+     texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-lang-spanish \
   && pip3 install --no-cache-dir --break-system-packages pulp \
   && ln -sf python3 /usr/bin/python \
   && rm -rf /var/lib/apt/lists/* \
