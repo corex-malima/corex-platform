@@ -1,4 +1,5 @@
 import type { BalanzasLaneId, BalanzasNodeData, BalanzasNodeKey } from "@/lib/postcosecha-balanzas";
+import { BALANZAS_LANE_COLORS } from "@/modules/postcosecha/lib/balanzas-process-tokens";
 
 export type BalanzasProcessSelection = {
   nodeKey: BalanzasNodeKey;
@@ -24,7 +25,7 @@ export const PROCESS_LANES: ProcessLane[] = [
   {
     id: "pre-gv",
     label: "Preclasificacion / GV sin pelar",
-    color: "#2563eb",
+    color: BALANZAS_LANE_COLORS["pre-gv"],
     selection: { nodeKey: "b1ab_pre_gv" },
     viewportTargetIds: [
       "Task_B1_Preclasificacion",
@@ -40,7 +41,7 @@ export const PROCESS_LANES: ProcessLane[] = [
   {
     id: "pre-directo",
     label: "Preclasificacion / Directo",
-    color: "#0891b2",
+    color: BALANZAS_LANE_COLORS["pre-directo"],
     selection: { nodeKey: "b1ab_pre_directo" },
     viewportTargetIds: [
       "Task_B1_Preclasificacion",
@@ -56,7 +57,7 @@ export const PROCESS_LANES: ProcessLane[] = [
   {
     id: "apertura-gv-pelado",
     label: "Apertura / GV pelado",
-    color: "#16a34a",
+    color: BALANZAS_LANE_COLORS["apertura-gv-pelado"],
     selection: { nodeKey: "b1c_apertura_gv" },
     viewportTargetIds: [
       "Task_B1_Apertura",
@@ -72,7 +73,7 @@ export const PROCESS_LANES: ProcessLane[] = [
   {
     id: "apertura-apertura",
     label: "Apertura / Apertura",
-    color: "#f97316",
+    color: BALANZAS_LANE_COLORS["apertura-apertura"],
     selection: { nodeKey: "b1c_apertura_directo" },
     viewportTargetIds: [
       "Task_B1_Apertura",

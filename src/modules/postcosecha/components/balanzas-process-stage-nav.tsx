@@ -37,9 +37,12 @@ export function BalanzasProcessStageNav({
           variant="ghost"
           className="ml-auto size-7 rounded-full"
           onClick={onToggleCollapse}
+          aria-label={collapsed ? "Expandir navegación" : "Colapsar navegación"}
+          aria-expanded={!collapsed}
         >
           <ChevronLeft
             className={cn("size-3.5 transition-transform duration-200", collapsed && "rotate-180")}
+            aria-hidden="true"
           />
         </Button>
       </div>

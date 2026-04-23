@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/shared/ui/card";
 import { cn } from "@/lib/utils";
 import { formatFlexibleNumber, formatPercent } from "@/shared/lib/format";
 import { toNumber } from "@/shared/lib/number-utils";
+import { getRatioTone } from "@/modules/postcosecha/lib/balanzas-node-format";
 import type {
   BalanzasNodeData,
   BalanzasTableColumn,
@@ -41,22 +42,6 @@ function getDisplayValue(column: BalanzasTableColumn | undefined, row: BalanzasT
 
   const value = row.values[column.key];
   return value === null || value === undefined || value === "" ? "-" : String(value);
-}
-
-function getRatioTone(value: number | null) {
-  if (value === null) {
-    return "bg-background/64";
-  }
-
-  if (value >= 95) {
-    return "bg-chart-success-bold/14";
-  }
-
-  if (value >= 80) {
-    return "bg-slate-500/14";
-  }
-
-  return "bg-slate-500/14";
 }
 
 export const BalanzasGroupedTable = memo(function BalanzasGroupedTable({

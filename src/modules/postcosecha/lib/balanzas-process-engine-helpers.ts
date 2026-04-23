@@ -8,6 +8,10 @@ import {
   getProcessSelection,
   resolveLaneViewportTargetIds,
 } from "@/modules/postcosecha/lib/balanzas-process-stages";
+import {
+  BALANZAS_OVERLAY_CLASSES,
+  BALANZAS_OVERLAY_INLINE_COLORS,
+} from "@/modules/postcosecha/lib/balanzas-process-tokens";
 import { cn } from "@/lib/utils";
 
 export type ProcessElement = {
@@ -126,17 +130,15 @@ export function buildProcessOverlayElement(node: BalanzasNodeData) {
     "balanzas-node-overlay rounded-xl border px-2.5 py-2 text-left backdrop-blur-md transition-shadow",
     "shadow-[0_2px_12px_-4px_rgba(15,23,42,0.18),0_1px_3px_-1px_rgba(15,23,42,0.08)]",
     "hover:shadow-[0_4px_20px_-4px_rgba(15,23,42,0.22)]",
-    isAggregate
-      ? "border-orange-200/80 bg-orange-50/98 text-orange-950 dark:border-orange-500/30 dark:bg-orange-950/80 dark:text-orange-100"
-      : "border-slate-200/80 bg-white/98 text-slate-900 dark:border-slate-700/60 dark:bg-slate-950/90 dark:text-slate-100",
+    isAggregate ? BALANZAS_OVERLAY_CLASSES.aggregate : BALANZAS_OVERLAY_CLASSES.metric,
   );
 
   const labelColor = isAggregate
-    ? "color:rgba(154,52,18,0.75)"
-    : "color:rgba(100,116,139,0.85)";
+    ? BALANZAS_OVERLAY_INLINE_COLORS.aggregateLabel
+    : BALANZAS_OVERLAY_INLINE_COLORS.metricLabel;
   const metricColor = isAggregate
-    ? "color:rgba(154,52,18,0.9)"
-    : "color:rgba(71,85,105,0.9)";
+    ? BALANZAS_OVERLAY_INLINE_COLORS.aggregateValue
+    : BALANZAS_OVERLAY_INLINE_COLORS.metricValue;
   const caption = isAggregate ? "GENERAL" : node.laneLabel;
 
   element.innerHTML = `

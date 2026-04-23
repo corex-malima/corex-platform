@@ -100,17 +100,17 @@ export function BalanzasProcessTopbar({
           Ver mapa limpio
         </Button>
         <div className="flex items-center gap-0.5 rounded-full border border-border/70 bg-background/88 p-1 shadow-sm">
-          <Button size="icon" variant="ghost" className="size-7 rounded-full" onClick={onZoomOut}>
-            <Minus className="size-3.5" />
+          <Button size="icon" variant="ghost" className="size-7 rounded-full" onClick={onZoomOut} aria-label="Reducir zoom">
+            <Minus className="size-3.5" aria-hidden="true" />
           </Button>
-          <span className={cn("w-11 text-center text-xs text-muted-foreground", "tabular-nums")}>
+          <span className={cn("w-11 text-center text-xs text-muted-foreground", "tabular-nums")} aria-live="polite" aria-label={`Zoom ${zoomPct}%`}>
             {zoomPct}%
           </span>
-          <Button size="icon" variant="ghost" className="size-7 rounded-full" onClick={onFit}>
-            <Maximize2 className="size-3.5" />
+          <Button size="icon" variant="ghost" className="size-7 rounded-full" onClick={onFit} aria-label="Ajustar al viewport">
+            <Maximize2 className="size-3.5" aria-hidden="true" />
           </Button>
-          <Button size="icon" variant="ghost" className="size-7 rounded-full" onClick={onZoomIn}>
-            <Plus className="size-3.5" />
+          <Button size="icon" variant="ghost" className="size-7 rounded-full" onClick={onZoomIn} aria-label="Aumentar zoom">
+            <Plus className="size-3.5" aria-hidden="true" />
           </Button>
         </div>
         <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-full text-xs" onClick={onExport}>

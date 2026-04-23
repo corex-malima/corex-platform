@@ -2,10 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   centerProcessOnElementIds,
+  getNodeMarkerClass,
+  isInteractiveProcessNode,
+  matchesProcessBinding,
+  resolveProcessSelection,
   scrollProcessToLane,
   type ViewerApi,
 } from "@/modules/postcosecha/lib/balanzas-process-engine-helpers";
 import { PROCESS_LANES } from "@/modules/postcosecha/lib/balanzas-process-stages";
+import type { BalanzasNodeData, BalanzasProcessBinding } from "@/lib/postcosecha-balanzas";
 
 function createViewer(options?: {
   elements?: Record<string, { id: string; x?: number; y?: number; width?: number; height?: number }>;
@@ -94,5 +99,73 @@ describe("balanzas process engine helpers", () => {
     )).toBe(false);
     expect(viewbox).toHaveBeenCalledTimes(0);
     expect(zoom).toHaveBeenCalledWith("fit-viewport", "auto");
+  });
+});
+
+describe("getNodeMarkerClass", () => {
+  it("returns aggregate marker for aggregate nodes", () => {
+    expect(getNodeMarkerClass({ kind: "aggregate" } as BalanzasNodeData)).toBe("balanzas-node-aggregate");
+  });
+
+  it("returns metric marker for metric nodes", () => {
+    expect(getNodeMarkerClass({ kind: "metric" } as BalanzasNodeData)).toBe("balanzas-node-metric");
+  });
+});
+
+describe("isInteractiveProcessNode", () => {
+  it("excludes root nodes b1_preclasificacion and b1_apertura", () => {
+    expect(isInteractiveProcessNode({ key: "b1_preclasificacion" } as BalanzasNodeData)).toBe(false);
+    expect(isInteractiveProcessNode({ key: "b1_apertura" } as BalanzasNodeData)).toBe(false);
+  });
+
+  it("includes all other nodes", () => {
+    expect(isInteractiveProcessNode({ key: "b1ab_pre_gv" } as BalanzasNodeData)).toBe(true);
+    expect(isInteractiveProcessNode({ key: "general_apertura_directo" } as BalanzasNodeData)).toBe(true);
+    expect(isInteractiveProcessNode({ key: "b2a_apertura_max10_arcoiris" } as BalanzasNodeData)).toBe(true);
+  });
+});
+
+describe("matchesProcessBinding", () => {
+  it("returns true when elementId matches exactly", () => {
+    const binding: BalanzasProcessBinding = { taskName: "B1AB", elementId: "Task_B1AB_Pre_GV" };
+    expect(matchesProcessBinding(binding, { id: "Task_B1AB_Pre_GV" })).toBe(true);
+  });
+
+  it("returns false when elementId does not match", () => {
+    const binding: BalanzasProcessBinding = { taskName: "B1AB", elementId: "Task_B1AB_Pre_GV" };
+    expect(matchesProcessBinding(binding, { id: "Task_B1AB_Pre_Directo" })).toBe(false);
+  });
+
+  it("returns false when binding has no elementId", () => {
+    const binding: BalanzasProcessBinding = { taskName: "B1AB" };
+    expect(matchesProcessBinding(binding, { id: "Task_B1AB_Pre_GV" })).toBe(false);
+  });
+});
+
+describe("resolveProcessSelection", () => {
+  const makeNode = (key: BalanzasNodeData["key"], kind: BalanzasNodeData["kind"], elementId: string): BalanzasNodeData =>
+    ({
+      key,
+      kind,
+      processBindings: [{ taskName: "Task", elementId }],
+    }) as unknown as BalanzasNodeData;
+
+  it("returns the matching selection for an interactive node", () => {
+    const nodes = [
+      makeNode("b1_preclasificacion", "aggregate", "Task_Root"),
+      makeNode("b1ab_pre_gv", "aggregate", "Task_B1AB_Pre_GV"),
+    ];
+    const result = resolveProcessSelection(nodes, { id: "Task_B1AB_Pre_GV" });
+    expect(result?.nodeKey).toBe("b1ab_pre_gv");
+  });
+
+  it("skips root nodes (b1_preclasificacion, b1_apertura) even if binding matches", () => {
+    const nodes = [makeNode("b1_preclasificacion", "aggregate", "Task_Root")];
+    expect(resolveProcessSelection(nodes, { id: "Task_Root" })).toBeNull();
+  });
+
+  it("returns null when no binding matches", () => {
+    const nodes = [makeNode("b1ab_pre_gv", "aggregate", "Task_B1AB_Pre_GV")];
+    expect(resolveProcessSelection(nodes, { id: "Task_Unknown" })).toBeNull();
   });
 });
