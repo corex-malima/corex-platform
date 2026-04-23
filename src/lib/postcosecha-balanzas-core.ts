@@ -668,7 +668,6 @@ export const defaultBalanzasFilters: BalanzasFilters = {
   year: "all",
   month: "all",
   dayName: "all",
-  destination: "all",
   weekMode: "iso",
   weekValue: "all",
   dateFrom: "",

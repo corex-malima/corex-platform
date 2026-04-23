@@ -675,6 +675,16 @@ const AREA_SQL = `
   end
 `;
 
+// Normaliza aliases históricos al nombre canónico (mismo mapeo que normalizeAreaDisplayName).
+// Se usa en el WHERE para que filtrar "SJP" también encuentre filas con prefijo "A-4" o "A4".
+const AREA_ALIAS_SQL = `
+  case upper(trim(${AREA_SQL}))
+    when 'A-4' then 'SJP'
+    when 'A4'  then 'SJP'
+    else upper(trim(${AREA_SQL}))
+  end
+`;
+
 const FENOGRAMA_SOURCE = "gld.mv_prod_fenograma_cur";
 const FENOGRAMA_DAY_SOURCE = "gld.mv_prod_fenograma_day_cur";
 const BED_PLANTS_SOURCE = "gld.mv_camp_kardex_bed_plants_cur";
@@ -687,7 +697,7 @@ const FENOGRAMA_OPTIONS_QUERY = `
     array(
       select distinct area_value
       from (
-        select ${AREA_SQL} as area_value
+        select ${AREA_ALIAS_SQL} as area_value
         from ${FENOGRAMA_SOURCE}
       ) areas
       where area_value is not null
@@ -1261,7 +1271,7 @@ function buildWhereClause(filters: FenogramaFilters) {
 
   if (selectedAreas.length) {
     values.push(selectedAreas);
-    conditions.push(`${AREA_SQL} = any($${values.length}::text[])`);
+    conditions.push(`${AREA_ALIAS_SQL} = any($${values.length}::text[])`);
   }
 
   if (selectedVarieties.length) {
