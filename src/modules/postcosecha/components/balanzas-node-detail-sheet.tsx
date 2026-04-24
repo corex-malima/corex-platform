@@ -1,250 +1,237 @@
 "use client";
 
-import { Layers3, TableProperties } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Download, LoaderCircle } from "lucide-react";
+import useSWR from "swr";
 
-import { BalanzasGroupedTable } from "@/modules/postcosecha/components/balanzas-grouped-table";
-import {
-  buildNodeHeadline,
-  buildVisibleSummary,
-  formatDisplayValue,
-  getRatioTone,
-  type NodeLocalFilters,
-} from "@/modules/postcosecha/lib/balanzas-node-format";
-import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
-import { Input } from "@/shared/ui/input";
-import { Label } from "@/shared/ui/label";
-import { formatDate, formatInteger, formatPercent } from "@/shared/lib/format";
-import { cn } from "@/lib/utils";
-import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { KpiGrid } from "@/shared/layout/filter-panel";
+import { FilterPanel } from "@/shared/layout/filter-panel";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { SheetShell } from "@/shared/overlays/sheet-shell";
-import type {
-  BalanzasNodeData,
-  BalanzasTableRow,
-} from "@/lib/postcosecha-balanzas";
+import { MultiSelectField } from "@/shared/filters/multi-select-field";
+import { fetchJson } from "@/lib/fetch-json";
+import { encodeMultiSelectValue } from "@/lib/multi-select";
+import { cn } from "@/lib/utils";
+import type { BalanzasFilters, BalanzasNodeDetail, BalanzasNodeSummary } from "@/lib/postcosecha-balanzas";
 
-export type { NodeLocalFilters } from "@/modules/postcosecha/lib/balanzas-node-format";
-export {
-  DEFAULT_NODE_LOCAL_FILTERS,
-  createNodeLocalFilters,
-} from "@/modules/postcosecha/lib/balanzas-node-format";
-
-export function BalanzasNodeDetailSheet({
-  node,
-  rows,
-  search,
-  filters,
-  open,
-  onSearchChange,
-  onFilterChange,
-  onClose,
-}: {
-  node: BalanzasNodeData;
-  rows: BalanzasTableRow[];
-  search: string;
-  filters: NodeLocalFilters;
+type Props = {
+  node: BalanzasNodeSummary;
+  filters: BalanzasFilters;
   open: boolean;
-  onSearchChange: (value: string) => void;
-  onFilterChange: (key: keyof NodeLocalFilters, value: string) => void;
   onClose: () => void;
-}) {
-  const sourceKey = node.columnMap.source;
-  const targetKey = node.columnMap.target;
-  const ratioKey = node.columnMap.ratio;
-  const gapKey = node.columnMap.gap;
-  const visibleColumns = node.tableColumns.filter((column) => column.key !== node.columnMap.destination);
-  const visibleSummary = buildVisibleSummary(node, rows);
-  const tableFilters = [
-    { key: "grade" as const, label: "Grado", options: node.localOptions.grades },
-    { key: "lot" as const, label: "Lote", options: node.localOptions.lots },
-    { key: "hydrationDays" as const, label: "Dias de hidratacion", options: node.localOptions.hydrationDays },
-    { key: "isoWeek" as const, label: "Semana", options: node.localOptions.isoWeeks },
-    { key: "dayName" as const, label: "Dia", options: node.localOptions.dayNames },
-    { key: "month" as const, label: "Mes", options: node.localOptions.months },
-    { key: "date" as const, label: "Fecha", options: node.localOptions.dates },
-  ].filter((entry) => entry.options.length > 1);
+};
+
+type LocalFilters = {
+  destinations: string;
+  grades: string;
+  gradeGroups: string;
+};
+
+const EMPTY_LOCAL: LocalFilters = { destinations: "all", grades: "all", gradeGroups: "all" };
+
+function buildDetailUrl(nodeKey: string, filters: BalanzasFilters, local: LocalFilters) {
+  const p = new URLSearchParams();
+  p.set("weekValue", filters.weekValue);
+  p.set("month", filters.month);
+  p.set("year", filters.year);
+  if (filters.dateFrom) p.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) p.set("dateTo", filters.dateTo);
+  p.set("destinations", local.destinations);
+  p.set("grades", local.grades);
+  p.set("gradeGroups", local.gradeGroups);
+  return `/api/postcosecha/balanzas/${nodeKey}?${p.toString()}`;
+}
+
+function downloadCsv(detail: BalanzasNodeDetail) {
+  const header = detail.columns.map((c) => c.label).join(",");
+  const rows = detail.rows.map((row) =>
+    detail.columns
+      .map((c) => {
+        const v = row[c.key];
+        if (v === null || v === undefined) return "";
+        const s = String(v);
+        return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+      })
+      .join(","),
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `balanzas-${detail.nodeKey}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function BalanzasNodeDetailSheet({ node, filters, open, onClose }: Props) {
+  const [local, setLocal] = useState<LocalFilters>(EMPTY_LOCAL);
+
+  useEffect(() => {
+    if (!open) setLocal(EMPTY_LOCAL);
+  }, [open, node.key]);
+
+  const url = open ? buildDetailUrl(node.key, filters, local) : null;
+
+  const { data: detail, isLoading } = useSWR(
+    url,
+    (u: string) => fetchJson<BalanzasNodeDetail>(u, "No se pudo cargar el detalle."),
+    { keepPreviousData: true, revalidateOnFocus: false, dedupingInterval: 10000 },
+  );
+
+  const metricCount = Math.min(detail?.metrics.length ?? node.metrics.length, 4) as 2 | 3 | 4;
+
+  const hasDestination = detail ? detail.destinations.length > 0 : false;
+  const hasGrades = detail ? detail.grades.length > 0 : false;
+  const hasGradeGroups = detail ? detail.gradeGroups.length > 0 : false;
+  const hasLocalFilters = hasDestination || hasGrades || hasGradeGroups;
+
+  const destinationOptions = detail?.destinations ?? [];
+  const gradeOptions = detail?.grades ?? [];
+  const gradeGroupOptions = detail?.gradeGroups ?? [];
+
+  const displayedMetrics = (detail?.metrics ?? node.metrics).slice(0, 4);
 
   return (
     <SheetShell
       open={open}
-      title={buildNodeHeadline(node)}
-      description={node.description}
-      side="right"
-      widthClassName="w-[min(1100px,100vw-80px)] max-w-[1100px]"
+      title={node.label}
+      description={`${node.branch.toUpperCase()} · ${detail ? detail.rowCount.toLocaleString("es-EC") : "…"} registros`}
+      widthClassName="max-w-5xl"
       onClose={onClose}
       headerActions={
-        <div className="flex flex-wrap justify-end gap-2">
-          <Badge variant="outline" className="rounded-full px-3 py-1">
-            {node.label}
-          </Badge>
-          <Badge variant="secondary" className="rounded-full px-3 py-1">
-            {node.laneLabel}
-          </Badge>
-          <Badge variant="outline" className="rounded-full px-3 py-1">
-            {node.kind === "aggregate" ? "GENERAL" : "CHART"}
-          </Badge>
-          {node.sourceView ? (
-            <Badge variant="outline" className="rounded-full px-3 py-1 font-mono text-[11px]">
-              {node.sourceView}
-            </Badge>
-          ) : null}
-        </div>
-      }
-      footer={
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            {formatInteger(rows.length)} filas visibles
-            {node.sourceView ? ` · fuente: ${node.sourceView}` : ""}
-          </p>
-          <Button variant="outline" size="sm" className="rounded-xl" onClick={onClose}>
-            Cerrar
+        detail ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+            onClick={() => downloadCsv(detail)}
+          >
+            <Download className="size-4" aria-hidden="true" />
+            CSV
           </Button>
-        </div>
+        ) : undefined
       }
     >
-      {node.status !== "ready" ? (
-        <div className="rounded-[24px] border border-slate-300/60 bg-slate-500/10 px-4 py-4 text-sm text-slate-950 dark:text-slate-100">
-          {node.statusMessage ?? "No hay vista disponible para este nodo."}
-        </div>
-      ) : (
-        <div className="space-y-5">
-          <KpiGrid columns={5}>
-            <MetricTile
-              label={node.focusStage}
-              value={node.metric === "peso" ? `${formatInteger(node.primaryTotal)} kg` : formatInteger(node.primaryTotal)}
-            />
-            <MetricTile
-              label={node.sourceStage}
-              value={node.metric === "peso" ? `${formatInteger(visibleSummary.sourceTotal)} kg` : formatInteger(visibleSummary.sourceTotal)}
-            />
-            <MetricTile
-              label={node.targetStage}
-              value={node.metric === "peso" ? `${formatInteger(visibleSummary.targetTotal)} kg` : formatInteger(visibleSummary.targetTotal)}
-            />
-            <MetricTile
-              label="Macro indicador"
-              value={formatPercent(visibleSummary.ratioPct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-              accent="success"
-            />
-            <MetricTile label="Ultimo corte" value={formatDate(visibleSummary.latestDate)} />
-            <MetricTile
-              label="Brecha"
-              value={node.metric === "peso" ? `${formatInteger(visibleSummary.gapTotal)} kg` : formatInteger(visibleSummary.gapTotal)}
-            />
-          </KpiGrid>
+      <div className="space-y-5">
+        <KpiGrid columns={metricCount}>
+          {displayedMetrics.map((m) => (
+            <MetricTile key={m.col} label={m.label} value={m.formatted} />
+          ))}
+        </KpiGrid>
 
-          <div className="grid gap-3 rounded-[24px] border border-border/70 bg-background/80 p-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-2 xl:col-span-2">
-              <Label htmlFor="balanzas-detail-search">Buscar dentro del nodo</Label>
-              <Input
-                id="balanzas-detail-search"
-                value={search}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Buscar por fecha, lote, destino o valor visible..."
-                className="rounded-xl"
-              />
+        {hasLocalFilters ? (
+          <FilterPanel>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {hasDestination ? (
+                <MultiSelectField
+                  id="detail-destinations"
+                  label="Destino"
+                  value={local.destinations}
+                  options={destinationOptions}
+                  onChange={(v) => setLocal((prev) => ({ ...prev, destinations: v }))}
+                  emptyLabel="Todos los destinos"
+                />
+              ) : null}
+              {hasGrades ? (
+                <MultiSelectField
+                  id="detail-grades"
+                  label="Grado"
+                  value={local.grades}
+                  options={gradeOptions}
+                  onChange={(v) => setLocal((prev) => ({ ...prev, grades: v }))}
+                  emptyLabel="Todos los grados"
+                />
+              ) : null}
+              {hasGradeGroups ? (
+                <MultiSelectField
+                  id="detail-grade-groups"
+                  label="Grupo de grado"
+                  value={local.gradeGroups}
+                  options={gradeGroupOptions}
+                  onChange={(v) => setLocal((prev) => ({ ...prev, gradeGroups: v }))}
+                  emptyLabel="Todos los grupos"
+                />
+              ) : null}
             </div>
-            {tableFilters.map((entry) => (
-              <MultiSelectField
-                key={entry.key}
-                id={`balanzas-detail-${entry.key}`}
-                label={entry.label}
-                value={filters[entry.key]}
-                options={entry.options}
-                onChange={(value) => onFilterChange(entry.key, value)}
-              />
-            ))}
+          </FilterPanel>
+        ) : null}
+
+        {isLoading && !detail ? (
+          <div className="flex items-center gap-3 py-12 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+            Cargando detalle…
           </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-slate-900/10 p-3 text-slate-700 dark:bg-slate-900/20 dark:text-white">
-                <Layers3 className="size-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-base font-semibold">Tabla agrupable del nodo</p>
-                <p className="text-sm text-muted-foreground">
-                  Agrupa por semana, dia, fecha, lote o grado segun la vista disponible.
-                </p>
-              </div>
-            </div>
-            <BalanzasGroupedTable key={node.key} node={node} rows={rows} />
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-slate-900/10 p-3 text-slate-700 dark:bg-slate-900/20 dark:text-white">
-                  <TableProperties className="size-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="text-base font-semibold">Detalle crudo del nodo</p>
-                  <p className="text-sm text-muted-foreground">
-                    Filas visibles despues de filtros globales y filtros locales.
-                  </p>
-                </div>
-              </div>
-              <Badge variant="outline" className="rounded-full px-3 py-1">
-                {rows.length} filas visibles
-              </Badge>
-            </div>
-
-            <div className="max-h-[min(42dvh,480px)] overflow-auto rounded-[24px] border border-border/70">
-              <table className="min-w-full border-separate border-spacing-0 text-sm">
-                <thead className="sticky top-0 z-20 bg-card/95 backdrop-blur">
-                  <tr>
-                    {visibleColumns.map((column) => (
-                      <th
-                        key={column.key}
-                        className="border-b border-r border-border/70 bg-card px-3 py-3 text-left font-semibold text-foreground last:border-r-0"
-                      >
-                        {column.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length ? rows.map((row, rowIndex) => (
+        ) : detail && detail.columns.length > 0 ? (
+          <div className="overflow-auto rounded-[24px] border border-border/70" style={{ maxHeight: "min(55dvh, 600px)" }}>
+            <table className="min-w-full border-separate border-spacing-0 text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr>
+                  {detail.columns.map((col) => (
+                    <th
+                      key={col.key}
+                      className="border-b border-r border-border/70 bg-card/95 px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.10em] text-muted-foreground whitespace-nowrap last:border-r-0"
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {detail.rows.length > 0 ? (
+                  detail.rows.map((row, i) => (
                     <tr
-                      key={row.id}
+                      key={i}
                       className={cn(
-                        rowIndex % 2 === 0 ? "bg-background/84" : "bg-background/70",
-                        row.ratioPct !== null && row.ratioPct < 80 && "bg-slate-500/8",
+                        i % 2 === 0 ? "bg-background/84" : "bg-background/70",
                       )}
                     >
-                      {visibleColumns.map((column) => (
+                      {detail.columns.map((col) => (
                         <td
-                          key={`${row.id}-${column.key}`}
+                          key={col.key}
                           className={cn(
-                            "border-b border-r border-border/50 px-3 py-2.5 align-middle text-foreground last:border-r-0",
-                            column.key === ratioKey && getRatioTone(row.ratioPct),
-                            column.key === sourceKey && "bg-slate-500/6",
-                            column.key === targetKey && "bg-chart-success-bold/6",
-                            column.key === gapKey && row.gapValue !== null && row.gapValue < 0 && "bg-slate-500/8",
+                            "border-b border-r border-border/40 px-3 py-2.5 whitespace-nowrap last:border-r-0",
+                            col.numeric ? "text-right tabular-nums" : "text-left",
                           )}
                         >
-                          {formatDisplayValue(node, column, row)}
+                          {formatCell(row[col.key])}
                         </td>
                       ))}
                     </tr>
-                  )) : (
-                    <tr>
-                      <td
-                        colSpan={visibleColumns.length}
-                        className="px-4 py-10 text-center text-sm text-muted-foreground"
-                      >
-                        No hay filas visibles para este nodo con el filtro local aplicado.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={detail.columns.length}
+                      className="px-4 py-10 text-center text-sm text-muted-foreground"
+                    >
+                      No hay filas para los filtros seleccionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        ) : detail && detail.columns.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            No hay datos disponibles para este nodo en el período seleccionado.
+          </p>
+        ) : null}
+      </div>
     </SheetShell>
   );
 }
+
+function formatCell(value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value.toLocaleString("es-EC", { maximumFractionDigits: 4 }) : String(value);
+  }
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
+  return s;
+}
+
+export { encodeMultiSelectValue };

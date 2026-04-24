@@ -1,87 +1,74 @@
 "use client";
 
-import { useEffect, useDeferredValue, useMemo, useState } from "react";
-import { AlertCircle, LoaderCircle, RefreshCcw, Scale } from "lucide-react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { LoaderCircle, RefreshCcw, Scale } from "lucide-react";
+import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { toast } from "sonner";
 
-import { BalanzasNodeDetailSheet } from "@/modules/postcosecha/components/balanzas-node-detail-sheet";
-import {
-  createNodeLocalFilters,
-  DEFAULT_NODE_LOCAL_FILTERS,
-  filterNodeDetailRows,
-  type NodeLocalFilters,
-} from "@/modules/postcosecha/lib/balanzas-node-format";
-import { BalanzasProcessDashboard } from "@/modules/postcosecha/components/balanzas-process-dashboard";
-import type { BalanzasProcessSelection } from "@/modules/postcosecha/lib/balanzas-process-stages";
 import { Button } from "@/shared/ui/button";
 import { fetchJson } from "@/lib/fetch-json";
-import { MultiSelectField } from "@/shared/filters/multi-select-field";
-import { formatYearMonth } from "@/shared/lib/format";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
-import { ChartSection, FilterPanel } from "@/shared/layout/filter-panel";
+import { FilterPanel } from "@/shared/layout/filter-panel";
+import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { DateField } from "@/shared/filters/date-field";
 import { EmptyState } from "@/shared/data-display/empty-state";
-import type {
-  BalanzasDashboardData,
-  BalanzasFilters,
-  BalanzasNodeData,
-} from "@/lib/postcosecha-balanzas";
+import type { BalanzasDashboardData, BalanzasFilters, BalanzasNodeSummary } from "@/lib/postcosecha-balanzas";
+import { BalanzasNodeDetailSheet } from "@/modules/postcosecha/components/balanzas-node-detail-sheet";
+
+const BalanzasProcessViewer = dynamic(
+  () =>
+    import("@/modules/postcosecha/components/balanzas-process-viewer").then(
+      (mod) => mod.BalanzasProcessViewer,
+    ),
+  { ssr: false },
+);
 
 type BalanzasExplorerProps = {
   initialData: BalanzasDashboardData;
   initialError?: string | null;
 };
 
-const balanzasFetcher = (url: string) =>
-  fetchJson<BalanzasDashboardData>(url, "No se pudo cargar Indicadores Balanzas.");
+function toProcessNodes(nodes: BalanzasNodeSummary[]) {
+  return nodes
+    .filter((n) => n.bpmnElementId !== null)
+    .map((n) => ({
+      key: n.key,
+      shortLabel: n.shortLabel,
+      label: n.label,
+      overlayOffsetLeft: n.overlayOffsetLeft,
+      ratioDisplay: n.metrics[2]?.formatted ?? "—",
+      sourceTotalDisplay: n.metrics[0]?.formatted ?? "—",
+      targetTotalDisplay: n.metrics[1]?.formatted ?? "—",
+      status: (n.rowCount > 0 ? "ready" : "unavailable") as "ready" | "unavailable",
+      processBindings: [{ elementId: n.bpmnElementId! }],
+      destinationBreakdown: [],
+    }));
+}
 
 function buildQueryString(filters: BalanzasFilters) {
   const params = new URLSearchParams();
-
-  params.set("metric", filters.metric);
-  params.set("year", filters.year);
-  params.set("month", filters.month);
-  params.set("dayName", filters.dayName);
-  params.set("weekMode", "iso");
   params.set("weekValue", filters.weekValue);
-
-  if (filters.dateFrom) {
-    params.set("dateFrom", filters.dateFrom);
-  }
-
-  if (filters.dateTo) {
-    params.set("dateTo", filters.dateTo);
-  }
-
+  params.set("month", filters.month);
+  params.set("year", filters.year);
+  if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
+  if (filters.dateTo) params.set("dateTo", filters.dateTo);
   return params.toString();
 }
 
-export function BalanzasExplorer({
-  initialData,
-  initialError,
-}: BalanzasExplorerProps) {
+const balanzasFetcher = (url: string) =>
+  fetchJson<BalanzasDashboardData>(url, "No se pudo cargar Indicadores Balanzas.");
+
+export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorerProps) {
   const [filters, setFilters] = useState<BalanzasFilters>(initialData.filters);
-  const [selection, setSelection] = useState<BalanzasProcessSelection | null>(null);
-  const [stableSelectedNode, setStableSelectedNode] = useState<BalanzasNodeData | null>(null);
-  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
-  const [detailSearch, setDetailSearch] = useState("");
-  const [detailFilters, setDetailFilters] = useState<NodeLocalFilters>(DEFAULT_NODE_LOCAL_FILTERS);
+  const [selectedNode, setSelectedNode] = useState<BalanzasNodeSummary | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
   const deferredFilters = useDeferredValue(filters);
-  const initialFilterKey = useMemo(
-    () => buildQueryString(initialData.filters),
-    [initialData.filters],
-  );
-  const filterKey = useMemo(
-    () => buildQueryString(deferredFilters),
-    [deferredFilters],
-  );
-  const {
-    data: dashboardData,
-    error: dashboardError,
-    isValidating,
-    mutate,
-  } = useSWR(
+  const initialFilterKey = useMemo(() => buildQueryString(initialData.filters), [initialData.filters]);
+  const filterKey = useMemo(() => buildQueryString(deferredFilters), [deferredFilters]);
+
+  const { data: dashboardData, error, isValidating, mutate } = useSWR(
     `/api/postcosecha/balanzas?${filterKey}`,
     balanzasFetcher,
     {
@@ -91,136 +78,90 @@ export function BalanzasExplorer({
       dedupingInterval: 15000,
     },
   );
+
   const data = dashboardData ?? initialData;
 
-  useEffect(() => {
-    if (dashboardError) {
-      toast.error(dashboardError.message || "Error al cargar datos");
-    }
-  }, [dashboardError]);
+  useMemo(() => {
+    if (error) toast.error(error.message || "Error al cargar datos de balanzas");
+  }, [error]);
 
-  const activeMessage = dashboardError?.message ?? data.summary.statusMessage ?? initialError ?? null;
-  const weekOptions = data.options.isoWeeks;
-  const effectiveWeekValue = data.filters.weekValue;
-  const liveSelectedNode = selection
-    ? data.nodes.find((node) => node.key === selection.nodeKey) ?? null
-    : null;
-  const selectedNode = liveSelectedNode ?? stableSelectedNode;
+  const nodeMap = useMemo(() => new Map(data.nodes.map((n) => [n.key, n])), [data.nodes]);
+  const processNodes = useMemo(() => toProcessNodes(data.nodes), [data.nodes]);
 
-  const filteredDetailRows = useMemo(
-    () => filterNodeDetailRows(selectedNode, detailFilters, detailSearch),
-    [selectedNode, detailFilters, detailSearch],
-  );
-
-  function updateFilter<Key extends keyof BalanzasFilters>(
-    key: Key,
-    value: BalanzasFilters[Key],
-  ) {
-    setFilters((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  }
-
-  function updateDetailFilter<Key extends keyof NodeLocalFilters>(key: Key, value: NodeLocalFilters[Key]) {
-    setDetailFilters((current) => ({
-      ...current,
-      [key]: value,
-    }));
+  function update<K extends keyof BalanzasFilters>(key: K, value: BalanzasFilters[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
   function resetFilters() {
     setFilters(initialData.filters);
   }
 
-  function handleSelectionChange(nextSelection: BalanzasProcessSelection | null) {
-    setSelection((current) => {
-      if (current?.nodeKey !== nextSelection?.nodeKey) {
-        setDetailSearch("");
-        setDetailFilters(createNodeLocalFilters());
-      }
-      return nextSelection;
-    });
-    setDetailSheetOpen(false);
-
-    if (!nextSelection) {
-      setStableSelectedNode(null);
-      return;
-    }
-
-    const liveNode = data.nodes.find((node) => node.key === nextSelection.nodeKey) ?? null;
-    if (liveNode) {
-      setStableSelectedNode(liveNode);
+  function handleSelectNode(nodeKey: string) {
+    const node = nodeMap.get(nodeKey);
+    if (node) {
+      setSelectedNode(node);
+      setDetailOpen(true);
     }
   }
+
+  const weekOptionValues = data.options.weeks.map((o) => o.value);
+  const monthOptionValues = data.options.months.map((o) => o.value);
+  const yearOptionValues = data.options.years.map((o) => o.value);
+
+  const weekLabelMap = new Map(data.options.weeks.map((o) => [o.value, o.label]));
+  const monthLabelMap = new Map(data.options.months.map((o) => [o.value, o.label]));
+  const weekDisplayValue = (v: string) => weekLabelMap.get(v) ?? v;
+  const monthDisplayValue = (v: string) => monthLabelMap.get(v) ?? v;
 
   return (
     <div className="space-y-4">
       <SectionPageShell
         eyebrow="Indicadores / Produccion / Poscosecha"
         title="Indicadores Balanzas"
-        subtitle="Viewer operativo por rutas reales. Cada caja azul es un chart clicable y cada boton GENERAL agrega la rama completa del flujo."
+        subtitle="Monitoreo de puntos de control en el flujo de producción. Haz clic en cualquier nodo para ver el detalle completo."
         icon={<Scale className="size-5" aria-hidden="true" />}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {(["peso", "tallos"] as const).map((metric) => (
-              <Button
-                key={metric}
-                variant={filters.metric === metric ? "secondary" : "outline"}
-                className="rounded-full"
-                onClick={() => updateFilter("metric", metric)}
-              >
-                {metric === "peso" ? "Peso" : "Tallos"}
-              </Button>
-            ))}
-          </div>
-        }
       >
         <FilterPanel>
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-            <MultiSelectField
-              id="balanzas-year"
-              label="Años"
-              value={filters.year}
-              options={data.options.years}
-              onChange={(value) => updateFilter("year", value)}
-            />
-            <MultiSelectField
-              id="balanzas-month"
-              label="Meses"
-              value={filters.month}
-              options={data.options.months}
-              onChange={(value) => updateFilter("month", value)}
-              displayValue={formatYearMonth}
-            />
-            <MultiSelectField
-              id="balanzas-day-name"
-              label="Dia"
-              value={filters.dayName}
-              options={data.options.dayNames}
-              onChange={(value) => updateFilter("dayName", value)}
-            />
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <MultiSelectField
               id="balanzas-week"
               label="Semana"
-              value={effectiveWeekValue}
-              options={weekOptions}
-              onChange={(value) => updateFilter("weekValue", value)}
-              emptyLabel="Ultima disponible"
+              value={filters.weekValue}
+              options={weekOptionValues}
+              onChange={(v) => update("weekValue", v)}
+              displayValue={weekDisplayValue}
+              emptyLabel="Todas las semanas"
+            />
+            <MultiSelectField
+              id="balanzas-month"
+              label="Mes"
+              value={filters.month}
+              options={monthOptionValues}
+              onChange={(v) => update("month", v)}
+              displayValue={monthDisplayValue}
+              emptyLabel="Todos los meses"
+            />
+            <MultiSelectField
+              id="balanzas-year"
+              label="Año"
+              value={filters.year}
+              options={yearOptionValues}
+              onChange={(v) => update("year", v)}
+              emptyLabel="Todos los años"
             />
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(2,minmax(0,1fr))_200px]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_200px]">
             <DateField
-              id="balanzas-date-from"
+              id="balanzas-from"
               label="Fecha desde"
               value={filters.dateFrom}
-              onChange={(value) => updateFilter("dateFrom", value)}
+              onChange={(v) => update("dateFrom", v)}
             />
             <DateField
-              id="balanzas-date-to"
+              id="balanzas-to"
               label="Fecha hasta"
               value={filters.dateTo}
-              onChange={(value) => updateFilter("dateTo", value)}
+              onChange={(v) => update("dateTo", v)}
             />
             <div className="flex items-end">
               <Button variant="outline" className="w-full rounded-xl" onClick={resetFilters}>
@@ -233,62 +174,46 @@ export function BalanzasExplorer({
           {isValidating ? (
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              Actualizando indicadores de balanzas.
+              Actualizando indicadores de balanzas…
             </div>
           ) : null}
 
-          {activeMessage ? (
-            <div className="rounded-[24px] border border-slate-300/60 bg-slate-500/10 px-4 py-3 text-sm text-slate-950 dark:text-slate-100">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="font-medium">Estado del origen</p>
-                  <p className="mt-1 text-sm opacity-90">{activeMessage}</p>
-                  {dashboardError ? (
-                    <button
-                      type="button"
-                      className="mt-2 text-sm underline underline-offset-2 opacity-80 hover:opacity-100"
-                      onClick={() => mutate()}
-                    >
-                      Reintentar
-                    </button>
-                  ) : null}
-                </div>
-              </div>
+          {error ? (
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              Error al cargar datos.{" "}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:opacity-80"
+                onClick={() => mutate()}
+              >
+                Reintentar
+              </button>
             </div>
+          ) : null}
+
+          {initialError && !error ? (
+            <p className="text-sm text-muted-foreground">{initialError}</p>
           ) : null}
         </FilterPanel>
       </SectionPageShell>
 
       {data.nodes.length === 0 ? (
-        <EmptyState label="No hay nodos de balanzas disponibles para el periodo seleccionado." />
+        <EmptyState label="No hay datos de balanzas para el período seleccionado." />
       ) : (
-        <ChartSection>
-          <BalanzasProcessDashboard
-            assetPath={data.processAssetPath}
-            metricLabel={data.metricLabel}
-            nodes={data.nodes}
-            selection={selection}
-            onSelectionChange={handleSelectionChange}
-            onExpandDetail={() => {
-              if (selectedNode) {
-                setDetailSheetOpen(true);
-              }
-            }}
-          />
-        </ChartSection>
+        <BalanzasProcessViewer
+          assetPath="/processes/postcosecha-es.bpmn"
+          nodes={processNodes}
+          selectedNodeKey={selectedNode?.key ?? null}
+          onNodeSelect={handleSelectNode}
+        />
       )}
 
       {selectedNode ? (
         <BalanzasNodeDetailSheet
           node={selectedNode}
-          rows={filteredDetailRows}
-          search={detailSearch}
-          filters={detailFilters}
-          open={detailSheetOpen}
-          onSearchChange={setDetailSearch}
-          onFilterChange={updateDetailFilter}
-          onClose={() => setDetailSheetOpen(false)}
+          filters={filters}
+          open={detailOpen}
+          onClose={() => setDetailOpen(false)}
         />
       ) : null}
     </div>

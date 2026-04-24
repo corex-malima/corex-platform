@@ -1,2005 +1,830 @@
-﻿import "server-only";
-
-import type { QueryResultRow } from "pg";
+import "server-only";
 
 import { query } from "@/lib/db";
-import { decodeMultiSelectValue, encodeMultiSelectValue, hasMultiSelectValue } from "@/lib/multi-select";
 import { cachedAsync } from "@/lib/server-cache";
+import { decodeMultiSelectValue, encodeMultiSelectValue } from "@/lib/multi-select";
 import { formatFlexibleNumber, formatPercent as formatPercentShared } from "@/shared/lib/format";
-import { roundValue, toNumber } from "@/shared/lib/number-utils";
+import { toNumber } from "@/shared/lib/number-utils";
 
-export type BalanzasMetric = "peso" | "tallos";
-export type BalanzasWeekMode = "none" | "pre" | "iso";
-export type BalanzasLaneId =
-  | "pre-gv"
-  | "pre-directo"
-  | "apertura-gv-pelado"
-  | "apertura-apertura";
-export type BalanzasNodeKind = "metric" | "aggregate";
-export type BalanzasNodeFocus = "source" | "target";
-export type BalanzasNodeKey =
-  | "b1_preclasificacion"
-  | "b1ab_pre_gv"
-  | "b2_pre_gv"
-  | "b3_pre_gv_arcoiris"
-  | "b3_pre_gv_tinturado"
-  | "b3_pre_gv_blanco"
-  | "general_pre_gv"
-  | "b1ab_pre_directo"
-  | "b2_pre_directo"
-  | "b3_pre_directo_arcoiris"
-  | "b3_pre_directo_tinturado"
-  | "b3_pre_directo_blanco"
-  | "general_pre_directo"
-  | "b1_apertura"
-  | "b1c_apertura_gv"
-  | "b2_apertura_max10"
-  | "b2a_apertura_max10_arcoiris"
-  | "b2a_apertura_max10_tinturado"
-  | "b2a_apertura_max10_blanco"
-  | "general_apertura_max10"
-  | "b1c_apertura_directo"
-  | "b2_apertura_directo"
-  | "b2a_apertura_directo_arcoiris"
-  | "b2a_apertura_directo_tinturado"
-  | "b2a_apertura_directo_blanco"
-  | "general_apertura_directo";
-export type BalanzasViewStatus = "ready" | "unavailable";
+// ─── Public types ─────────────────────────────────────────────────────────────
 
 export type BalanzasFilters = {
-  metric: BalanzasMetric;
-  year: string;
-  month: string;
-  dayName: string;
-  weekMode: BalanzasWeekMode;
-  weekValue: string;
-  dateFrom: string;
-  dateTo: string;
+  weekValue: string;  // comma-sep YYWW e.g. "2617,2616"; "all" = sin filtro
+  month: string;      // comma-sep mes numérico "4,8"; "all" = sin filtro
+  year: string;       // comma-sep año "2025,2026"; "all" = sin filtro
+  dateFrom: string;   // "YYYY-MM-DD" o ""
+  dateTo: string;     // "YYYY-MM-DD" o ""
 };
+
+export type SelectOption = { value: string; label: string };
 
 export type BalanzasFilterOptions = {
-  years: string[];
-  months: string[];
-  preWeeks: string[];
-  isoWeeks: string[];
-  dayNames: string[];
+  weeks: SelectOption[];
+  months: SelectOption[];
+  years: SelectOption[];
 };
 
-export type BalanzasLocalFilterOptions = {
-  destinations: string[];
-  grades: string[];
-  lots: string[];
-  hydrationDays: string[];
-  preWeeks: string[];
-  isoWeeks: string[];
-  dayNames: string[];
-  months: string[];
-  dates: string[];
+export type BalanzasSummaryMetric = {
+  col: string;
+  label: string;
+  value: number | null;
+  formatted: string;
 };
 
-export type BalanzasTableColumnKind = "text" | "number" | "date" | "ratio";
-
-export type BalanzasTableColumn = {
+export type BalanzasNodeSummary = {
   key: string;
   label: string;
-  kind: BalanzasTableColumnKind;
-};
-
-export type BalanzasTableRow = {
-  id: string;
-  values: Record<string, string | number | null>;
-  ratioPct: number | null;
-  gapValue: number | null;
-};
-
-export type BalanzasProcessBinding = {
-  taskName: string;
-  elementId?: string;
-  minY?: number;
-  maxY?: number;
-};
-
-export type BalanzasNodeData = {
-  key: BalanzasNodeKey;
-  metric: BalanzasMetric;
-  label: string;
   shortLabel: string;
-  kind: BalanzasNodeKind;
-  laneId: BalanzasLaneId;
-  laneLabel: string;
-  sourceStage: string;
-  targetStage: string;
-  focusStage: string;
-  focusRole: BalanzasNodeFocus;
-  description: string;
-  fixedDestination: string | null;
-  sourceView: string | null;
-  status: BalanzasViewStatus;
-  statusMessage: string | null;
+  branch: "preclasif" | "gv" | "apertura";
+  active: boolean;
   rowCount: number;
-  sourceTotal: number;
-  sourceTotalDisplay: string;
-  targetTotal: number;
-  targetTotalDisplay: string;
-  gapTotal: number;
-  gapTotalDisplay: string;
-  ratioPct: number | null;
-  ratioDisplay: string;
-  latestDate: string | null;
-  primaryTotal: number;
-  primaryTotalDisplay: string;
-  secondaryStage: string | null;
-  secondaryTotal: number | null;
-  secondaryTotalDisplay: string;
-  processBindings: BalanzasProcessBinding[];
-  childrenKeys: BalanzasNodeKey[];
-  columnMap: {
-    year: string | null;
-    month: string | null;
-    preWeek: string | null;
-    isoWeek: string | null;
-    dayName: string | null;
-    date: string | null;
-    destination: string | null;
-    lot: string | null;
-    grade: string | null;
-    hydrationDays: string | null;
-    source: string | null;
-    target: string | null;
-    ratio: string;
-    gap: string;
-  };
-  /** Nombres reales de columnas detectadas en la vista (útil para diagnóstico). */
-  rawColumnNames: string[];
-  localOptions: BalanzasLocalFilterOptions;
-  groupDefaults: string[];
-  tableColumns: BalanzasTableColumn[];
-  rows: BalanzasTableRow[];
+  dateMin: string | null;
+  dateMax: string | null;
+  metrics: BalanzasSummaryMetric[];
+  bpmnElementId: string | null;
+  overlayOffsetLeft: number;
 };
 
 export type BalanzasDashboardData = {
-  generatedAt: string;
-  processAssetPath: string;
-  metric: BalanzasMetric;
-  metricLabel: string;
   filters: BalanzasFilters;
   options: BalanzasFilterOptions;
-  summary: {
-    totalNodes: number;
-    readyNodes: number;
-    totalRows: number;
-    latestDate: string | null;
-    periodLabel: string;
-    scopeLabel: string;
-    scopeNote: string;
-    statusMessage: string | null;
-  };
-  nodes: BalanzasNodeData[];
+  nodes: BalanzasNodeSummary[];
 };
 
-type GenericQueryRow = QueryResultRow & Record<string, unknown>;
+export type BalanzasDetailRow = Record<string, unknown>;
 
-type BalanzasProcessNodeDefinition = {
-  key: BalanzasNodeKey;
+export type BalanzasNodeDetail = {
+  nodeKey: string;
+  nodeLabel: string;
+  branch: string;
+  active: boolean;
+  rows: BalanzasDetailRow[];
+  columns: { key: string; label: string; numeric: boolean }[];
+  destinations: string[];
+  grades: string[];
+  gradeGroups: string[];
+  rowCount: number;
+  metrics: BalanzasSummaryMetric[];
+};
+
+// ─── Internal types ───────────────────────────────────────────────────────────
+
+type FormatType = "kg" | "pct" | "count" | "ratio";
+type AggType = "sum" | "avg";
+
+type BalanzasBpmnBinding = {
+  elementId: string;
+  overlayOffsetLeft: number;
+};
+
+type SummaryMetricDef = {
+  col: string;
+  label: string;
+  agg: AggType;
+  format: FormatType;
+};
+
+type BalanzasNodeDef = {
+  key: string;
   label: string;
   shortLabel: string;
-  kind: BalanzasNodeKind;
-  laneId: BalanzasLaneId;
-  laneLabel: string;
-  sourceStage: string;
-  targetStage: string;
-  focusRole: BalanzasNodeFocus;
-  description: string;
-  fixedDestination?: string | null;
-  childrenKeys?: BalanzasNodeKey[];
-  views: Partial<Record<BalanzasMetric, string | string[]>>;
-  processBindings: BalanzasProcessBinding[];
-};
-
-type BalanzasViewSchema = {
+  branch: "preclasif" | "gv" | "apertura";
+  active: boolean;
   viewName: string;
-  sourceViews: string[];
-  fromSql: string;
-  columns: Array<{
-    name: string;
-    dataType: string;
-    canonicalName: string;
-  }>;
-  aliases: {
-    year: string | null;
-    month: string | null;
-    preWeek: string | null;
-    isoWeek: string | null;
-    dayName: string | null;
-    date: string | null;
-    destination: string | null;
-    lot: string | null;
-    hydrationDays: string | null;
-    grade: string | null;
-    ratio: string | null;
-    target: string | null;
-    source: string | null;
-    targetValue: string | null;
-  };
-  numericColumns: string[];
+  dateCol: "work_date" | "lot_date";
+  summaryMetrics: SummaryMetricDef[];
+  hasDestination: boolean;
+  hasGrade: boolean;
+  hasGradeGroup: boolean;
+  bpmnBinding: BalanzasBpmnBinding | null;
 };
 
-const BALANZAS_PROCESS_ASSET = "/processes/postcosecha-es.bpmn";
-const BALANZAS_SCHEMA_TTL_MS = 5 * 60 * 1000;
-const BALANZAS_OPTIONS_TTL_MS = 5 * 60 * 1000;
-const BALANZAS_DASHBOARD_TTL_MS = 60 * 1000;
-const BALANZAS_MAX_NODE_ROWS = 800;
-const BALANZAS_SCOPE_LABEL = "Rutas operativas: Preclasificacion y Apertura";
-const BALANZAS_SCOPE_NOTE = "Cada caja azul del diagrama se modela como un nodo independiente y cada boton GENERAL agrega la rama completa.";
-const BALANZAS_DESTINATION_LABEL = "Destino";
+// ─── ISO week helpers ─────────────────────────────────────────────────────────
 
-const PRE_SHARED_NOTE =
-  "La fuente actual de preclasificacion no separa GV sin pelar y Directo; este corte se refleja igual en ambas rutas operativas.";
+function isoWeekYear(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dow = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dow);
+  return d.getUTCFullYear();
+}
 
-const BALANZAS_PROCESS_NODES: BalanzasProcessNodeDefinition[] = [
+function isoWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dow = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dow);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+function toYYWW(date: Date): string {
+  const yy = isoWeekYear(date) % 100;
+  const ww = isoWeekNumber(date);
+  return String(yy).padStart(2, "0") + String(ww).padStart(2, "0");
+}
+
+export function formatWeekLabel(yyww: string): string {
+  if (yyww.length !== 4) return yyww;
+  const yy = parseInt(yyww.slice(0, 2), 10);
+  const ww = parseInt(yyww.slice(2, 4), 10);
+  const year = yy < 50 ? 2000 + yy : 1900 + yy;
+  return `Sem. ${ww} · ${year}`;
+}
+
+// ─── Month helpers ────────────────────────────────────────────────────────────
+
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+export function formatMonthName(monthNum: string): string {
+  const n = parseInt(monthNum, 10);
+  if (Number.isFinite(n) && n >= 1 && n <= 12) return MONTH_NAMES[n - 1] ?? monthNum;
+  return monthNum;
+}
+
+// ─── Metric formatting ────────────────────────────────────────────────────────
+
+function formatMetricValue(value: number | null, format: FormatType): string {
+  if (value === null) return "—";
+  switch (format) {
+    case "kg": return formatFlexibleNumber(value) + " kg";
+    case "pct": return formatPercentShared(value, { input: "ratio" });
+    case "count": return formatFlexibleNumber(value);
+    case "ratio": return formatPercentShared(value, { input: "ratio" });
+  }
+}
+
+// ─── Node definitions (19 nodos, prefijo vw_ confirmado en DB) ───────────────
+
+const VIEW_PREFIX = "gld.vw_camp_ind_bal_";
+
+const BALANZAS_NODES: BalanzasNodeDef[] = [
+  // ── PRECLASIFICACIÓN ──────────────────────────────────────────────────────
   {
-    key: "b1_preclasificacion",
-    label: "B1",
-    shortLabel: "B1",
-    kind: "metric",
-    laneId: "pre-gv",
-    laneLabel: "Preclasificacion",
-    sourceStage: "B1",
-    targetStage: "B1AB",
-    focusRole: "source",
-    description: "Nodo inicial de preclasificacion antes de bifurcar hacia GV sin pelar y Directo.",
-    views: {
-      peso: "gld.mv_camp_ind_bal_preclasif_b1_vs_b1a_xl_np_weight_cur",
-      tallos: "gld.mv_camp_ind_bal_preclasif_b1_vs_b1a_xl_np_stems_cur",
-    },
-    processBindings: [{ taskName: "B1", elementId: "Task_B1_Preclasificacion" }],
-  },
-  {
-    key: "b1ab_pre_gv",
-    label: "B1AB",
-    shortLabel: "B1AB",
-    kind: "metric",
-    laneId: "pre-gv",
-    laneLabel: "Preclasificacion / GV sin pelar",
-    sourceStage: "B1",
-    targetStage: "B1AB",
-    focusRole: "target",
-    description: `B1AB de la ruta GV sin pelar. ${PRE_SHARED_NOTE}`,
-    views: {
-      peso: "gld.mv_camp_ind_bal_preclasif_b1_vs_b1a_xl_np_weight_cur",
-      tallos: "gld.mv_camp_ind_bal_preclasif_b1_vs_b1a_xl_np_stems_cur",
-    },
-    processBindings: [{ taskName: "B1AB", elementId: "Task_B1AB_Pre_GV" }],
-  },
-  {
-    key: "b2_pre_gv",
-    label: "B2",
-    shortLabel: "B2",
-    kind: "metric",
-    laneId: "pre-gv",
-    laneLabel: "Preclasificacion / GV sin pelar",
-    sourceStage: "B1AB",
-    targetStage: "B2",
-    focusRole: "target",
-    description: `B2 de la ruta GV sin pelar. ${PRE_SHARED_NOTE}`,
-    views: {
-      peso: "gld.mv_camp_ind_bal_preclasif_b1a_vs_b2_xl_np_weight_cur",
-      tallos: "gld.mv_camp_ind_bal_preclasif_b1a_vs_b2_xl_np_stems_cur",
-    },
-    processBindings: [{ taskName: "B2", elementId: "Task_B2_Pre_GV" }],
-  },
-  {
-    key: "b3_pre_gv_arcoiris",
-    label: "B3",
-    shortLabel: "B3",
-    kind: "metric",
-    laneId: "pre-gv",
-    laneLabel: "Preclasificacion / GV sin pelar",
-    sourceStage: "B2",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `B3 Arcoiris de la ruta GV sin pelar. ${PRE_SHARED_NOTE}`,
-    fixedDestination: "ARCOIRIS",
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b2_vs_b3_xl_np_weight_cur" },
-    processBindings: [{ taskName: "B3", elementId: "Task_B3_Pre_GV_Arcoiris" }],
-  },
-  {
-    key: "b3_pre_gv_tinturado",
-    label: "B3",
-    shortLabel: "B3",
-    kind: "metric",
-    laneId: "pre-gv",
-    laneLabel: "Preclasificacion / GV sin pelar",
-    sourceStage: "B2",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `B3 Tinturado de la ruta GV sin pelar. ${PRE_SHARED_NOTE}`,
-    fixedDestination: "TINTURADO",
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b2_vs_b3_xl_np_weight_cur" },
-    processBindings: [{ taskName: "B3", elementId: "Task_B3_Pre_GV_Tinturado" }],
-  },
-  {
-    key: "b3_pre_gv_blanco",
-    label: "B3",
-    shortLabel: "B3",
-    kind: "metric",
-    laneId: "pre-gv",
-    laneLabel: "Preclasificacion / GV sin pelar",
-    sourceStage: "B2",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `B3 Blanco de la ruta GV sin pelar. ${PRE_SHARED_NOTE}`,
-    fixedDestination: "BLANCO",
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b2_vs_b3_xl_np_weight_cur" },
-    processBindings: [{ taskName: "B3", elementId: "Task_B3_Pre_GV_Blanco" }],
-  },
-  {
-    key: "general_pre_gv",
-    label: "GENERAL",
-    shortLabel: "GENERAL",
-    kind: "aggregate",
-    laneId: "pre-gv",
-    laneLabel: "Preclasificacion / GV sin pelar",
-    sourceStage: "B1",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `Agregado B1→B3 con ideal de la ruta GV sin pelar. ${PRE_SHARED_NOTE}`,
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b1_vs_b3_ideal_weight_xl_np_cur" },
-    processBindings: [{ taskName: "GENERAL", elementId: "Task_General_Pre_GV" }],
-    childrenKeys: ["b3_pre_gv_arcoiris", "b3_pre_gv_tinturado", "b3_pre_gv_blanco"],
-  },
-  {
-    key: "b1ab_pre_directo",
-    label: "B1AB",
-    shortLabel: "B1AB",
-    kind: "metric",
-    laneId: "pre-directo",
-    laneLabel: "Preclasificacion / Directo",
-    sourceStage: "B1",
-    targetStage: "B1AB",
-    focusRole: "target",
-    description: `B1AB de la ruta Directo. ${PRE_SHARED_NOTE}`,
-    views: {
-      peso: "gld.mv_camp_ind_bal_preclasif_b1_vs_b1a_xl_np_weight_cur",
-      tallos: "gld.mv_camp_ind_bal_preclasif_b1_vs_b1a_xl_np_stems_cur",
-    },
-    processBindings: [{ taskName: "B1AB", elementId: "Task_B1AB_Pre_Directo" }],
-  },
-  {
-    key: "b2_pre_directo",
-    label: "B2",
-    shortLabel: "B2",
-    kind: "metric",
-    laneId: "pre-directo",
-    laneLabel: "Preclasificacion / Directo",
-    sourceStage: "B1AB",
-    targetStage: "B2",
-    focusRole: "target",
-    description: `B2 de la ruta Directo. ${PRE_SHARED_NOTE}`,
-    views: {
-      peso: "gld.mv_camp_ind_bal_preclasif_b1a_vs_b2_xl_np_weight_cur",
-      tallos: "gld.mv_camp_ind_bal_preclasif_b1a_vs_b2_xl_np_stems_cur",
-    },
-    processBindings: [{ taskName: "B2", elementId: "Task_B2_Pre_Directo" }],
-  },
-  {
-    key: "b3_pre_directo_arcoiris",
-    label: "B3",
-    shortLabel: "B3",
-    kind: "metric",
-    laneId: "pre-directo",
-    laneLabel: "Preclasificacion / Directo",
-    sourceStage: "B2",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `B3 Arcoiris de la ruta Directo. ${PRE_SHARED_NOTE}`,
-    fixedDestination: "ARCOIRIS",
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b2_vs_b3_xl_np_weight_cur" },
-    processBindings: [{ taskName: "B3", elementId: "Task_B3_Pre_Directo_Arcoiris" }],
-  },
-  {
-    key: "b3_pre_directo_tinturado",
-    label: "B3",
-    shortLabel: "B3",
-    kind: "metric",
-    laneId: "pre-directo",
-    laneLabel: "Preclasificacion / Directo",
-    sourceStage: "B2",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `B3 Tinturado de la ruta Directo. ${PRE_SHARED_NOTE}`,
-    fixedDestination: "TINTURADO",
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b2_vs_b3_xl_np_weight_cur" },
-    processBindings: [{ taskName: "B3", elementId: "Task_B3_Pre_Directo_Tinturado" }],
-  },
-  {
-    key: "b3_pre_directo_blanco",
-    label: "B3",
-    shortLabel: "B3",
-    kind: "metric",
-    laneId: "pre-directo",
-    laneLabel: "Preclasificacion / Directo",
-    sourceStage: "B2",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `B3 Blanco de la ruta Directo. ${PRE_SHARED_NOTE}`,
-    fixedDestination: "BLANCO",
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b2_vs_b3_xl_np_weight_cur" },
-    processBindings: [{ taskName: "B3", elementId: "Task_B3_Pre_Directo_Blanco" }],
-  },
-  {
-    key: "general_pre_directo",
-    label: "GENERAL",
-    shortLabel: "GENERAL",
-    kind: "aggregate",
-    laneId: "pre-directo",
-    laneLabel: "Preclasificacion / Directo",
-    sourceStage: "B1",
-    targetStage: "B3",
-    focusRole: "target",
-    description: `Agregado B1→B3 con ideal de la ruta Directo. ${PRE_SHARED_NOTE}`,
-    views: { peso: "gld.mv_camp_ind_bal_preclasif_b1_vs_b3_ideal_weight_xl_np_cur" },
-    processBindings: [{ taskName: "GENERAL", elementId: "Task_General_Pre_Directo" }],
-    childrenKeys: ["b3_pre_directo_arcoiris", "b3_pre_directo_tinturado", "b3_pre_directo_blanco"],
-  },
-  {
-    key: "b1_apertura",
-    label: "B1",
-    shortLabel: "B1",
-    kind: "metric",
-    laneId: "apertura-gv-pelado",
-    laneLabel: "Apertura",
-    sourceStage: "B1",
-    targetStage: "B1C",
-    focusRole: "source",
-    description: "Nodo inicial compartido de Apertura antes de bifurcar entre GV pelado y Apertura.",
-    views: {
-      peso: [
-        "gld.mv_camp_ind_bal_gv_b1_vs_b1c_weight_xl_np_cur",
-        "gld.mv_camp_ind_bal_apertura_b1_vs_b1c_weight_xl_np_cur",
-      ],
-      tallos: [
-        "gld.mv_camp_ind_bal_gv_b1_vs_b1c_stems_xl_np_cur",
-        "gld.mv_camp_ind_bal_apertura_b1_vs_b1c_stems_xl_np_cur",
-      ],
-    },
-    processBindings: [{ taskName: "B1", elementId: "Task_B1_Apertura" }],
-  },
-  {
-    key: "b1c_apertura_gv",
-    label: "B1C",
-    shortLabel: "B1C",
-    kind: "metric",
-    laneId: "apertura-gv-pelado",
-    laneLabel: "Apertura / GV pelado",
-    sourceStage: "B1",
-    targetStage: "B1C",
-    focusRole: "target",
-    description: "B1C de la ruta GV pelado.",
-    views: {
-      peso: "gld.mv_camp_ind_bal_gv_b1_vs_b1c_weight_xl_np_cur",
-      tallos: "gld.mv_camp_ind_bal_gv_b1_vs_b1c_stems_xl_np_cur",
-    },
-    processBindings: [{ taskName: "B1C", elementId: "Task_B1C_Apertura_GV" }],
-  },
-  {
-    key: "b2_apertura_max10",
-    label: "B2",
-    shortLabel: "B2",
-    kind: "metric",
-    laneId: "apertura-gv-pelado",
-    laneLabel: "Apertura / GV pelado",
-    sourceStage: "B1C",
-    targetStage: "B2",
-    focusRole: "target",
-    description: "B2 de la ruta GV pelado, incluyendo el tramo MAX 10 dias e hidratacion.",
-    views: {
-      peso: "gld.mv_camp_ind_bal_gv_b1c_vs_b2_weight_xl_np_cur",
-      tallos: "gld.mv_camp_ind_bal_gv_b1c_vs_b2_stems_xl_np_cur",
-    },
-    processBindings: [{ taskName: "B2", elementId: "Task_B2_Apertura_Max10" }],
-  },
-  {
-    key: "b2a_apertura_max10_arcoiris",
-    label: "B2A",
-    shortLabel: "B2A",
-    kind: "metric",
-    laneId: "apertura-gv-pelado",
-    laneLabel: "Apertura / GV pelado",
-    sourceStage: "B2",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "B2A Arcoiris de la ruta GV pelado.",
-    fixedDestination: "ARCOIRIS",
-    views: { peso: "gld.mv_camp_ind_bal_gv_b2_vs_b2a_weight_xl_np_cur" },
-    processBindings: [{ taskName: "B2A", elementId: "Task_B2A_Apertura_Max10_Arcoiris" }],
-  },
-  {
-    key: "b2a_apertura_max10_tinturado",
-    label: "B2A",
-    shortLabel: "B2A",
-    kind: "metric",
-    laneId: "apertura-gv-pelado",
-    laneLabel: "Apertura / GV pelado",
-    sourceStage: "B2",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "B2A Tinturado de la ruta GV pelado.",
-    fixedDestination: "TINTURADO",
-    views: { peso: "gld.mv_camp_ind_bal_gv_b2_vs_b2a_weight_xl_np_cur" },
-    processBindings: [{ taskName: "B2A", elementId: "Task_B2A_Apertura_Max10_Tinturado" }],
-  },
-  {
-    key: "b2a_apertura_max10_blanco",
-    label: "B2A",
-    shortLabel: "B2A",
-    kind: "metric",
-    laneId: "apertura-gv-pelado",
-    laneLabel: "Apertura / GV pelado",
-    sourceStage: "B2",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "B2A Blanco de la ruta GV pelado.",
-    fixedDestination: "BLANCO",
-    views: { peso: "gld.mv_camp_ind_bal_gv_b2_vs_b2a_weight_xl_np_cur" },
-    processBindings: [{ taskName: "B2A", elementId: "Task_B2A_Apertura_Max10_Blanco" }],
-  },
-  {
-    key: "general_apertura_max10",
-    label: "GENERAL",
-    shortLabel: "GENERAL",
-    kind: "aggregate",
-    laneId: "apertura-gv-pelado",
-    laneLabel: "Apertura / GV pelado",
-    sourceStage: "B1C",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "Agregado B1C→B2A con ideal de la ruta GV pelado.",
-    views: { peso: "gld.mv_camp_ind_bal_gv_b1c_vs_b2a_vs_ideal_weight_xl_np_cur" },
-    processBindings: [{ taskName: "GENERAL", elementId: "Task_General_Apertura_Max10" }],
-    childrenKeys: [
-      "b2a_apertura_max10_arcoiris",
-      "b2a_apertura_max10_tinturado",
-      "b2a_apertura_max10_blanco",
+    key: "preclasif-b1-b1a-stems",
+    label: "B1 → B1a (Tallos)",
+    shortLabel: "Tallos",
+    branch: "preclasif",
+    active: true,
+    viewName: `${VIEW_PREFIX}preclasif_b1_vs_b1a_xl_np_stems_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "stems_b1",           label: "Tallos B1",   agg: "sum", format: "count" },
+      { col: "stems_b1ab",         label: "Tallos B1a",  agg: "sum", format: "count" },
+      { col: "dispatch_pct_stems", label: "Despacho %",  agg: "avg", format: "pct" },
     ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: true,
+    bpmnBinding: { elementId: "Task_B1AB_Pre_GV", overlayOffsetLeft: 0 },
   },
   {
-    key: "b1c_apertura_directo",
-    label: "B1C",
-    shortLabel: "B1C",
-    kind: "metric",
-    laneId: "apertura-apertura",
-    laneLabel: "Apertura / Apertura",
-    sourceStage: "B1",
-    targetStage: "B1C",
-    focusRole: "target",
-    description: "B1C de la ruta Apertura.",
-    views: {
-      peso: "gld.mv_camp_ind_bal_apertura_b1_vs_b1c_weight_xl_np_cur",
-      tallos: "gld.mv_camp_ind_bal_apertura_b1_vs_b1c_stems_xl_np_cur",
-    },
-    processBindings: [{ taskName: "B1C", elementId: "Task_B1C_Apertura_Directo" }],
-  },
-  {
-    key: "b2_apertura_directo",
-    label: "B2",
-    shortLabel: "B2",
-    kind: "metric",
-    laneId: "apertura-apertura",
-    laneLabel: "Apertura / Apertura",
-    sourceStage: "B1C",
-    targetStage: "B2",
-    focusRole: "target",
-    description: "B2 de la ruta Apertura.",
-    views: {
-      peso: "gld.mv_camp_ind_bal_apertura_b1c_vs_b2_weight_xl_np_cur",
-      tallos: "gld.mv_camp_ind_bal_apertura_b1c_vs_b2_stems_xl_np_cur",
-    },
-    processBindings: [{ taskName: "B2", elementId: "Task_B2_Apertura_Directo" }],
-  },
-  {
-    key: "b2a_apertura_directo_arcoiris",
-    label: "B2A",
-    shortLabel: "B2A",
-    kind: "metric",
-    laneId: "apertura-apertura",
-    laneLabel: "Apertura / Apertura",
-    sourceStage: "B2",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "B2A Arcoiris de la ruta Apertura.",
-    fixedDestination: "ARCOIRIS",
-    views: { peso: "gld.mv_camp_ind_bal_apertura_b2_vs_b2a_weight_xl_np_cur" },
-    processBindings: [{ taskName: "B2A", elementId: "Task_B2A_Apertura_Directo_Arcoiris" }],
-  },
-  {
-    key: "b2a_apertura_directo_tinturado",
-    label: "B2A",
-    shortLabel: "B2A",
-    kind: "metric",
-    laneId: "apertura-apertura",
-    laneLabel: "Apertura / Apertura",
-    sourceStage: "B2",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "B2A Tinturado de la ruta Apertura.",
-    fixedDestination: "TINTURADO",
-    views: { peso: "gld.mv_camp_ind_bal_apertura_b2_vs_b2a_weight_xl_np_cur" },
-    processBindings: [{ taskName: "B2A", elementId: "Task_B2A_Apertura_Directo_Tinturado" }],
-  },
-  {
-    key: "b2a_apertura_directo_blanco",
-    label: "B2A",
-    shortLabel: "B2A",
-    kind: "metric",
-    laneId: "apertura-apertura",
-    laneLabel: "Apertura / Apertura",
-    sourceStage: "B2",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "B2A Blanco de la ruta Apertura.",
-    fixedDestination: "BLANCO",
-    views: { peso: "gld.mv_camp_ind_bal_apertura_b2_vs_b2a_weight_xl_np_cur" },
-    processBindings: [{ taskName: "B2A", elementId: "Task_B2A_Apertura_Directo_Blanco" }],
-  },
-  {
-    key: "general_apertura_directo",
-    label: "GENERAL",
-    shortLabel: "GENERAL",
-    kind: "aggregate",
-    laneId: "apertura-apertura",
-    laneLabel: "Apertura / Apertura",
-    sourceStage: "B1C",
-    targetStage: "B2A",
-    focusRole: "target",
-    description: "Agregado B1C→B2A con ideal de la ruta Apertura.",
-    views: { peso: "gld.mv_camp_ind_bal_apertura_b1c_vs_b2a_vs_ideal_weight_xl_np_cur" },
-    processBindings: [{ taskName: "GENERAL", elementId: "Task_General_Apertura_Directo" }],
-    childrenKeys: [
-      "b2a_apertura_directo_arcoiris",
-      "b2a_apertura_directo_tinturado",
-      "b2a_apertura_directo_blanco",
+    key: "preclasif-b1-b1a-weight",
+    label: "B1 → B1a (Peso)",
+    shortLabel: "Peso",
+    branch: "preclasif",
+    active: true,
+    viewName: `${VIEW_PREFIX}preclasif_b1_vs_b1a_xl_np_weight_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b1_kg",         label: "B1 kg",       agg: "sum", format: "kg" },
+      { col: "weight_b1ab_kg",       label: "B1a kg",      agg: "sum", format: "kg" },
+      { col: "dispatch_pct_weight",  label: "Despacho %",  agg: "avg", format: "pct" },
     ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: true,
+    bpmnBinding: { elementId: "Task_B1AB_Pre_GV", overlayOffsetLeft: 172 },
+  },
+  {
+    key: "preclasif-b1a-b2-stems",
+    label: "B1a → B2 (Tallos)",
+    shortLabel: "Tallos",
+    branch: "preclasif",
+    active: true,
+    viewName: `${VIEW_PREFIX}preclasif_b1a_vs_b2_xl_np_stems_cur`,
+    dateCol: "lot_date",
+    summaryMetrics: [
+      { col: "stems_b1ab",      label: "Tallos B1a",    agg: "sum", format: "count" },
+      { col: "stems_b2",        label: "Tallos B2",     agg: "sum", format: "count" },
+      { col: "diff_pct_stems",  label: "Diferencia %",  agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: true,
+    bpmnBinding: { elementId: "Task_B2_Pre_GV", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "preclasif-b1a-b2-weight",
+    label: "B1a → B2 (Peso)",
+    shortLabel: "Peso",
+    branch: "preclasif",
+    active: true,
+    viewName: `${VIEW_PREFIX}preclasif_b1a_vs_b2_xl_np_weight_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b1ab_est",  label: "B1a est. kg",    agg: "sum", format: "kg" },
+      { col: "weight_b2",        label: "B2 kg",          agg: "sum", format: "kg" },
+      { col: "hydration_pct",    label: "Hidratación %",  agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: true,
+    bpmnBinding: { elementId: "Task_B2_Pre_GV", overlayOffsetLeft: 172 },
+  },
+  {
+    key: "preclasif-b2-b3-weight",
+    label: "B2 → B3 (Peso)",
+    shortLabel: "B2 → B3",
+    branch: "preclasif",
+    active: true,
+    viewName: `${VIEW_PREFIX}preclasif_b2_vs_b3_xl_np_weight_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2_kg",    label: "B2 kg",        agg: "sum", format: "kg" },
+      { col: "weight_b3_kg",    label: "B3 kg",        agg: "sum", format: "kg" },
+      { col: "diff_pct_weight", label: "Diferencia %", agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_General_Pre_GV", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "preclasif-b1-b3-ideal",
+    label: "B1 → B3 Ideal",
+    shortLabel: "→ Ideal",
+    branch: "preclasif",
+    active: true,
+    viewName: `${VIEW_PREFIX}preclasif_b1_vs_b3_ideal_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b1_kg",   label: "B1 kg",          agg: "sum", format: "kg" },
+      { col: "weight_b3_kg",   label: "B3 kg",          agg: "sum", format: "kg" },
+      { col: "yield_b1_vs_b3", label: "Rendimiento %",  agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_General_Pre_GV", overlayOffsetLeft: 172 },
+  },
+  // ── COSECHA GV ────────────────────────────────────────────────────────────
+  {
+    key: "gv-b1-b1c-stems",
+    label: "B1 → B1c (Tallos)",
+    shortLabel: "Tallos",
+    branch: "gv",
+    active: true,
+    viewName: `${VIEW_PREFIX}gv_b1_vs_b1c_stems_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "stems_b1_count",  label: "Tallos B1",    agg: "sum", format: "count" },
+      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
+    ],
+    hasDestination: false,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B1C_Apertura_GV", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "gv-b1-b1c-weight",
+    label: "B1 → B1c (Peso)",
+    shortLabel: "Peso",
+    branch: "gv",
+    active: true,
+    viewName: `${VIEW_PREFIX}gv_b1_vs_b1c_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b1_kg",    label: "B1 kg",        agg: "sum", format: "kg" },
+      { col: "weight_b1c_kg",   label: "B1c kg",       agg: "sum", format: "kg" },
+      { col: "weight_diff_pct", label: "Diferencia %", agg: "avg", format: "pct" },
+    ],
+    hasDestination: false,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B1C_Apertura_GV", overlayOffsetLeft: 172 },
+  },
+  {
+    key: "gv-b1c-b2-stems",
+    label: "B1c → B2 (Tallos)",
+    shortLabel: "Tallos",
+    branch: "gv",
+    active: true,
+    viewName: `${VIEW_PREFIX}gv_b1c_vs_b2_stems_xl_np_cur`,
+    dateCol: "lot_date",
+    summaryMetrics: [
+      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_b2_count",  label: "Tallos B2",    agg: "sum", format: "count" },
+      { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
+    ],
+    hasDestination: false,
+    hasGrade: true,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B2_Apertura_Max10", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "gv-b1c-b2-weight",
+    label: "B1c → B2 (Peso)",
+    shortLabel: "Peso",
+    branch: "gv",
+    active: true,
+    viewName: `${VIEW_PREFIX}gv_b1c_vs_b2_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2_kg",            label: "B2 kg",          agg: "sum", format: "kg" },
+      { col: "weight_b1c_estimated_kg", label: "B1c est. kg",    agg: "sum", format: "kg" },
+      { col: "hydration_pct",           label: "Hidratación %",  agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: true,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B2_Apertura_Max10", overlayOffsetLeft: 172 },
+  },
+  {
+    key: "gv-b2-b2a-weight",
+    label: "B2 → B2a (Peso)",
+    shortLabel: "B2 → B2A",
+    branch: "gv",
+    active: true,
+    viewName: `${VIEW_PREFIX}gv_b2_vs_b2a_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2_kg",   label: "B2 kg",       agg: "sum", format: "kg" },
+      { col: "weight_b2a_kg",  label: "B2a kg",      agg: "sum", format: "kg" },
+      { col: "dispatch_pct",   label: "Despacho %",  agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_General_Apertura_Max10", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "gv-b1c-b2a-ideal",
+    label: "B1c → B2a → Ideal",
+    shortLabel: "→ Ideal",
+    branch: "gv",
+    active: true,
+    viewName: `${VIEW_PREFIX}gv_b1c_vs_b2a_vs_ideal_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2a_kg",      label: "B2a kg",    agg: "sum", format: "kg" },
+      { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
+      { col: "b2a_to_ideal_ratio", label: "B2a/Ideal", agg: "avg", format: "ratio" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_General_Apertura_Max10", overlayOffsetLeft: 172 },
+  },
+  // ── APERTURA (inactive — rama legacy) ────────────────────────────────────
+  {
+    key: "apertura-b1-b1c-stems",
+    label: "B1 → B1c (Tallos)",
+    shortLabel: "Tallos",
+    branch: "apertura",
+    active: false,
+    viewName: `${VIEW_PREFIX}apertura_b1_vs_b1c_stems_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "stems_b1_count",  label: "Tallos B1",    agg: "sum", format: "count" },
+      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
+    ],
+    hasDestination: false,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B1C_Apertura_Directo", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "apertura-b1-b1c-weight",
+    label: "B1 → B1c (Peso)",
+    shortLabel: "Peso",
+    branch: "apertura",
+    active: false,
+    viewName: `${VIEW_PREFIX}apertura_b1_vs_b1c_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b1_kg",    label: "B1 kg",        agg: "sum", format: "kg" },
+      { col: "weight_b1c_kg",   label: "B1c kg",       agg: "sum", format: "kg" },
+      { col: "weight_diff_pct", label: "Diferencia %", agg: "avg", format: "pct" },
+    ],
+    hasDestination: false,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B1C_Apertura_Directo", overlayOffsetLeft: 172 },
+  },
+  {
+    key: "apertura-b1c-b2-stems",
+    label: "B1c → B2 (Tallos)",
+    shortLabel: "Tallos",
+    branch: "apertura",
+    active: false,
+    viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2_stems_xl_np_cur`,
+    dateCol: "lot_date",
+    summaryMetrics: [
+      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_b2_count",  label: "Tallos B2",    agg: "sum", format: "count" },
+      { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
+    ],
+    hasDestination: false,
+    hasGrade: true,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B2_Apertura_Directo", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "apertura-b1c-b2-weight",
+    label: "B1c → B2 (Peso)",
+    shortLabel: "Peso",
+    branch: "apertura",
+    active: false,
+    viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2_kg",            label: "B2 kg",          agg: "sum", format: "kg" },
+      { col: "weight_b1c_estimated_kg", label: "B1c est. kg",    agg: "sum", format: "kg" },
+      { col: "hydration_pct",           label: "Hidratación %",  agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: true,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_B2_Apertura_Directo", overlayOffsetLeft: 172 },
+  },
+  {
+    key: "apertura-b2-b2a-weight",
+    label: "B2 → B2a (Peso)",
+    shortLabel: "B2 → B2A",
+    branch: "apertura",
+    active: false,
+    viewName: `${VIEW_PREFIX}apertura_b2_vs_b2a_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2_kg",  label: "B2 kg",       agg: "sum", format: "kg" },
+      { col: "weight_b2a_kg", label: "B2a kg",      agg: "sum", format: "kg" },
+      { col: "dispatch_pct",  label: "Despacho %",  agg: "avg", format: "pct" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 0 },
+  },
+  {
+    key: "apertura-b1c-b2a-ideal",
+    label: "B1c → B2a → Ideal",
+    shortLabel: "→ Ideal",
+    branch: "apertura",
+    active: false,
+    viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2a_vs_ideal_weight_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2a_kg",      label: "B2a kg",    agg: "sum", format: "kg" },
+      { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
+      { col: "b2a_to_ideal_ratio", label: "B2a/Ideal", agg: "avg", format: "ratio" },
+    ],
+    hasDestination: true,
+    hasGrade: false,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 172 },
+  },
+  {
+    key: "apertura-b2a-ideal-grade",
+    label: "B2a → Ideal × Grado",
+    shortLabel: "B2A × Grado",
+    branch: "apertura",
+    active: false,
+    viewName: `${VIEW_PREFIX}apertura_b2a_vs_ideal_weight_x_grade_xl_np_cur`,
+    dateCol: "work_date",
+    summaryMetrics: [
+      { col: "weight_b2a_kg",      label: "B2a kg",    agg: "sum", format: "kg" },
+      { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
+      { col: "b2a_to_ideal_ratio", label: "B2a/Ideal", agg: "avg", format: "ratio" },
+    ],
+    hasDestination: true,
+    hasGrade: true,
+    hasGradeGroup: false,
+    bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 344 },
   },
 ];
 
-export const defaultBalanzasFilters: BalanzasFilters = {
-  metric: "peso",
-  year: "all",
-  month: "all",
-  dayName: "all",
-  weekMode: "iso",
-  weekValue: "all",
-  dateFrom: "",
-  dateTo: "",
-};
+// ─── SQL helpers ──────────────────────────────────────────────────────────────
 
-function normalizeMetric(value: string | undefined): BalanzasMetric {
-  return value === "tallos" ? "tallos" : "peso";
-}
-
-function normalizeSelectValue(value: string | undefined) {
-  return encodeMultiSelectValue(decodeMultiSelectValue(value));
-}
-
-function normalizeDateValue(value: string | undefined) {
-  if (!value) {
-    return "";
-  }
-
-  const normalizedValue = value.trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(normalizedValue) ? normalizedValue : "";
-}
-
-function canonicalize(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function quoteIdentifier(identifier: string) {
-  return `"${identifier.replace(/"/g, "\"\"")}"`;
-}
-
-function normalizePercentValue(value: number | null) {
-  if (value === null) {
-    return null;
-  }
-
-  return Math.abs(value) <= 1 ? roundValue(value * 100) : roundValue(value);
-}
-
-function formatNumber(value: number | null) {
-  return formatFlexibleNumber(value, { empty: "-" });
-}
-
-function formatPercent(value: number | null) {
-  return formatPercentShared(value, { empty: "-", minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
-
-function toComparableText(value: unknown) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-
-  const text = String(value).trim();
-  return text || null;
-}
-
-function serializeCellValue(value: unknown): string | number | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (typeof value === "number") {
-    return roundValue(value);
-  }
-
-  if (typeof value === "bigint") {
-    return Number(value);
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-
-  const numericValue = toNumber(value);
-
-  if (numericValue !== null && /^[+-]?\d+([.,]\d+)?$/.test(String(value).trim())) {
-    return roundValue(numericValue);
-  }
-
-  return String(value).trim() || null;
-}
-
-function buildMetricLabel(metric: BalanzasMetric) {
-  return metric === "peso" ? "Peso XL NP" : "Tallos XL NP";
-}
-
-function buildStageMetricLabel(metric: BalanzasMetric, stage: string) {
-  return `${metric === "peso" ? "Peso" : "Tallos"} ${stage}`;
-}
-
-function toColumnLabel(columnName: string) {
-  const canonicalName = canonicalize(columnName);
-
-  if (canonicalName === "destination" || canonicalName === "destino") {
-    return BALANZAS_DESTINATION_LABEL;
-  }
-
-  if (canonicalName === "work_date" || canonicalName === "date") {
-    return "Fecha";
-  }
-
-  if (canonicalName === "iso_week_id" || canonicalName === "iso_week") {
-    return "Semana";
-  }
-
-  if (canonicalName === "day_name_es" || canonicalName === "day_name") {
-    return "Dia";
-  }
-
-  if (canonicalName === "month_name" || canonicalName === "month") {
-    return "Mes";
-  }
-
-  if (canonicalName === "lot_date" || canonicalName === "origin_date" || canonicalName === "lot") {
-    return "Lote";
-  }
-
-  if (canonicalName === "grade" || canonicalName === "grado") {
-    return "Grado";
-  }
-
-  if (canonicalName === "hydration_days" || canonicalName === "dias_hidratacion") {
-    return "Dias de hidratacion";
-  }
-
-  if (canonicalName === "weight_per_stem") {
-    return "Peso por tallo";
-  }
-
-  if (canonicalName === "stems_count") {
-    return "Tallos";
-  }
-
-  const parts = canonicalName.split("_").filter(Boolean);
-
-  if (!parts.length) {
-    return columnName;
-  }
-
-  return parts
-    .map((part) => (part.length <= 3 ? part.toUpperCase() : `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`))
-    .join(" ");
-}
-
-function serializeFilters(filters: BalanzasFilters) {
-  return [
-    filters.metric,
-    filters.year,
-    filters.month,
-    filters.dayName,
-    filters.weekMode,
-    filters.weekValue,
-    filters.dateFrom,
-    filters.dateTo,
-  ].join("|");
-}
-
-function uniqueSorted(values: Array<string | null | undefined>, descending = false) {
-  return Array.from(new Set(values.map((value) => value?.trim() ?? "").filter(Boolean))).sort((left, right) => {
-    if (descending) {
-      return right.localeCompare(left, "en-US", { numeric: true });
-    }
-
-    return left.localeCompare(right, "en-US", { numeric: true });
-  });
-}
-
-function findMatchingColumn(
-  columns: BalanzasViewSchema["columns"],
-  candidates: string[] = [],
-  contains: string[] = [],
-  excludes: string[] = [],
-) {
-  const exactMatch = columns.find((column) => candidates.includes(column.canonicalName));
-
-  if (exactMatch) {
-    return exactMatch.name;
-  }
-
-  const containsMatch = columns.find((column) => (
-    contains.every((token) => column.canonicalName.includes(token))
-    && excludes.every((token) => !column.canonicalName.includes(token))
-  ));
-
-  return containsMatch?.name ?? null;
-}
-
-function getSourceStageTokens(stage: string, metric: BalanzasMetric = "peso") {
-  // Los tokens se usan para detectar columnas de una vista por nombre canónico.
-  // Para el metric "peso", se excluye "count" para no confundir columnas de tallos
-  // (stems_bX_count) con columnas de peso (weight_bX_kg) en vistas mixtas.
-  const isWeight = metric === "peso";
-
-  switch (stage) {
-    case "B1":
-    case "BAL1":
-      // weight_b1_kg / stems_b1 / b1_peso / b1_kg — excluir b1c, b1a, b2, b3
-      return {
-        contains: ["b1"],
-        excludes: isWeight
-          ? ["b1c", "b1a", "b1ab", "2", "3", "count"]
-          : ["b1c", "b1a", "b1ab", "2", "3"],
-      };
-    case "B1AB":
-    case "B1A":
-    case "BAL1AB":
-      // weight_b1ab_kg / stems_b1ab — excluir per_stem (factor de escala, no total)
-      return {
-        contains: ["b1a"],
-        excludes: isWeight ? ["b1c", "per_stem", "count"] : ["b1c", "per_stem"],
-      };
-    case "B1C":
-    case "BAL1C":
-      // weight_b1c_kg / stems_b1c_count — excluir "count" para peso
-      return {
-        contains: ["b1c"],
-        excludes: isWeight ? ["count"] : [],
-      };
-    case "B2":
-    case "BAL2":
-      // weight_b2_kg / stems_b2_count — excluir b2a y "count" para peso
-      return {
-        contains: ["b2"],
-        excludes: isWeight ? ["b2a", "b2_a", "count"] : ["b2a", "b2_a"],
-      };
-    case "B2A":
-    case "BAL2A":
-      // weight_b2a_kg / stems_b2a — excluir "count" para peso
-      return {
-        contains: ["b2a"],
-        excludes: isWeight ? ["count"] : [],
-      };
-    case "B3":
-    case "BAL3":
-      // weight_b3_kg / stems_b3
-      return { contains: ["b3"], excludes: [] as string[] };
-    case "IDEAL":
-      return { contains: ["ideal"], excludes: [] as string[] };
-    default:
-      return { contains: [canonicalize(stage)], excludes: [] as string[] };
-  }
-}
-
-async function loadViewColumns(viewName: string) {
-  const [schemaName, relationName] = viewName.split(".");
-  const result = await query<{ column_name: string; data_type: string }>(
-    `
-      select
-        a.attname as column_name,
-        format_type(a.atttypid, a.atttypmod) as data_type
-      from pg_attribute a
-      join pg_class c
-        on c.oid = a.attrelid
-      join pg_namespace n
-        on n.oid = c.relnamespace
-      where n.nspname = $1
-        and c.relname = $2
-        and a.attnum > 0
-        and not a.attisdropped
-      order by a.attnum
-    `,
-    [schemaName, relationName],
-  );
-
-  if (!result.rows.length) {
-    throw new Error(`No se encontro la vista ${viewName} en la base configurada.`);
-  }
-
-  return result.rows.map((row) => ({
-    name: row.column_name,
-    dataType: row.data_type,
-    canonicalName: canonicalize(row.column_name),
-  }));
-}
-
-async function loadBalanzasViewSchema(
-  node: BalanzasProcessNodeDefinition,
-  metric: BalanzasMetric,
-): Promise<BalanzasViewSchema | null> {
-  const configuredViews = node.views[metric] ?? null;
-  const sourceViews = Array.isArray(configuredViews)
-    ? configuredViews
-    : configuredViews
-      ? [configuredViews]
-      : [];
-
-  if (!sourceViews.length) {
-    return null;
-  }
-
-  const columns = await loadViewColumns(sourceViews[0]!);
-  const numericColumns = columns
-    .filter((column) => (
-      column.dataType.includes("numeric")
-      || column.dataType.includes("integer")
-      || column.dataType.includes("double")
-      || column.dataType.includes("real")
-      || column.dataType.includes("decimal")
-      || column.dataType.includes("bigint")
-      || column.dataType.includes("smallint")
-    ))
-    .map((column) => column.name);
-  const sourceTokens = getSourceStageTokens(node.sourceStage, metric);
-  const targetTokens = getSourceStageTokens(node.targetStage, metric);
-
-  return {
-    viewName: sourceViews.join(" + "),
-    sourceViews,
-    fromSql: sourceViews.length === 1
-      ? sourceViews[0]!
-      : `(${sourceViews.map((viewName) => `select * from ${viewName}`).join(" union all ")}) as balanzas_union`,
-    columns,
-    numericColumns,
-    aliases: {
-      year: findMatchingColumn(columns, ["calendar_year", "iso_year", "year", "ano", "anio"]),
-      month: findMatchingColumn(columns, ["month_name", "month", "mes", "calendar_month"]),
-      preWeek: findMatchingColumn(columns, ["pre_week_id", "pre_week"], ["pre", "week"]),
-      isoWeek: findMatchingColumn(columns, ["iso_week_id", "iso_week"], ["iso", "week"]),
-      dayName: findMatchingColumn(columns, ["day_name_es", "day_name"], ["day", "name"]),
-      date: findMatchingColumn(columns, ["work_date", "date", "event_date", "fecha"], ["date"]),
-      destination: findMatchingColumn(columns, ["destination", "destino"], ["destination"]),
-      lot: findMatchingColumn(columns, ["lot_date", "lot", "lote", "origin_date"], ["lot"]),
-      hydrationDays: findMatchingColumn(columns, ["hydration_days", "dias_hidratacion"], ["hydrat"]),
-      grade: findMatchingColumn(columns, ["grade", "grado"], ["grade"]),
-      ratio: findMatchingColumn(
-        columns,
-        [
-          // Nombres exactos de las vistas actuales (gld.mv_camp_ind_bal_*)
-          "dispatch_pct",
-          "dispatch_pct_weight",
-          "dispatch_pct_stems",
-          "weight_diff_pct",
-          "stems_diff_pct",
-          "diff_pct_weight",
-          "diff_pct_stems",
-          "b2a_to_b1c_ratio",
-          "b2a_to_ideal_ratio",
-          "ideal_to_b1c_ratio",
-          "yield_b1_vs_b3",
-          "yield_b1_vs_ideal",
-          // Patrones originales
-          "diff_weight",
-          "diff_stems",
-          "hidr_pct",
-          "desp_pct_peso",
-          "desp_pct_stems",
-          "ratio_pct",
-          "apertura_pct",
-          // Patrones extendidos para vistas modificadas
-          "rendimiento_pct",
-          "rendimiento_porcentaje",
-          "eficiencia_pct",
-          "eficiencia_porcentaje",
-          "pct_rendimiento",
-          "pct_eficiencia",
-          "porcentaje_rendimiento",
-          "porcentaje_eficiencia",
-          "rendimiento",
-          "eficiencia",
-          "macro_indicador",
-          "indicador",
-        ],
-        // Fallback: cualquier columna que contenga "pct"
-        ["pct"],
-      ),
-      target: findMatchingColumn(columns, ["target", "objetivo", "meta"], ["target"]),
-      source: findMatchingColumn(columns, [], sourceTokens.contains, sourceTokens.excludes),
-      targetValue: findMatchingColumn(columns, [], targetTokens.contains, targetTokens.excludes),
-    },
-  };
-}
-
-async function getBalanzasViewSchema(
-  node: BalanzasProcessNodeDefinition,
-  metric: BalanzasMetric,
-) {
-  return cachedAsync(
-    `postcosecha:balanzas:schema:${node.key}:${metric}`,
-    BALANZAS_SCHEMA_TTL_MS,
-    () => loadBalanzasViewSchema(node, metric),
-  );
-}
-
-function buildTextFieldExpression(
-  schema: BalanzasViewSchema,
-  key: "year" | "month" | "preWeek" | "isoWeek" | "dayName" | "destination",
-) {
-  const aliases = schema.aliases;
-
-  if (key === "year") {
-    if (aliases.date) {
-      return `to_char(${quoteIdentifier(aliases.date)}::date, 'YYYY')`;
-    }
-
-    if (aliases.year) {
-      return `nullif(trim(cast(${quoteIdentifier(aliases.year)} as text)), '')`;
-    }
-
-    return null;
-  }
-
-  if (key === "month") {
-    if (aliases.month) {
-      return `nullif(trim(cast(${quoteIdentifier(aliases.month)} as text)), '')`;
-    }
-
-    if (aliases.date) {
-      return `to_char(${quoteIdentifier(aliases.date)}::date, 'YYYY-MM')`;
-    }
-
-    return null;
-  }
-
-  if (key === "isoWeek") {
-    if (aliases.isoWeek) {
-      return `nullif(trim(cast(${quoteIdentifier(aliases.isoWeek)} as text)), '')`;
-    }
-
-    if (aliases.date) {
-      const d = quoteIdentifier(aliases.date);
-      return `lpad((extract(isoyear from ${d}::date) % 100)::int::text, 2, '0') || lpad(extract(week from ${d}::date)::int::text, 2, '0')`;
-    }
-
-    return null;
-  }
-
-  if (key === "dayName") {
-    if (aliases.dayName) {
-      return `nullif(trim(cast(${quoteIdentifier(aliases.dayName)} as text)), '')`;
-    }
-
-    if (aliases.date) {
-      const d = quoteIdentifier(aliases.date);
-      return `case extract(isodow from ${d}::date)::int when 1 then 'Lunes' when 2 then 'Martes' when 3 then 'Miercoles' when 4 then 'Jueves' when 5 then 'Viernes' when 6 then 'Sabado' when 7 then 'Domingo' end`;
-    }
-
-    return null;
-  }
-
-  const columnName = aliases[key];
-  return columnName ? `nullif(trim(cast(${quoteIdentifier(columnName)} as text)), '')` : null;
-}
-
-function buildDateFieldExpression(schema: BalanzasViewSchema) {
-  return schema.aliases.date ? `${quoteIdentifier(schema.aliases.date)}::date` : null;
-}
-
-function buildRatioSql(schema: BalanzasViewSchema) {
-  if (schema.aliases.ratio) {
-    const ratioColumn = `${quoteIdentifier(schema.aliases.ratio)}::numeric`;
-    return `case when ${ratioColumn} is null then null when abs(${ratioColumn}) <= 1 then ${ratioColumn} * 100 else ${ratioColumn} end`;
-  }
-
-  if (!schema.aliases.source || !schema.aliases.targetValue) {
-    return "null::numeric";
-  }
-
-  const sourceColumn = `${quoteIdentifier(schema.aliases.source)}::numeric`;
-  const targetColumn = `${quoteIdentifier(schema.aliases.targetValue)}::numeric`;
-  return `case when ${sourceColumn} is null or ${sourceColumn} = 0 or ${targetColumn} is null then null else ((${targetColumn} / nullif(${sourceColumn}, 0)) - 1) * 100 end`;
-}
-
-function buildGapValue(row: GenericQueryRow, schema: BalanzasViewSchema) {
-  const sourceValue = schema.aliases.source ? toNumber(row[schema.aliases.source]) : null;
-  const targetValue = schema.aliases.targetValue ? toNumber(row[schema.aliases.targetValue]) : null;
-
-  if (sourceValue === null || targetValue === null) {
-    return null;
-  }
-
-  return roundValue(sourceValue - targetValue);
-}
-
-function buildRowRatio(row: GenericQueryRow, schema: BalanzasViewSchema) {
-  if (schema.aliases.ratio) {
-    return normalizePercentValue(toNumber(row[schema.aliases.ratio]));
-  }
-
-  if (!schema.aliases.source || !schema.aliases.targetValue) {
-    return null;
-  }
-
-  const sourceValue = toNumber(row[schema.aliases.source]);
-  const targetValue = toNumber(row[schema.aliases.targetValue]);
-
-  if (sourceValue === null || targetValue === null || sourceValue === 0) {
-    return null;
-  }
-
-  return roundValue(((targetValue / sourceValue) - 1) * 100);
-}
-
-async function loadDistinctValues(viewName: string, expression: string | null, descending = false) {
-  if (!expression) {
-    return [] as string[];
-  }
-
-  const result = await query<{ value: string | null }>(
-    `
-      select distinct ${expression} as value
-      from ${viewName}
-      where ${expression} is not null
-      order by 1 ${descending ? "desc" : "asc"}
-      limit 250
-    `,
-  );
-
-  return uniqueSorted(result.rows.map((row) => row.value), descending);
-}
-
-async function loadBalanzasFilterOptions(metric: BalanzasMetric): Promise<BalanzasFilterOptions> {
-  const schemas = await Promise.all(
-    BALANZAS_PROCESS_NODES.map((node) => getBalanzasViewSchema(node, metric)),
-  );
-  const activeSchemas = schemas.filter((schema): schema is BalanzasViewSchema => Boolean(schema));
-  const valueSets = await Promise.all(
-    activeSchemas.map(async (schema) => ({
-      years: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "year"), true),
-      months: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "month"), true),
-      preWeeks: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "preWeek"), true),
-      isoWeeks: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "isoWeek"), true),
-      dayNames: await loadDistinctValues(schema.fromSql, buildTextFieldExpression(schema, "dayName")),
-    })),
-  );
-
-  return {
-    years: uniqueSorted(valueSets.flatMap((entry) => entry.years), true),
-    months: uniqueSorted(valueSets.flatMap((entry) => entry.months), true),
-    preWeeks: uniqueSorted(valueSets.flatMap((entry) => entry.preWeeks), true),
-    isoWeeks: uniqueSorted(valueSets.flatMap((entry) => entry.isoWeeks), true),
-    dayNames: uniqueSorted(valueSets.flatMap((entry) => entry.dayNames)),
-  };
-}
-
-async function getBalanzasFilterOptions(metric: BalanzasMetric) {
-  return cachedAsync(
-    `postcosecha:balanzas:options:${metric}`,
-    BALANZAS_OPTIONS_TTL_MS,
-    () => loadBalanzasFilterOptions(metric),
-  );
-}
-
-function buildFilterSupportIssues(schema: BalanzasViewSchema, filters: BalanzasFilters) {
-  const issues: string[] = [];
-
-  if (hasMultiSelectValue(filters.year) && !buildTextFieldExpression(schema, "year")) {
-    issues.push("A\u00f1o");
-  }
-
-  if (hasMultiSelectValue(filters.month) && !buildTextFieldExpression(schema, "month")) {
-    issues.push("Mes");
-  }
-
-  if (hasMultiSelectValue(filters.dayName) && !buildTextFieldExpression(schema, "dayName")) {
-    issues.push("Dia");
-  }
-
-  if (filters.weekMode === "iso" && hasMultiSelectValue(filters.weekValue) && !buildTextFieldExpression(schema, "isoWeek")) {
-    issues.push("Semana");
-  }
-
-  if ((filters.dateFrom || filters.dateTo) && !buildDateFieldExpression(schema)) {
-    issues.push("Fecha");
-  }
-
-  return issues;
-}
-
-function buildWhereClause(
-  schema: BalanzasViewSchema,
+function buildTemporalConditions(
+  dateCol: string,
   filters: BalanzasFilters,
-  node: BalanzasProcessNodeDefinition,
-) {
+): { conditions: string[]; values: unknown[] } {
   const conditions: string[] = [];
   const values: unknown[] = [];
 
-  const yearExpression = buildTextFieldExpression(schema, "year");
-  const monthExpression = buildTextFieldExpression(schema, "month");
-  const dayNameExpression = buildTextFieldExpression(schema, "dayName");
-  const destinationExpression = buildTextFieldExpression(schema, "destination");
-  const preWeekExpression = buildTextFieldExpression(schema, "preWeek");
-  const isoWeekExpression = buildTextFieldExpression(schema, "isoWeek");
-  const dateExpression = buildDateFieldExpression(schema);
-  const selectedYears = decodeMultiSelectValue(filters.year);
-  const selectedMonths = decodeMultiSelectValue(filters.month);
-  const selectedDayNames = decodeMultiSelectValue(filters.dayName);
-  const selectedWeeks = decodeMultiSelectValue(filters.weekValue);
-
-  if (selectedYears.length && yearExpression) {
-    values.push(selectedYears);
-    conditions.push(`${yearExpression} = any($${values.length}::text[])`);
-  }
-
-  if (selectedMonths.length && monthExpression) {
-    values.push(selectedMonths);
-    conditions.push(`${monthExpression} = any($${values.length}::text[])`);
-  }
-
-  if (selectedDayNames.length && dayNameExpression) {
-    values.push(selectedDayNames);
-    conditions.push(`${dayNameExpression} = any($${values.length}::text[])`);
-  }
-
-  if (node.fixedDestination && destinationExpression) {
-    values.push(node.fixedDestination);
-    conditions.push(`${destinationExpression} = $${values.length}::text`);
-  }
-
-  if (filters.weekMode === "pre" && selectedWeeks.length && preWeekExpression) {
-    values.push(selectedWeeks);
-    conditions.push(`${preWeekExpression} = any($${values.length}::text[])`);
-  }
-
-  if (filters.weekMode === "iso" && selectedWeeks.length && isoWeekExpression) {
-    values.push(selectedWeeks);
-    conditions.push(`${isoWeekExpression} = any($${values.length}::text[])`);
-  }
-
-  if (filters.dateFrom && dateExpression) {
+  if (filters.dateFrom) {
     values.push(filters.dateFrom);
-    conditions.push(`${dateExpression} >= $${values.length}::date`);
+    conditions.push(`${dateCol} >= $${values.length}::date`);
   }
-
-  if (filters.dateTo && dateExpression) {
+  if (filters.dateTo) {
     values.push(filters.dateTo);
-    conditions.push(`${dateExpression} <= $${values.length}::date`);
+    conditions.push(`${dateCol} <= $${values.length}::date`);
   }
 
+  const weeks = decodeMultiSelectValue(filters.weekValue);
+  if (weeks.length > 0) {
+    values.push(weeks);
+    conditions.push(
+      `(lpad((extract(isoyear from ${dateCol}) % 100)::int::text, 2, '0') || lpad(extract(week from ${dateCol})::int::text, 2, '0')) = any($${values.length}::text[])`,
+    );
+  }
+
+  const months = decodeMultiSelectValue(filters.month);
+  if (months.length > 0) {
+    values.push(months);
+    conditions.push(`extract(month from ${dateCol})::text = any($${values.length}::text[])`);
+  }
+
+  const years = decodeMultiSelectValue(filters.year);
+  if (years.length > 0) {
+    values.push(years);
+    conditions.push(`extract(year from ${dateCol})::text = any($${values.length}::text[])`);
+  }
+
+  return { conditions, values };
+}
+
+// ─── Filter options ───────────────────────────────────────────────────────────
+
+const OPTIONS_SOURCE = `${VIEW_PREFIX}gv_b1_vs_b1c_weight_xl_np_cur`;
+const OPTIONS_CACHE_TTL = 3 * 60 * 1000;
+
+async function loadFilterOptionsImpl(): Promise<BalanzasFilterOptions> {
+  const [weeksRes, monthsRes, yearsRes] = await Promise.all([
+    query<{ week_val: string }>(
+      `SELECT week_val FROM (
+         SELECT DISTINCT lpad((extract(isoyear from work_date) % 100)::int::text, 2, '0')
+                      || lpad(extract(week from work_date)::int::text, 2, '0') AS week_val
+         FROM ${OPTIONS_SOURCE}
+       ) t ORDER BY week_val DESC`,
+    ),
+    query<{ month_val: string }>(
+      `SELECT month_val FROM (
+         SELECT DISTINCT extract(month from work_date)::int::text AS month_val
+         FROM ${OPTIONS_SOURCE}
+       ) t ORDER BY month_val::int ASC`,
+    ),
+    query<{ year_val: string }>(
+      `SELECT year_val FROM (
+         SELECT DISTINCT extract(year from work_date)::int::text AS year_val
+         FROM ${OPTIONS_SOURCE}
+       ) t ORDER BY year_val::int DESC`,
+    ),
+  ]);
+
   return {
-    whereClause: conditions.length ? `where ${conditions.join(" and ")}` : "",
-    values,
+    weeks: weeksRes.rows.map((r) => ({ value: r.week_val, label: formatWeekLabel(r.week_val) })),
+    months: monthsRes.rows.map((r) => ({ value: r.month_val, label: formatMonthName(r.month_val) })),
+    years: yearsRes.rows.map((r) => ({ value: r.year_val, label: r.year_val })),
   };
 }
 
-function inferColumnKind(
-  columnName: string,
-  schema: BalanzasViewSchema,
-) {
-  if (columnName === "__ratio_pct") {
-    return "ratio" as const;
-  }
-
-  if (columnName === "__gap_value") {
-    return "number" as const;
-  }
-
-  if (columnName === schema.aliases.date) {
-    return "date" as const;
-  }
-
-  if (schema.numericColumns.includes(columnName)) {
-    return "number" as const;
-  }
-
-  return "text" as const;
+function loadFilterOptions(): Promise<BalanzasFilterOptions> {
+  return cachedAsync("balanzas:options:v3", OPTIONS_CACHE_TTL, loadFilterOptionsImpl);
 }
 
-function buildTableColumns(
-  node: BalanzasProcessNodeDefinition,
-  schema: BalanzasViewSchema,
-  metric: BalanzasMetric,
-) {
-  const desiredColumns = [
-    schema.aliases.date,
-    schema.aliases.month,
-    schema.aliases.isoWeek,
-    schema.aliases.dayName,
-    schema.aliases.lot,
-    schema.aliases.grade,
-    schema.aliases.hydrationDays,
-    schema.aliases.destination,
-    schema.aliases.source,
-    schema.aliases.targetValue,
-    "__gap_value",
-    "__ratio_pct",
-  ].filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
+// ─── Node summary ─────────────────────────────────────────────────────────────
 
-  // Cuando las columnas clave (source/target) no se detectaron automáticamente,
-  // exponer TODAS las columnas numéricas de la vista primero para que el usuario
-  // pueda ver los datos aunque el alias-matching haya fallado por cambios en el schema.
-  const hasKeyMetrics = Boolean(schema.aliases.source && schema.aliases.targetValue);
-  const remainingColumns = schema.columns
-    .map((column) => column.name)
-    .filter((columnName) => columnName !== schema.aliases.ratio)
-    .filter((columnName) => !desiredColumns.includes(columnName))
-    .sort((a, b) => {
-      if (hasKeyMetrics) {
-        return 0;
-      }
-      // Numéricas primero, luego texto
-      const aNum = schema.numericColumns.includes(a) ? 0 : 1;
-      const bNum = schema.numericColumns.includes(b) ? 0 : 1;
-      return aNum - bNum;
-    })
-    // Si no se detectaron métricas clave, mostrar todas las columnas (sin límite de 4)
-    .slice(0, hasKeyMetrics ? 4 : schema.columns.length);
+async function loadNodeSummary(
+  nodeDef: BalanzasNodeDef,
+  filters: BalanzasFilters,
+): Promise<BalanzasNodeSummary> {
+  const { conditions, values } = buildTemporalConditions(nodeDef.dateCol, filters);
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const aggExprs = nodeDef.summaryMetrics
+    .map((m) => `${m.agg === "sum" ? "SUM" : "AVG"}(${m.col}::numeric) AS ${m.col}`)
+    .join(", ");
+  const sql = `
+    SELECT COUNT(*) AS row_count, MIN(${nodeDef.dateCol}) AS date_min, MAX(${nodeDef.dateCol}) AS date_max
+    ${aggExprs ? `, ${aggExprs}` : ""}
+    FROM ${nodeDef.viewName}
+    ${where}
+  `;
 
-  return [...desiredColumns, ...remainingColumns].map((columnName) => {
-    if (columnName === schema.aliases.source) {
-      return {
-        key: columnName,
-        label: buildStageMetricLabel(metric, node.sourceStage),
-        kind: inferColumnKind(columnName, schema),
-      } satisfies BalanzasTableColumn;
-    }
-
-    if (columnName === schema.aliases.targetValue) {
-      return {
-        key: columnName,
-        label: buildStageMetricLabel(metric, node.targetStage),
-        kind: inferColumnKind(columnName, schema),
-      } satisfies BalanzasTableColumn;
-    }
-
-    if (columnName === schema.aliases.destination) {
-      return {
-        key: columnName,
-        label: BALANZAS_DESTINATION_LABEL,
-        kind: inferColumnKind(columnName, schema),
-      } satisfies BalanzasTableColumn;
-    }
-
-    if (columnName === "__gap_value") {
-      return { key: columnName, label: "Brecha", kind: "number" } satisfies BalanzasTableColumn;
-    }
-
-    if (columnName === "__ratio_pct") {
-      return { key: columnName, label: "Macro indicador", kind: "ratio" } satisfies BalanzasTableColumn;
-    }
-
+  try {
+    const result = await query<Record<string, unknown>>(sql, values);
+    const row = result.rows[0] ?? {};
     return {
-      key: columnName,
-      label: toColumnLabel(columnName),
-      kind: inferColumnKind(columnName, schema),
-    } satisfies BalanzasTableColumn;
-  });
-}
-
-function trimTableColumns(
-  columns: BalanzasTableColumn[],
-  schema: BalanzasViewSchema,
-  localOptions: BalanzasLocalFilterOptions,
-) {
-  return columns.filter((column) => {
-    if (column.key === schema.aliases.preWeek) {
-      return false;
-    }
-
-    if (column.key === schema.aliases.destination && localOptions.destinations.length <= 1) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
-function buildTableRows(rows: GenericQueryRow[], schema: BalanzasViewSchema) {
-  return rows.map((row, index) => {
-    const ratioPct = buildRowRatio(row, schema);
-    const gapValue = buildGapValue(row, schema);
-    const values = Object.fromEntries(
-      Object.entries(row).map(([key, value]) => [key, serializeCellValue(value)]),
-    ) as Record<string, string | number | null>;
-
-    values.__ratio_pct = ratioPct;
-    values.__gap_value = gapValue;
-
+      key: nodeDef.key,
+      label: nodeDef.label,
+      shortLabel: nodeDef.shortLabel,
+      branch: nodeDef.branch,
+      active: nodeDef.active,
+      rowCount: toNumber(row.row_count) ?? 0,
+      dateMin: row.date_min ? String(row.date_min).slice(0, 10) : null,
+      dateMax: row.date_max ? String(row.date_max).slice(0, 10) : null,
+      metrics: nodeDef.summaryMetrics.map((m) => {
+        const raw = toNumber(row[m.col]);
+        return { col: m.col, label: m.label, value: raw, formatted: formatMetricValue(raw, m.format) };
+      }),
+      bpmnElementId: nodeDef.bpmnBinding?.elementId ?? null,
+      overlayOffsetLeft: nodeDef.bpmnBinding?.overlayOffsetLeft ?? 0,
+    };
+  } catch {
     return {
-      id: [
-        toComparableText(schema.aliases.date ? row[schema.aliases.date] : null) ?? `row-${index + 1}`,
-        toComparableText(schema.aliases.destination ? row[schema.aliases.destination] : null) ?? index + 1,
-        `${index + 1}`,
-      ].join("|"),
+      key: nodeDef.key,
+      label: nodeDef.label,
+      shortLabel: nodeDef.shortLabel,
+      branch: nodeDef.branch,
+      active: nodeDef.active,
+      rowCount: 0,
+      dateMin: null,
+      dateMax: null,
+      metrics: nodeDef.summaryMetrics.map((m) => ({
+        col: m.col,
+        label: m.label,
+        value: null,
+        formatted: "—",
+      })),
+      bpmnElementId: nodeDef.bpmnBinding?.elementId ?? null,
+      overlayOffsetLeft: nodeDef.bpmnBinding?.overlayOffsetLeft ?? 0,
+    };
+  }
+}
+
+// ─── Node detail ──────────────────────────────────────────────────────────────
+
+export async function loadNodeDetail(
+  nodeKey: string,
+  filters: BalanzasFilters,
+  localFilters: { destinations: string[]; grades: string[]; gradeGroups: string[] },
+): Promise<BalanzasNodeDetail> {
+  const nodeDef = BALANZAS_NODES.find((n) => n.key === nodeKey);
+  if (!nodeDef) throw new Error(`Nodo balanzas no encontrado: ${nodeKey}`);
+
+  const { conditions, values } = buildTemporalConditions(nodeDef.dateCol, filters);
+
+  if (localFilters.destinations.length > 0 && nodeDef.hasDestination) {
+    values.push(localFilters.destinations);
+    conditions.push(`destination = any($${values.length}::text[])`);
+  }
+  if (localFilters.grades.length > 0 && nodeDef.hasGrade) {
+    values.push(localFilters.grades);
+    conditions.push(`grade = any($${values.length}::text[])`);
+  }
+  if (localFilters.gradeGroups.length > 0 && nodeDef.hasGradeGroup) {
+    values.push(localFilters.gradeGroups);
+    conditions.push(`grade_group = any($${values.length}::text[])`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  const { conditions: optConds, values: optVals } = buildTemporalConditions(nodeDef.dateCol, filters);
+  const optWhere = optConds.length > 0 ? `WHERE ${optConds.join(" AND ")}` : "";
+  const optSelects = [
+    nodeDef.hasDestination ? "destination" : "null::text AS destination",
+    nodeDef.hasGrade ? "grade" : "null::text AS grade",
+    nodeDef.hasGradeGroup ? "grade_group" : "null::text AS grade_group",
+  ].join(", ");
+
+  const aggExprs = nodeDef.summaryMetrics
+    .map((m) => `${m.agg === "sum" ? "SUM" : "AVG"}(${m.col}::numeric) AS ${m.col}`)
+    .join(", ");
+
+  const [dataRes, optRes, summaryRes] = await Promise.all([
+    query<BalanzasDetailRow>(
+      `SELECT * FROM ${nodeDef.viewName} ${where} ORDER BY ${nodeDef.dateCol} DESC LIMIT 2000`,
       values,
-      ratioPct,
-      gapValue,
-    } satisfies BalanzasTableRow;
+    ),
+    query<{ destination: string | null; grade: string | null; grade_group: string | null }>(
+      `SELECT DISTINCT ${optSelects} FROM ${nodeDef.viewName} ${optWhere} ORDER BY 1 NULLS LAST, 2 NULLS LAST, 3 NULLS LAST`,
+      optVals,
+    ),
+    query<Record<string, unknown>>(
+      `SELECT COUNT(*) AS row_count, MIN(${nodeDef.dateCol}) AS date_min, MAX(${nodeDef.dateCol}) AS date_max ${aggExprs ? `, ${aggExprs}` : ""} FROM ${nodeDef.viewName} ${optWhere}`,
+      optVals,
+    ),
+  ]);
+
+  const rows = dataRes.rows;
+  const sampleRow = rows[0] ?? {};
+  const columns = Object.keys(sampleRow).map((key) => ({
+    key,
+    label: columnLabel(key),
+    numeric: typeof sampleRow[key] === "number",
+  }));
+
+  const sRow = summaryRes.rows[0] ?? {};
+  const metrics: BalanzasSummaryMetric[] = nodeDef.summaryMetrics.map((m) => {
+    const raw = toNumber(sRow[m.col]);
+    return { col: m.col, label: m.label, value: raw, formatted: formatMetricValue(raw, m.format) };
   });
-}
 
-function collectDistinctFromRows(rows: GenericQueryRow[], columnName: string | null, descending = false) {
-  return uniqueSorted(
-    rows.map((row) => (columnName ? toComparableText(row[columnName]) : null)),
-    descending,
-  );
-}
-
-function buildLocalFilterOptions(rows: GenericQueryRow[], schema: BalanzasViewSchema): BalanzasLocalFilterOptions {
   return {
-    destinations: collectDistinctFromRows(rows, schema.aliases.destination),
-    grades: collectDistinctFromRows(rows, schema.aliases.grade),
-    lots: collectDistinctFromRows(rows, schema.aliases.lot, true),
-    hydrationDays: collectDistinctFromRows(rows, schema.aliases.hydrationDays, true),
-    preWeeks: collectDistinctFromRows(rows, schema.aliases.preWeek, true),
-    isoWeeks: collectDistinctFromRows(rows, schema.aliases.isoWeek, true),
-    dayNames: collectDistinctFromRows(rows, schema.aliases.dayName),
-    months: collectDistinctFromRows(rows, schema.aliases.month, true),
-    dates: collectDistinctFromRows(rows, schema.aliases.date, true),
+    nodeKey: nodeDef.key,
+    nodeLabel: nodeDef.label,
+    branch: nodeDef.branch,
+    active: nodeDef.active,
+    rows,
+    columns,
+    destinations: [...new Set(optRes.rows.map((r) => r.destination).filter((v): v is string => !!v))].sort(),
+    grades: [...new Set(optRes.rows.map((r) => r.grade).filter((v): v is string => !!v))].sort(),
+    gradeGroups: [...new Set(optRes.rows.map((r) => r.grade_group).filter((v): v is string => !!v))].sort(),
+    rowCount: toNumber(sRow.row_count) ?? rows.length,
+    metrics,
   };
 }
 
-function buildGroupDefaults(schema: BalanzasViewSchema) {
-  const preferredWeekColumn = schema.aliases.isoWeek;
-  const defaults = [
-    preferredWeekColumn,
-    schema.aliases.dayName,
-    schema.aliases.destination ?? schema.aliases.grade ?? schema.aliases.month,
-    schema.aliases.date,
-  ].filter((value, index, array): value is string => Boolean(value) && array.indexOf(value) === index);
+const COLUMN_LABELS: Record<string, string> = {
+  work_date: "Fecha trabajo",
+  lot_date: "Fecha lote",
+  destination: "Destino",
+  grade: "Grado",
+  grade_group: "Grupo grado",
+  stems_b1: "Tallos B1",
+  stems_b1_count: "Tallos B1",
+  stems_b1ab: "Tallos B1AB",
+  stems_b1c_count: "Tallos B1C",
+  stems_b2: "Tallos B2",
+  stems_b2_count: "Tallos B2",
+  weight_b1_kg: "Peso B1 (kg)",
+  weight_b1ab_kg: "Peso B1AB (kg)",
+  weight_b1ab_est: "Peso B1AB est. (kg)",
+  weight_b1c_kg: "Peso B1C (kg)",
+  weight_b1c_estimated_kg: "Peso B1C est. (kg)",
+  weight_per_stem_kg: "Peso/tallo (kg)",
+  weight_per_stem_b1ab: "Peso/tallo B1AB (kg)",
+  weight_b2_kg: "Peso B2 (kg)",
+  weight_b2: "Peso B2 (kg)",
+  weight_b2a_kg: "Peso B2A (kg)",
+  weight_b3_kg: "Peso B3 (kg)",
+  ideal_weight_kg: "Peso ideal (kg)",
+  hydration_pct: "Hidratación %",
+  hydration_target: "Meta hidratación",
+  dispatch_pct: "Despacho %",
+  dispatch_pct_stems: "Despacho tallos %",
+  dispatch_pct_weight: "Despacho peso %",
+  dispatch_1_pct: "Despacho 1 %",
+  dispatch_2_pct: "Despacho 2 %",
+  diff_pct_stems: "Dif. tallos %",
+  diff_pct_weight: "Dif. peso %",
+  stems_diff_pct: "Dif. tallos %",
+  weight_diff_pct: "Dif. peso %",
+  yield_b1_vs_b3: "Rendimiento B1/B3",
+  yield_b1_vs_ideal: "Rend. vs ideal",
+  b2a_to_ideal_ratio: "B2A/Ideal",
+  b2a_to_b1c_ratio: "B2A/B1C",
+  ideal_to_b1c_ratio: "Ideal/B1C",
+  processed_bunch_count: "Ramos procesados",
+  week_id: "Semana",
+};
 
-  return defaults.slice(0, 3);
+function columnLabel(key: string): string {
+  return COLUMN_LABELS[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function buildNodePeriodLabel(filters: BalanzasFilters) {
-  const selectedYears = decodeMultiSelectValue(filters.year);
-  const selectedMonths = decodeMultiSelectValue(filters.month);
-  const selectedDays = decodeMultiSelectValue(filters.dayName);
-  const selectedWeeks = decodeMultiSelectValue(filters.weekValue);
-  const calendarTokens = [
-    selectedYears.length ? `A\u00f1os ${selectedYears.join(", ")}` : null,
-    selectedMonths.length ? `Meses ${selectedMonths.join(", ")}` : null,
-    selectedDays.length ? `Dias ${selectedDays.join(", ")}` : null,
-  ].filter((value): value is string => Boolean(value));
-  const weekLabel = !selectedWeeks.length
-    ? "Ultima semana ISO disponible"
-    : `Semanas ${selectedWeeks.join(", ")}`;
-  const dateRangeLabel = filters.dateFrom || filters.dateTo
-    ? `${filters.dateFrom || "..."} a ${filters.dateTo || "..."}`.replace("... a ...", "Sin rango libre")
-    : "Sin rango libre";
+// ─── Public API ───────────────────────────────────────────────────────────────
 
-  return [...calendarTokens, weekLabel, dateRangeLabel].join(" / ");
-}
-
-function formatConfiguredViews(configuredViews: string | string[] | undefined) {
-  if (!configuredViews) {
-    return null;
-  }
-
-  return Array.isArray(configuredViews) ? configuredViews.join(" + ") : configuredViews;
-}
-
-function createUnavailableNodeData(
-  node: BalanzasProcessNodeDefinition,
-  filters: BalanzasFilters,
-  message: string,
-): BalanzasNodeData {
-  const focusStage = node.focusRole === "source" ? node.sourceStage : node.targetStage;
-  const secondaryStage = node.focusRole === "source" ? node.targetStage : node.sourceStage;
+function buildDefaultBalanzasFilters(): BalanzasFilters {
+  const now = new Date();
+  const currentYYWW = toYYWW(now);
+  const prevDate = new Date(now);
+  prevDate.setDate(prevDate.getDate() - 7);
+  const prevYYWW = toYYWW(prevDate);
+  const weeks = currentYYWW === prevYYWW ? [currentYYWW] : [currentYYWW, prevYYWW];
   return {
-    key: node.key,
-    metric: filters.metric,
-    label: node.label,
-    shortLabel: node.shortLabel,
-    kind: node.kind,
-    laneId: node.laneId,
-    laneLabel: node.laneLabel,
-    sourceStage: node.sourceStage,
-    targetStage: node.targetStage,
-    focusStage,
-    focusRole: node.focusRole,
-    description: node.description,
-    fixedDestination: node.fixedDestination ?? null,
-    sourceView: formatConfiguredViews(node.views[filters.metric]),
-    status: "unavailable",
-    statusMessage: message,
-    rowCount: 0,
-    sourceTotal: 0,
-    sourceTotalDisplay: "0",
-    targetTotal: 0,
-    targetTotalDisplay: "0",
-    gapTotal: 0,
-    gapTotalDisplay: "0",
-    ratioPct: null,
-    ratioDisplay: "-",
-    latestDate: null,
-    primaryTotal: 0,
-    primaryTotalDisplay: "0",
-    secondaryStage,
-    secondaryTotal: 0,
-    secondaryTotalDisplay: "0",
-    processBindings: node.processBindings,
-    childrenKeys: node.childrenKeys ?? [],
-    columnMap: {
-      year: null,
-      month: null,
-      preWeek: null,
-      isoWeek: null,
-      dayName: null,
-      date: null,
-      destination: null,
-      lot: null,
-      grade: null,
-      hydrationDays: null,
-      source: null,
-      target: null,
-      ratio: "__ratio_pct",
-      gap: "__gap_value",
-    },
-    rawColumnNames: [],
-    localOptions: {
-      destinations: [],
-      grades: [],
-      lots: [],
-      hydrationDays: [],
-      preWeeks: [],
-      isoWeeks: [],
-      dayNames: [],
-      months: [],
-      dates: [],
-    },
-    groupDefaults: [],
-    tableColumns: [
-      { key: "__ratio_pct", label: "Macro indicador", kind: "ratio" },
-    ],
-    rows: [],
+    weekValue: encodeMultiSelectValue(weeks),
+    month: "all",
+    year: "all",
+    dateFrom: "",
+    dateTo: "",
   };
 }
 
-async function buildNodeData(
-  node: BalanzasProcessNodeDefinition,
-  filters: BalanzasFilters,
-): Promise<BalanzasNodeData> {
-  const schema = await getBalanzasViewSchema(node, filters.metric);
-
-  if (!schema) {
-    return createUnavailableNodeData(
-      node,
-      filters,
-      `No existe vista ${filters.metric} para este nodo del proceso.`,
-    );
-  }
-
-  const missingColumns = buildFilterSupportIssues(schema, filters);
-
-  if (missingColumns.length) {
-    return createUnavailableNodeData(
-      node,
-      filters,
-      `La vista no expone columnas para filtrar por: ${missingColumns.join(", ")}.`,
-    );
-  }
-
-  const { whereClause, values } = buildWhereClause(schema, filters, node);
-  const ratioSql = buildRatioSql(schema);
-  const dateSql = buildDateFieldExpression(schema);
-  const sourceSql = schema.aliases.source ? `${quoteIdentifier(schema.aliases.source)}::numeric` : "null::numeric";
-  const targetSql = schema.aliases.targetValue ? `${quoteIdentifier(schema.aliases.targetValue)}::numeric` : "null::numeric";
-  const orderByColumn = schema.aliases.date ?? schema.aliases.preWeek ?? schema.aliases.isoWeek ?? schema.aliases.month;
-  const summaryResult = await query<{
-    row_count: string | number | null;
-    source_total: string | number | null;
-    target_total: string | number | null;
-    avg_ratio_pct: string | number | null;
-    latest_date: string | null;
-  }>(
-    `
-      select
-        count(*) as row_count,
-        sum(coalesce(${sourceSql}, 0)) as source_total,
-        sum(coalesce(${targetSql}, 0)) as target_total,
-        avg(${ratioSql}) as avg_ratio_pct,
-        ${dateSql ? `to_char(max(${dateSql}), 'YYYY-MM-DD')` : "null"} as latest_date
-      from ${schema.fromSql}
-      ${whereClause}
-    `,
-    values,
-  );
-  const detailValues = [...values, BALANZAS_MAX_NODE_ROWS];
-  const detailResult = await query<GenericQueryRow>(
-    `
-      select *
-      from ${schema.fromSql}
-      ${whereClause}
-      ${orderByColumn ? `order by ${quoteIdentifier(orderByColumn)} desc nulls last` : ""}
-      limit $${detailValues.length}
-    `,
-    detailValues,
-  );
-
-  const summaryRow = summaryResult.rows[0];
-  const rowCount = Math.trunc(toNumber(summaryRow?.row_count) ?? 0);
-  const sourceTotal = roundValue(toNumber(summaryRow?.source_total) ?? 0);
-  const targetTotal = roundValue(toNumber(summaryRow?.target_total) ?? 0);
-  const avgRatioPct = normalizePercentValue(toNumber(summaryRow?.avg_ratio_pct));
-  const derivedRatioPct = sourceTotal > 0 ? roundValue(((targetTotal / sourceTotal) - 1) * 100) : null;
-  const ratioPct = derivedRatioPct ?? avgRatioPct;
-  const rows = detailResult.rows;
-  const tableRows = buildTableRows(rows, schema);
-  const localOptions = buildLocalFilterOptions(rows, schema);
-  const tableColumns = trimTableColumns(buildTableColumns(node, schema, filters.metric), schema, localOptions);
-  const primaryTotal = node.focusRole === "source" ? sourceTotal : targetTotal;
-  const secondaryTotal = node.focusRole === "source" ? targetTotal : sourceTotal;
-  const focusStage = node.focusRole === "source" ? node.sourceStage : node.targetStage;
-  const secondaryStage = node.focusRole === "source" ? node.targetStage : node.sourceStage;
-
+export function normalizeBalanzasFilters(raw: {
+  weekValue?: string;
+  month?: string;
+  year?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}): BalanzasFilters {
+  const defaults = buildDefaultBalanzasFilters();
   return {
-    key: node.key,
-    metric: filters.metric,
-    label: node.label,
-    shortLabel: node.shortLabel,
-    kind: node.kind,
-    laneId: node.laneId,
-    laneLabel: node.laneLabel,
-    sourceStage: node.sourceStage,
-    targetStage: node.targetStage,
-    focusStage,
-    focusRole: node.focusRole,
-    description: node.description,
-    fixedDestination: node.fixedDestination ?? null,
-    sourceView: schema.viewName,
-    status: "ready",
-    statusMessage: null,
-    rowCount,
-    sourceTotal,
-    sourceTotalDisplay: formatNumber(sourceTotal),
-    targetTotal,
-    targetTotalDisplay: formatNumber(targetTotal),
-    gapTotal: roundValue(sourceTotal - targetTotal),
-    gapTotalDisplay: formatNumber(roundValue(sourceTotal - targetTotal)),
-    ratioPct,
-    ratioDisplay: formatPercent(ratioPct),
-    latestDate: summaryRow?.latest_date ?? null,
-    primaryTotal,
-    primaryTotalDisplay: formatNumber(primaryTotal),
-    secondaryStage,
-    secondaryTotal,
-    secondaryTotalDisplay: formatNumber(secondaryTotal),
-    processBindings: node.processBindings,
-    childrenKeys: node.childrenKeys ?? [],
-    columnMap: {
-      year: schema.aliases.year,
-      month: schema.aliases.month,
-      preWeek: schema.aliases.preWeek,
-      isoWeek: schema.aliases.isoWeek,
-      dayName: schema.aliases.dayName,
-      date: schema.aliases.date,
-      destination: schema.aliases.destination,
-      lot: schema.aliases.lot,
-      grade: schema.aliases.grade,
-      hydrationDays: schema.aliases.hydrationDays,
-      source: schema.aliases.source,
-      target: schema.aliases.targetValue,
-      ratio: "__ratio_pct",
-      gap: "__gap_value",
-    },
-    rawColumnNames: schema.columns.map((c) => c.name),
-    localOptions,
-    groupDefaults: buildGroupDefaults(schema),
-    tableColumns,
-    rows: tableRows,
+    weekValue: raw.weekValue ?? defaults.weekValue,
+    month: raw.month ?? "all",
+    year: raw.year ?? "all",
+    dateFrom: raw.dateFrom ?? "",
+    dateTo: raw.dateTo ?? "",
   };
 }
 
-function isUnavailableSchemaError(error: unknown) {
-  return error instanceof Error
-    && (
-      error.message.includes("No se encontro la vista")
-      || ((error as Error & { code?: string }).code === "42P01")
-    );
-}
-
-export function normalizeBalanzasFilters(
-  rawFilters: Partial<Record<keyof BalanzasFilters | "destination", string | undefined>> = {},
-): BalanzasFilters {
-  return {
-    metric: normalizeMetric(rawFilters.metric),
-    year: normalizeSelectValue(rawFilters.year),
-    month: normalizeSelectValue(rawFilters.month),
-    dayName: normalizeSelectValue(rawFilters.dayName),
-    weekMode: "iso",
-    weekValue: normalizeSelectValue(rawFilters.weekValue),
-    dateFrom: normalizeDateValue(rawFilters.dateFrom),
-    dateTo: normalizeDateValue(rawFilters.dateTo),
-  };
-}
-
-function applyLatestIsoWeek(filters: BalanzasFilters, options: BalanzasFilterOptions) {
-  if (filters.weekMode !== "iso") {
-    return filters;
-  }
-
-  const availableIsoWeeks = options.isoWeeks;
-  const selectedWeeks = decodeMultiSelectValue(filters.weekValue)
-    .filter((week) => availableIsoWeeks.includes(week));
-  const fallbackWeek = availableIsoWeeks[0] ? [availableIsoWeeks[0]] : [];
-
-  return {
-    ...filters,
-    weekValue: encodeMultiSelectValue(selectedWeeks.length ? selectedWeeks : fallbackWeek),
-  } satisfies BalanzasFilters;
+export async function getBalanzasDashboardData(filters: BalanzasFilters): Promise<BalanzasDashboardData> {
+  const [options, ...nodeSummaries] = await Promise.all([
+    loadFilterOptions(),
+    ...BALANZAS_NODES.map((n) => loadNodeSummary(n, filters)),
+  ]);
+  return { filters, options, nodes: nodeSummaries };
 }
 
 export function createEmptyBalanzasDashboardData(
   filters: BalanzasFilters,
-  statusMessage: string | null = null,
+  _message?: string,
 ): BalanzasDashboardData {
-  return {
-    generatedAt: new Date().toISOString(),
-    processAssetPath: BALANZAS_PROCESS_ASSET,
-    metric: filters.metric,
-    metricLabel: buildMetricLabel(filters.metric),
-    filters,
-    options: {
-      years: [],
-      months: [],
-      preWeeks: [],
-      isoWeeks: [],
-      dayNames: [],
-    },
-    summary: {
-      totalNodes: BALANZAS_PROCESS_NODES.length,
-      readyNodes: 0,
-      totalRows: 0,
-      latestDate: null,
-      periodLabel: buildNodePeriodLabel(filters),
-      scopeLabel: BALANZAS_SCOPE_LABEL,
-      scopeNote: BALANZAS_SCOPE_NOTE,
-      statusMessage,
-    },
-    nodes: BALANZAS_PROCESS_NODES.map((node) =>
-      createUnavailableNodeData(node, filters, statusMessage ?? "Indicador no disponible."),
-    ),
-  };
+  return { filters, options: { weeks: [], months: [], years: [] }, nodes: [] };
 }
 
-export async function getBalanzasDashboardData(
-  rawFilters: Partial<Record<keyof BalanzasFilters, string | undefined>> = {},
-): Promise<BalanzasDashboardData> {
-  const filters = normalizeBalanzasFilters(rawFilters);
-
-  try {
-    return await cachedAsync(
-      `postcosecha:balanzas:${serializeFilters(filters)}`,
-      BALANZAS_DASHBOARD_TTL_MS,
-      async () => {
-        const options = await getBalanzasFilterOptions(filters.metric);
-        const effectiveFilters = applyLatestIsoWeek(filters, options);
-        const nodes = await Promise.all(BALANZAS_PROCESS_NODES.map((node) => buildNodeData(node, effectiveFilters)));
-        const readyNodes = nodes.filter((node) => node.status === "ready");
-        const latestDates = readyNodes
-          .map((node) => node.latestDate)
-          .filter((value): value is string => Boolean(value))
-          .sort();
-
-        return {
-          generatedAt: new Date().toISOString(),
-          processAssetPath: BALANZAS_PROCESS_ASSET,
-          metric: effectiveFilters.metric,
-          metricLabel: buildMetricLabel(effectiveFilters.metric),
-          filters: effectiveFilters,
-          options,
-          summary: {
-            totalNodes: nodes.length,
-            readyNodes: readyNodes.length,
-            totalRows: readyNodes.reduce((sum, node) => sum + node.rowCount, 0),
-            latestDate: latestDates.length ? latestDates[latestDates.length - 1] ?? null : null,
-            periodLabel: buildNodePeriodLabel(effectiveFilters),
-            scopeLabel: BALANZAS_SCOPE_LABEL,
-            scopeNote: BALANZAS_SCOPE_NOTE,
-            statusMessage: readyNodes.length
-              ? null
-              : "Ningun nodo tiene una vista disponible para la combinacion actual de filtros.",
-          },
-          nodes,
-        } satisfies BalanzasDashboardData;
-      },
-    );
-  } catch (error) {
-    if (isUnavailableSchemaError(error)) {
-      return createEmptyBalanzasDashboardData(
-        filters,
-        error instanceof Error ? error.message : "No se pudo consultar las vistas de Balanzas.",
-      );
-    }
-
-    throw error;
-  }
-}
-
-// ─── Diagnóstico ────────────────────────────────────────────────────────────
-
-async function listAvailableGldViews(): Promise<Array<{ viewName: string; columns: string[] }>> {
-  // Usar pg_class en lugar de information_schema para incluir vistas materializadas (relkind='m')
-  const result = await query<{ view_name: string; column_name: string }>(
-    `
-      select
-        c.relname     as view_name,
-        a.attname     as column_name
-      from pg_class c
-      join pg_namespace n on n.oid = c.relnamespace
-      join pg_attribute a on a.attrelid = c.oid
-      where n.nspname = 'gld'
-        and c.relname like 'mv_camp_ind_bal%'
-        and c.relkind in ('r', 'v', 'm')
-        and a.attnum > 0
-        and not a.attisdropped
-      order by c.relname, a.attnum
-    `,
-  );
-
-  const map = new Map<string, string[]>();
-  for (const row of result.rows) {
-    const key = `gld.${row.view_name}`;
-    if (!map.has(key)) {
-      map.set(key, []);
-    }
-    map.get(key)!.push(row.column_name);
-  }
-
-  return Array.from(map.entries()).map(([viewName, columns]) => ({ viewName, columns }));
-}
-
-export type BalanzasDiagnosticNodeSchema = {
-  nodeKey: string;
-  nodeLabel: string;
-  viewName: string | null;
-  error: string | null;
-  columns: Array<{ name: string; dataType: string }>;
-  aliases: {
-    date: string | null;
-    source: string | null;
-    targetValue: string | null;
-    ratio: string | null;
-    destination: string | null;
-    isoWeek: string | null;
-    month: string | null;
-    dayName: string | null;
-    lot: string | null;
-    grade: string | null;
-    hydrationDays: string | null;
-  };
-  missingAliases: string[];
-};
-
-/**
- * Devuelve:
- * 1. `availableViews`: todas las vistas `gld.mv_camp_ind_bal_*` que EXISTEN
- *    actualmente en la base de datos (con sus columnas).
- * 2. `nodes`: para cada nodo del proceso, la vista configurada en el código,
- *    si existe en la BD, y qué aliases se detectaron.
- *
- * Si las vistas fueron renombradas, `nodes[].error` indica "vista no encontrada"
- * y `availableViews` muestra los nombres nuevos para actualizar el código.
- */
-export async function getBalanzasDiagnosticSchema(
-  metric: BalanzasMetric,
-): Promise<{
-  metric: BalanzasMetric;
-  availableViews: Array<{ viewName: string; columns: string[] }>;
-  nodes: BalanzasDiagnosticNodeSchema[];
-}> {
-  const [availableViews, nodeResults] = await Promise.all([
-    listAvailableGldViews(),
-    Promise.all(
-      BALANZAS_PROCESS_NODES.map(async (node): Promise<BalanzasDiagnosticNodeSchema> => {
-        const configuredViews = node.views[metric] ?? null;
-        const viewName = Array.isArray(configuredViews)
-          ? configuredViews.join(" + ")
-          : configuredViews ?? null;
-
-        try {
-          const schema = await loadBalanzasViewSchema(node, metric);
-          if (!schema) {
-            return {
-              nodeKey: node.key,
-              nodeLabel: node.label,
-              viewName,
-              error: "Sin vista configurada para esta métrica.",
-              columns: [],
-              aliases: {
-                date: null, source: null, targetValue: null, ratio: null,
-                destination: null, isoWeek: null, month: null, dayName: null,
-                lot: null, grade: null, hydrationDays: null,
-              },
-              missingAliases: ["date", "source", "targetValue", "ratio"],
-            };
-          }
-
-          const aliases = {
-            date: schema.aliases.date,
-            source: schema.aliases.source,
-            targetValue: schema.aliases.targetValue,
-            ratio: schema.aliases.ratio,
-            destination: schema.aliases.destination,
-            isoWeek: schema.aliases.isoWeek,
-            month: schema.aliases.month,
-            dayName: schema.aliases.dayName,
-            lot: schema.aliases.lot,
-            grade: schema.aliases.grade,
-            hydrationDays: schema.aliases.hydrationDays,
-          };
-
-          const missingAliases = (Object.entries(aliases) as [string, string | null][])
-            .filter(([, v]) => v === null)
-            .map(([k]) => k);
-
-          return {
-            nodeKey: node.key,
-            nodeLabel: node.label,
-            viewName: schema.viewName,
-            error: null,
-            columns: schema.columns.map((c) => ({ name: c.name, dataType: c.dataType })),
-            aliases,
-            missingAliases,
-          };
-        } catch (err) {
-          return {
-            nodeKey: node.key,
-            nodeLabel: node.label,
-            viewName,
-            error: err instanceof Error ? err.message : String(err),
-            columns: [],
-            aliases: {
-              date: null, source: null, targetValue: null, ratio: null,
-              destination: null, isoWeek: null, month: null, dayName: null,
-              lot: null, grade: null, hydrationDays: null,
-            },
-            missingAliases: ["date", "source", "targetValue", "ratio", "destination"],
-          };
-        }
-      }),
-    ),
-  ]);
-
-  return { metric, availableViews, nodes: nodeResults };
-}
+export const defaultBalanzasFilters: BalanzasFilters = buildDefaultBalanzasFilters();
