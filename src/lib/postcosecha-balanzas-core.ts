@@ -35,6 +35,12 @@ export type BalanzasNodeSummary = {
   key: string;
   label: string;
   shortLabel: string;
+  /**
+   * Título canónico que se usa en el header del modal de detalle.
+   * Formato: `<Rama> - <Comparación> - <Métrica>`.
+   * Ejemplos: `Apertura - B1 vs B1C - Peso`, `Preclasificación - B2 vs B3 - Peso`.
+   */
+  dialogTitle: string;
   branch: "preclasif" | "gv" | "apertura";
   active: boolean;
   rowCount: number;
@@ -88,6 +94,7 @@ type BalanzasNodeDef = {
   key: string;
   label: string;
   shortLabel: string;
+  dialogTitle: string;
   branch: "preclasif" | "gv" | "apertura";
   active: boolean;
   viewName: string;
@@ -161,15 +168,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   // ── PRECLASIFICACIÓN ──────────────────────────────────────────────────────
   {
     key: "preclasif-b1-b1a-stems",
-    label: "B1 → B1a (Tallos)",
+    label: "B1 → B1AB (Tallos)",
     shortLabel: "Tallos",
+    dialogTitle: "Preclasificación - B1 vs B1AB - Tallos",
     branch: "preclasif",
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1_vs_b1a_xl_np_stems_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "stems_b1",           label: "Tallos B1",   agg: "sum", format: "count" },
-      { col: "stems_b1ab",         label: "Tallos B1a",  agg: "sum", format: "count" },
+      { col: "stems_b1ab",         label: "Tallos B1AB",  agg: "sum", format: "count" },
       { col: "dispatch_pct_stems", label: "Despacho %",  agg: "avg", format: "pct" },
     ],
     hasDestination: true,
@@ -179,15 +187,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "preclasif-b1-b1a-weight",
-    label: "B1 → B1a (Peso)",
+    label: "B1 → B1AB (Peso)",
     shortLabel: "Peso",
+    dialogTitle: "Preclasificación - B1 vs B1AB - Peso",
     branch: "preclasif",
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1_vs_b1a_xl_np_weight_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "weight_b1_kg",         label: "B1 kg",       agg: "sum", format: "kg" },
-      { col: "weight_b1ab_kg",       label: "B1a kg",      agg: "sum", format: "kg" },
+      { col: "weight_b1ab_kg",       label: "B1AB kg",      agg: "sum", format: "kg" },
       { col: "dispatch_pct_weight",  label: "Despacho %",  agg: "avg", format: "pct" },
     ],
     hasDestination: true,
@@ -197,14 +206,15 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "preclasif-b1a-b2-stems",
-    label: "B1a → B2 (Tallos)",
+    label: "B1AB → B2 (Tallos)",
     shortLabel: "Tallos",
+    dialogTitle: "Preclasificación - B1AB vs B2 - Tallos",
     branch: "preclasif",
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1a_vs_b2_xl_np_stems_cur`,
     dateCol: "lot_date",
     summaryMetrics: [
-      { col: "stems_b1ab",      label: "Tallos B1a",    agg: "sum", format: "count" },
+      { col: "stems_b1ab",      label: "Tallos B1AB",    agg: "sum", format: "count" },
       { col: "stems_b2",        label: "Tallos B2",     agg: "sum", format: "count" },
       { col: "diff_pct_stems",  label: "Diferencia %",  agg: "avg", format: "pct" },
     ],
@@ -215,14 +225,15 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "preclasif-b1a-b2-weight",
-    label: "B1a → B2 (Peso)",
+    label: "B1AB → B2 (Peso)",
     shortLabel: "Peso",
+    dialogTitle: "Preclasificación - B1AB vs B2 - Peso",
     branch: "preclasif",
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1a_vs_b2_xl_np_weight_cur`,
     dateCol: "work_date",
     summaryMetrics: [
-      { col: "weight_b1ab_est",  label: "B1a est. kg",    agg: "sum", format: "kg" },
+      { col: "weight_b1ab_est",  label: "B1AB est. kg",    agg: "sum", format: "kg" },
       { col: "weight_b2",        label: "B2 kg",          agg: "sum", format: "kg" },
       { col: "hydration_pct",    label: "Hidratación %",  agg: "avg", format: "pct" },
     ],
@@ -235,6 +246,7 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     key: "preclasif-b2-b3-weight",
     label: "B2 → B3 (Peso)",
     shortLabel: "B2 → B3",
+    dialogTitle: "Preclasificación - B2 vs B3 - Peso",
     branch: "preclasif",
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b2_vs_b3_xl_np_weight_cur`,
@@ -253,6 +265,7 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     key: "preclasif-b1-b3-ideal",
     label: "B1 → B3 Ideal",
     shortLabel: "→ Ideal",
+    dialogTitle: "Preclasificación - B1 vs B3 vs Peso ideal",
     branch: "preclasif",
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1_vs_b3_ideal_weight_xl_np_cur`,
@@ -270,15 +283,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   // ── COSECHA GV ────────────────────────────────────────────────────────────
   {
     key: "gv-b1-b1c-stems",
-    label: "B1 → B1c (Tallos)",
+    label: "B1 → B1C (Tallos)",
     shortLabel: "Tallos",
+    dialogTitle: "GV - B1 vs B1C - Tallos",
     branch: "gv",
     active: true,
     viewName: `${VIEW_PREFIX}gv_b1_vs_b1c_stems_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "stems_b1_count",  label: "Tallos B1",    agg: "sum", format: "count" },
-      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_b1c_count", label: "Tallos B1C",   agg: "sum", format: "count" },
       { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
     ],
     hasDestination: false,
@@ -288,15 +302,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "gv-b1-b1c-weight",
-    label: "B1 → B1c (Peso)",
+    label: "B1 → B1C (Peso)",
     shortLabel: "Peso",
+    dialogTitle: "GV - B1 vs B1C - Peso",
     branch: "gv",
     active: true,
     viewName: `${VIEW_PREFIX}gv_b1_vs_b1c_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "weight_b1_kg",    label: "B1 kg",        agg: "sum", format: "kg" },
-      { col: "weight_b1c_kg",   label: "B1c kg",       agg: "sum", format: "kg" },
+      { col: "weight_b1c_kg",   label: "B1C kg",       agg: "sum", format: "kg" },
       { col: "weight_diff_pct", label: "Diferencia %", agg: "avg", format: "pct" },
     ],
     hasDestination: false,
@@ -306,14 +321,15 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "gv-b1c-b2-stems",
-    label: "B1c → B2 (Tallos)",
+    label: "B1C → B2 (Tallos)",
     shortLabel: "Tallos",
+    dialogTitle: "GV - B1C vs B2 - Tallos",
     branch: "gv",
     active: true,
     viewName: `${VIEW_PREFIX}gv_b1c_vs_b2_stems_xl_np_cur`,
     dateCol: "lot_date",
     summaryMetrics: [
-      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_b1c_count", label: "Tallos B1C",   agg: "sum", format: "count" },
       { col: "stems_b2_count",  label: "Tallos B2",    agg: "sum", format: "count" },
       { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
     ],
@@ -324,15 +340,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "gv-b1c-b2-weight",
-    label: "B1c → B2 (Peso)",
+    label: "B1C → B2 (Peso)",
     shortLabel: "Peso",
+    dialogTitle: "GV - B1C vs B2 - Peso",
     branch: "gv",
     active: true,
     viewName: `${VIEW_PREFIX}gv_b1c_vs_b2_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "weight_b2_kg",            label: "B2 kg",          agg: "sum", format: "kg" },
-      { col: "weight_b1c_estimated_kg", label: "B1c est. kg",    agg: "sum", format: "kg" },
+      { col: "weight_b1c_estimated_kg", label: "B1C est. kg",    agg: "sum", format: "kg" },
       { col: "hydration_pct",           label: "Hidratación %",  agg: "avg", format: "pct" },
     ],
     hasDestination: true,
@@ -342,15 +359,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "gv-b2-b2a-weight",
-    label: "B2 → B2a (Peso)",
+    label: "B2 → B2A (Peso)",
     shortLabel: "B2 → B2A",
+    dialogTitle: "GV - B2 vs B2A - Peso",
     branch: "gv",
     active: true,
     viewName: `${VIEW_PREFIX}gv_b2_vs_b2a_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "weight_b2_kg",   label: "B2 kg",       agg: "sum", format: "kg" },
-      { col: "weight_b2a_kg",  label: "B2a kg",      agg: "sum", format: "kg" },
+      { col: "weight_b2a_kg",  label: "B2A kg",      agg: "sum", format: "kg" },
       { col: "dispatch_pct",   label: "Despacho %",  agg: "avg", format: "pct" },
     ],
     hasDestination: true,
@@ -360,16 +378,17 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "gv-b1c-b2a-ideal",
-    label: "B1c → B2a → Ideal",
+    label: "B1C → B2A → Ideal",
     shortLabel: "→ Ideal",
+    dialogTitle: "GV - B1 vs B2A vs Peso ideal - XLENCE",
     branch: "gv",
     active: true,
     viewName: `${VIEW_PREFIX}gv_b1c_vs_b2a_vs_ideal_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
-      { col: "weight_b2a_kg",      label: "B2a kg",    agg: "sum", format: "kg" },
+      { col: "weight_b2a_kg",      label: "B2A kg",    agg: "sum", format: "kg" },
       { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
-      { col: "b2a_to_ideal_ratio", label: "B2a/Ideal", agg: "avg", format: "ratio" },
+      { col: "b2a_to_ideal_ratio", label: "B2A/Ideal", agg: "avg", format: "ratio" },
     ],
     hasDestination: true,
     hasGrade: false,
@@ -379,15 +398,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   // ── APERTURA (inactive — rama legacy) ────────────────────────────────────
   {
     key: "apertura-b1-b1c-stems",
-    label: "B1 → B1c (Tallos)",
+    label: "B1 → B1C (Tallos)",
     shortLabel: "Tallos",
+    dialogTitle: "Apertura - B1 vs B1C - Tallos",
     branch: "apertura",
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b1_vs_b1c_stems_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "stems_b1_count",  label: "Tallos B1",    agg: "sum", format: "count" },
-      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_b1c_count", label: "Tallos B1C",   agg: "sum", format: "count" },
       { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
     ],
     hasDestination: false,
@@ -397,15 +417,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "apertura-b1-b1c-weight",
-    label: "B1 → B1c (Peso)",
+    label: "B1 → B1C (Peso)",
     shortLabel: "Peso",
+    dialogTitle: "Apertura - B1 vs B1C - Peso",
     branch: "apertura",
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b1_vs_b1c_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "weight_b1_kg",    label: "B1 kg",        agg: "sum", format: "kg" },
-      { col: "weight_b1c_kg",   label: "B1c kg",       agg: "sum", format: "kg" },
+      { col: "weight_b1c_kg",   label: "B1C kg",       agg: "sum", format: "kg" },
       { col: "weight_diff_pct", label: "Diferencia %", agg: "avg", format: "pct" },
     ],
     hasDestination: false,
@@ -415,14 +436,15 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "apertura-b1c-b2-stems",
-    label: "B1c → B2 (Tallos)",
+    label: "B1C → B2 (Tallos)",
     shortLabel: "Tallos",
+    dialogTitle: "Apertura - B1C vs B2 - Tallos",
     branch: "apertura",
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2_stems_xl_np_cur`,
     dateCol: "lot_date",
     summaryMetrics: [
-      { col: "stems_b1c_count", label: "Tallos B1c",   agg: "sum", format: "count" },
+      { col: "stems_b1c_count", label: "Tallos B1C",   agg: "sum", format: "count" },
       { col: "stems_b2_count",  label: "Tallos B2",    agg: "sum", format: "count" },
       { col: "stems_diff_pct",  label: "Diferencia %", agg: "avg", format: "pct" },
     ],
@@ -433,15 +455,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "apertura-b1c-b2-weight",
-    label: "B1c → B2 (Peso)",
+    label: "B1C → B2 (Peso)",
     shortLabel: "Peso",
+    dialogTitle: "Apertura - B1C vs B2 - Peso",
     branch: "apertura",
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "weight_b2_kg",            label: "B2 kg",          agg: "sum", format: "kg" },
-      { col: "weight_b1c_estimated_kg", label: "B1c est. kg",    agg: "sum", format: "kg" },
+      { col: "weight_b1c_estimated_kg", label: "B1C est. kg",    agg: "sum", format: "kg" },
       { col: "hydration_pct",           label: "Hidratación %",  agg: "avg", format: "pct" },
     ],
     hasDestination: true,
@@ -451,15 +474,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "apertura-b2-b2a-weight",
-    label: "B2 → B2a (Peso)",
+    label: "B2 → B2A (Peso)",
     shortLabel: "B2 → B2A",
+    dialogTitle: "Apertura - B2 vs B2A - Peso",
     branch: "apertura",
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b2_vs_b2a_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
       { col: "weight_b2_kg",  label: "B2 kg",       agg: "sum", format: "kg" },
-      { col: "weight_b2a_kg", label: "B2a kg",      agg: "sum", format: "kg" },
+      { col: "weight_b2a_kg", label: "B2A kg",      agg: "sum", format: "kg" },
       { col: "dispatch_pct",  label: "Despacho %",  agg: "avg", format: "pct" },
     ],
     hasDestination: true,
@@ -469,16 +493,17 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "apertura-b1c-b2a-ideal",
-    label: "B1c → B2a → Ideal",
+    label: "B1C → B2A → Ideal",
     shortLabel: "→ Ideal",
+    dialogTitle: "Apertura - B1 vs B2A vs Peso ideal - XLENCE",
     branch: "apertura",
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2a_vs_ideal_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
-      { col: "weight_b2a_kg",      label: "B2a kg",    agg: "sum", format: "kg" },
+      { col: "weight_b2a_kg",      label: "B2A kg",    agg: "sum", format: "kg" },
       { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
-      { col: "b2a_to_ideal_ratio", label: "B2a/Ideal", agg: "avg", format: "ratio" },
+      { col: "b2a_to_ideal_ratio", label: "B2A/Ideal", agg: "avg", format: "ratio" },
     ],
     hasDestination: true,
     hasGrade: false,
@@ -487,16 +512,17 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
   },
   {
     key: "apertura-b2a-ideal-grade",
-    label: "B2a → Ideal × Grado",
+    label: "B2A → Ideal × Grado",
     shortLabel: "B2A × Grado",
+    dialogTitle: "Apertura - B2A vs Peso ideal por grado",
     branch: "apertura",
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b2a_vs_ideal_weight_x_grade_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
-      { col: "weight_b2a_kg",      label: "B2a kg",    agg: "sum", format: "kg" },
+      { col: "weight_b2a_kg",      label: "B2A kg",    agg: "sum", format: "kg" },
       { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
-      { col: "b2a_to_ideal_ratio", label: "B2a/Ideal", agg: "avg", format: "ratio" },
+      { col: "b2a_to_ideal_ratio", label: "B2A/Ideal", agg: "avg", format: "ratio" },
     ],
     hasDestination: true,
     hasGrade: true,
@@ -610,6 +636,7 @@ async function loadNodeSummary(
       key: nodeDef.key,
       label: nodeDef.label,
       shortLabel: nodeDef.shortLabel,
+      dialogTitle: nodeDef.dialogTitle,
       branch: nodeDef.branch,
       active: nodeDef.active,
       rowCount: toNumber(row.row_count) ?? 0,
@@ -627,6 +654,7 @@ async function loadNodeSummary(
       key: nodeDef.key,
       label: nodeDef.label,
       shortLabel: nodeDef.shortLabel,
+      dialogTitle: nodeDef.dialogTitle,
       branch: nodeDef.branch,
       active: nodeDef.active,
       rowCount: 0,
@@ -727,30 +755,53 @@ export async function loadNodeDetail(
   };
 }
 
+/**
+ * Mapeo backend (snake_case / nombres legacy de Excel) → label visible canónico.
+ *
+ * Casing canónico: B1, B1AB, B1C, B2, B2A, B3 siempre en uppercase.
+ * Sin abreviaturas técnicas (`%HIDR` → `Hidratación %`).
+ *
+ * Las columnas Meta % / Objetivo % / Cumplimiento % vienen preparadas pero
+ * el loader devuelve `null` si la tabla fuente aún no existe — la tabla
+ * sanitiza nulls/NaN/Infinity a `—` (em-dash) para no mostrar valores crudos.
+ */
 const COLUMN_LABELS: Record<string, string> = {
+  // Fechas
   work_date: "Fecha trabajo",
   lot_date: "Fecha lote",
+  fecha_b1: "Fecha B1",
+  fecha_b1c: "Fecha B1C",
+  fecha_entrega: "Fecha entrega",
+  // Categorías y filtros
   destination: "Destino",
   grade: "Grado",
   grade_group: "Grupo grado",
+  lote: "Lote",
+  tipo: "Tipo",
+  codigo_actividad: "Actividad",
+  dias_hidratacion: "Días hidratación",
+  // Tallos (uppercase canónico)
   stems_b1: "Tallos B1",
   stems_b1_count: "Tallos B1",
   stems_b1ab: "Tallos B1AB",
   stems_b1c_count: "Tallos B1C",
   stems_b2: "Tallos B2",
   stems_b2_count: "Tallos B2",
+  stems_b2a: "Tallos B2A",
+  // Pesos (uppercase canónico, kg explícito)
   weight_b1_kg: "Peso B1 (kg)",
   weight_b1ab_kg: "Peso B1AB (kg)",
   weight_b1ab_est: "Peso B1AB est. (kg)",
   weight_b1c_kg: "Peso B1C (kg)",
   weight_b1c_estimated_kg: "Peso B1C est. (kg)",
-  weight_per_stem_kg: "Peso/tallo (kg)",
-  weight_per_stem_b1ab: "Peso/tallo B1AB (kg)",
+  weight_per_stem_kg: "Peso por tallo (kg)",
+  weight_per_stem_b1ab: "Peso por tallo B1AB (kg)",
   weight_b2_kg: "Peso B2 (kg)",
   weight_b2: "Peso B2 (kg)",
   weight_b2a_kg: "Peso B2A (kg)",
   weight_b3_kg: "Peso B3 (kg)",
   ideal_weight_kg: "Peso ideal (kg)",
+  // Hidratación / Despacho
   hydration_pct: "Hidratación %",
   hydration_target: "Meta hidratación",
   dispatch_pct: "Despacho %",
@@ -758,16 +809,25 @@ const COLUMN_LABELS: Record<string, string> = {
   dispatch_pct_weight: "Despacho peso %",
   dispatch_1_pct: "Despacho 1 %",
   dispatch_2_pct: "Despacho 2 %",
-  diff_pct_stems: "Dif. tallos %",
-  diff_pct_weight: "Dif. peso %",
-  stems_diff_pct: "Dif. tallos %",
-  weight_diff_pct: "Dif. peso %",
+  // Diferencias
+  diff_pct_stems: "Diferencia tallos %",
+  diff_pct_weight: "Diferencia peso %",
+  stems_diff_pct: "Diferencia tallos %",
+  weight_diff_pct: "Diferencia peso %",
+  // Rendimientos / ratios
   yield_b1_vs_b3: "Rendimiento B1/B3",
-  yield_b1_vs_ideal: "Rend. vs ideal",
+  yield_b1_vs_ideal: "Rendimiento vs ideal",
   b2a_to_ideal_ratio: "B2A/Ideal",
   b2a_to_b1c_ratio: "B2A/B1C",
   ideal_to_b1c_ratio: "Ideal/B1C",
+  // Conteos operativos
   processed_bunch_count: "Ramos procesados",
+  bunches_prod: "Ramos producidos",
+  // Metas / Objetivo / Cumplimiento (preparadas — null si no hay tabla fuente)
+  meta_pct: "Meta %",
+  objetivo_pct: "Objetivo %",
+  cumplimiento_pct: "Cumplimiento %",
+  // Tiempo
   week_id: "Semana",
 };
 

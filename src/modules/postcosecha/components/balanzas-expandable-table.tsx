@@ -82,8 +82,14 @@ function aggregateMetrics(rows: BalanzasRow[], numericColumns: string[]) {
   return result;
 }
 
-function formatMetric(value: number | null): string {
-  if (value === null) return "—";
+/**
+ * Sanitiza valor numérico para mostrar al usuario.
+ * `null`, `undefined`, `NaN`, `Infinity`, `-Infinity` → em-dash `"—"`.
+ * Nunca renderiza valores crudos como `null`, `NaN`, `#DIV/0`, `Infinity`.
+ */
+function formatMetric(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  if (!Number.isFinite(value)) return "—";
   return value.toLocaleString("es-EC", { maximumFractionDigits: 2 });
 }
 
@@ -91,9 +97,11 @@ function formatLeafCell(value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   if (typeof value === "number") {
-    return Number.isFinite(value) ? value.toLocaleString("es-EC", { maximumFractionDigits: 4 }) : String(value);
+    if (!Number.isFinite(value)) return "—";
+    return value.toLocaleString("es-EC", { maximumFractionDigits: 4 });
   }
   const str = String(value);
+  if (str === "" || str === "null" || str === "undefined" || str === "NaN") return "—";
   if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return str.slice(0, 10);
   return str;
 }

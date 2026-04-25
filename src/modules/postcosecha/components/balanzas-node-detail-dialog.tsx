@@ -9,7 +9,7 @@ import { Button } from "@/shared/ui/button";
 import { KpiGrid } from "@/shared/layout/filter-panel";
 import { FilterPanel } from "@/shared/layout/filter-panel";
 import { MetricTile } from "@/shared/data-display/metric-tile";
-import { SheetShell } from "@/shared/overlays/sheet-shell";
+import { DialogShell } from "@/shared/overlays/dialog-shell";
 import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { fetchJson } from "@/lib/fetch-json";
@@ -30,6 +30,24 @@ type LocalFilters = {
 };
 
 const EMPTY_LOCAL: LocalFilters = { destinations: "all", grades: "all", gradeGroups: "all" };
+
+/**
+ * Normaliza el casing del valor `destination` proveniente del backend a la
+ * forma visible canónica del docx: Arcoíris / Blanco / Tinturado.
+ *
+ * El value enviado al backend (filtro) se mantiene tal cual — solo cambiamos
+ * el label que ve el usuario.
+ */
+function formatDestinationLabel(raw: string): string {
+  if (!raw) return raw;
+  const upper = raw.trim().toUpperCase();
+  if (upper === "ARCOIRIS" || upper === "ARCOÍRIS") return "Arcoíris";
+  if (upper === "BLANCO") return "Blanco";
+  if (upper === "TINTURADO") return "Tinturado";
+  // Fallback: capitalizar primera letra, resto lowercase
+  const lower = raw.trim().toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
 
 function buildDetailUrl(nodeKey: string, filters: BalanzasFilters, local: LocalFilters) {
   const p = new URLSearchParams();
@@ -66,7 +84,7 @@ function downloadCsv(detail: BalanzasNodeDetail) {
   URL.revokeObjectURL(url);
 }
 
-export function BalanzasNodeDetailSheet({ node, filters, open, onClose }: Props) {
+export function BalanzasNodeDetailDialog({ node, filters, open, onClose }: Props) {
   const [local, setLocal] = useState<LocalFilters>(EMPTY_LOCAL);
   const [groupBy, setGroupBy] = useState<BalanzasGroupBy>(null);
 
@@ -100,11 +118,11 @@ export function BalanzasNodeDetailSheet({ node, filters, open, onClose }: Props)
   const displayedMetrics = (detail?.metrics ?? node.metrics).slice(0, 4);
 
   return (
-    <SheetShell
+    <DialogShell
       open={open}
-      title={node.label}
-      description={`${node.branch.toUpperCase()} · ${detail ? detail.rowCount.toLocaleString("es-EC") : "…"} registros`}
-      widthClassName="max-w-5xl"
+      title={node.dialogTitle ?? node.label}
+      description={`${detail ? detail.rowCount.toLocaleString("es-EC") : "…"} registros`}
+      maxWidth="max-w-7xl"
       onClose={onClose}
       headerActions={
         detail ? (
@@ -154,6 +172,7 @@ export function BalanzasNodeDetailSheet({ node, filters, open, onClose }: Props)
                 label="Destino"
                 value={local.destinations}
                 options={destinationOptions}
+                displayValue={formatDestinationLabel}
                 onChange={(v) => setLocal((prev) => ({ ...prev, destinations: v }))}
                 emptyLabel="Todos los destinos"
               />
@@ -194,7 +213,7 @@ export function BalanzasNodeDetailSheet({ node, filters, open, onClose }: Props)
           </p>
         ) : null}
       </div>
-    </SheetShell>
+    </DialogShell>
   );
 }
 

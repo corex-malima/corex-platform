@@ -14,7 +14,12 @@ import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { DateField } from "@/shared/filters/date-field";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import type { BalanzasDashboardData, BalanzasFilters, BalanzasNodeSummary } from "@/lib/postcosecha-balanzas";
-import { BalanzasNodeDetailSheet } from "@/modules/postcosecha/components/balanzas-node-detail-sheet";
+import {
+  BalanzasMetricSelector,
+  BALANZAS_METRIC_DEFAULT,
+  type BalanzasMetricMode,
+} from "@/modules/postcosecha/components/balanzas-metric-selector";
+import { BalanzasNodeDetailDialog } from "@/modules/postcosecha/components/balanzas-node-detail-dialog";
 
 const BalanzasProcessViewer = dynamic(
   () =>
@@ -29,9 +34,33 @@ type BalanzasExplorerProps = {
   initialError?: string | null;
 };
 
-function toProcessNodes(nodes: BalanzasNodeSummary[]) {
+/**
+ * Filtra los nodos visibles en el BPMN según el modo de métrica activo.
+ *
+ * - `weight`: solo nodos con sufijo `-weight` (peso simple)
+ * - `stems`: solo nodos con sufijo `-stems` (tallos simples)
+ * - **Nodos especiales** (terminados en `-ideal`, `-ideal-grade`,
+ *   `-b2-b3-weight`, `-b2-b2a-weight`) se muestran SIEMPRE — son métricas
+ *   de aprovechamiento/general, no opciones de Tallos vs Peso.
+ */
+function isSpecialMetricNode(key: string): boolean {
+  return (
+    key.endsWith("-ideal") ||
+    key.endsWith("-ideal-grade") ||
+    key.endsWith("-b2-b3-weight") ||
+    key.endsWith("-b2-b2a-weight")
+  );
+}
+
+function nodeMatchesMetricMode(key: string, mode: BalanzasMetricMode): boolean {
+  if (isSpecialMetricNode(key)) return true;
+  if (mode === "stems") return key.endsWith("-stems");
+  return key.endsWith("-weight");
+}
+
+function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) {
   return nodes
-    .filter((n) => n.bpmnElementId !== null)
+    .filter((n) => n.bpmnElementId !== null && nodeMatchesMetricMode(n.key, mode))
     .map((n) => ({
       key: n.key,
       label: n.label,
@@ -60,6 +89,12 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
   const [filters, setFilters] = useState<BalanzasFilters>(initialData.filters);
   const [selectedNode, setSelectedNode] = useState<BalanzasNodeSummary | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  /**
+   * Modo de métrica visible: Tallos vs Peso. NO se resetea con `Restablecer`.
+   * Los nodos especiales (`-ideal`, `-ideal-grade`, `-b2-b3-weight`,
+   * `-b2-b2a-weight`) se muestran siempre, independiente del modo.
+   */
+  const [metricMode, setMetricMode] = useState<BalanzasMetricMode>(BALANZAS_METRIC_DEFAULT);
 
   const deferredFilters = useDeferredValue(filters);
   const initialFilterKey = useMemo(() => buildQueryString(initialData.filters), [initialData.filters]);
@@ -83,7 +118,7 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
   }, [error]);
 
   const nodeMap = useMemo(() => new Map(data.nodes.map((n) => [n.key, n])), [data.nodes]);
-  const processNodes = useMemo(() => toProcessNodes(data.nodes), [data.nodes]);
+  const processNodes = useMemo(() => toProcessNodes(data.nodes, metricMode), [data.nodes, metricMode]);
 
   function update<K extends keyof BalanzasFilters>(key: K, value: BalanzasFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -117,6 +152,7 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
         title="Indicadores Balanzas"
         subtitle="Monitoreo de puntos de control en el flujo de producción. Haz clic en cualquier nodo para ver el detalle completo."
         icon={<Scale className="size-5" aria-hidden="true" />}
+        actions={<BalanzasMetricSelector value={metricMode} onChange={setMetricMode} />}
       >
         <FilterPanel>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -206,7 +242,7 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
       )}
 
       {selectedNode ? (
-        <BalanzasNodeDetailSheet
+        <BalanzasNodeDetailDialog
           node={selectedNode}
           filters={filters}
           open={detailOpen}
