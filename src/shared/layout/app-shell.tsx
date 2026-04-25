@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { SWRConfig } from "swr";
 import { AppSidebar } from "@/shared/layout/app-sidebar";
+import { RuntimeMarker } from "@/shared/layout/runtime-marker";
 import { SiteFooter } from "@/shared/layout/site-footer";
 import { SiteHeader } from "@/shared/layout/site-header";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </div>
+        <RuntimeMarker />
       </div>
     </SWRConfig>
   );

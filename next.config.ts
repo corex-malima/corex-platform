@@ -1,12 +1,34 @@
 import path from "path";
+import { execSync } from "child_process";
 import type { NextConfig } from "next";
 
 const projectRoot = path.resolve(__dirname);
 const projectNodeModules = path.join(projectRoot, "node_modules");
 
+function readGitInfo() {
+  try {
+    const commit = execSync("git rev-parse --short HEAD", { cwd: projectRoot, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: projectRoot, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    return { commit, branch };
+  } catch {
+    return { commit: "unknown", branch: "unknown" };
+  }
+}
+
+const { commit: BUILD_COMMIT, branch: BUILD_BRANCH } = readGitInfo();
+
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: projectRoot,
+  env: {
+    NEXT_PUBLIC_BUILD_COMMIT: process.env.NEXT_PUBLIC_BUILD_COMMIT ?? BUILD_COMMIT,
+    NEXT_PUBLIC_BUILD_BRANCH: process.env.NEXT_PUBLIC_BUILD_BRANCH ?? BUILD_BRANCH,
+    NEXT_PUBLIC_BUILD_LABEL: process.env.NEXT_PUBLIC_BUILD_LABEL ?? "Audit final runtime check",
+  },
   transpilePackages: [
     "recharts",
     "react-redux",
