@@ -20,6 +20,12 @@ type Props = {
   node: BalanzasNodeSummary;
   filters: BalanzasFilters;
   open: boolean;
+  /**
+   * Cuando se abre desde un overlay split por destino (Arcoíris/Blanco/Tinturado),
+   * el dialog pre-aplica el filtro `destination` con este valor uppercase
+   * (ej: "ARCOIRIS"). El usuario puede cambiarlo o ampliar manualmente.
+   */
+  presetDestination?: string | null;
   onClose: () => void;
 };
 
@@ -84,7 +90,7 @@ function downloadCsv(detail: BalanzasNodeDetail) {
   URL.revokeObjectURL(url);
 }
 
-export function BalanzasNodeDetailDialog({ node, filters, open, onClose }: Props) {
+export function BalanzasNodeDetailDialog({ node, filters, open, presetDestination, onClose }: Props) {
   const [local, setLocal] = useState<LocalFilters>(EMPTY_LOCAL);
   const [groupBy, setGroupBy] = useState<BalanzasGroupBy>(null);
 
@@ -97,6 +103,15 @@ export function BalanzasNodeDetailDialog({ node, filters, open, onClose }: Props
       setGroupBy(null);
     }
   }, [open, node.key]);
+
+  // Pre-aplica el filtro `destination` cuando el dialog se abre desde un
+  // overlay split por destino. Solo se aplica al abrir (al cambiar
+  // `presetDestination` o al pasar de cerrado a abierto).
+  useEffect(() => {
+    if (!open || !presetDestination) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLocal((prev) => ({ ...prev, destinations: presetDestination }));
+  }, [open, presetDestination, node.key]);
 
   const url = open ? buildDetailUrl(node.key, filters, local) : null;
 
@@ -120,7 +135,11 @@ export function BalanzasNodeDetailDialog({ node, filters, open, onClose }: Props
   return (
     <DialogShell
       open={open}
-      title={node.dialogTitle ?? node.label}
+      title={
+        presetDestination
+          ? `${node.dialogTitle ?? node.label} · ${formatDestinationLabel(presetDestination)}`
+          : (node.dialogTitle ?? node.label)
+      }
       description={`${detail ? detail.rowCount.toLocaleString("es-EC") : "…"} registros`}
       maxWidth="max-w-7xl"
       onClose={onClose}

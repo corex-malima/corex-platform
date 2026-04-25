@@ -31,6 +31,22 @@ export type BalanzasSummaryMetric = {
   formatted: string;
 };
 
+/**
+ * Categoría de destino canónica (Arcoíris / Blanco / Tinturado).
+ * Usada para el split visual en BPMN de los nodos terminales B2A/B3.
+ */
+export type BalanzasDestinationKey = "arcoiris" | "blanco" | "tinturado";
+
+/**
+ * Mapeo opcional de un nodo de datos a 3 BPMN tasks (uno por destino).
+ *
+ * Cuando está presente, el explorer genera 3 overlays virtuales clickeables
+ * en lugar de 1, cada uno pre-aplicando el filtro `destination` correspondiente
+ * en el modal de detalle. Solo aplica a nodos terminales (B2A/B3) según el
+ * BPMN canónico de balanzas.
+ */
+export type BalanzasBpmnByDestination = Record<BalanzasDestinationKey, string>;
+
 export type BalanzasNodeSummary = {
   key: string;
   label: string;
@@ -49,6 +65,13 @@ export type BalanzasNodeSummary = {
   metrics: BalanzasSummaryMetric[];
   bpmnElementId: string | null;
   overlayOffsetLeft: number;
+  /**
+   * Cuando está definido, el explorer genera 3 overlays virtuales (uno por
+   * destino: Arcoíris / Blanco / Tinturado) en lugar de 1 sobre el
+   * `bpmnElementId` principal. Cada overlay abre el modal con el filtro
+   * `destination` pre-aplicado.
+   */
+  bpmnByDestination?: BalanzasBpmnByDestination;
 };
 
 export type BalanzasDashboardData = {
@@ -104,6 +127,11 @@ type BalanzasNodeDef = {
   hasGrade: boolean;
   hasGradeGroup: boolean;
   bpmnBinding: BalanzasBpmnBinding | null;
+  /**
+   * Mapeo opcional a 3 BPMN tasks por destino (Arcoíris / Blanco / Tinturado).
+   * Cuando está presente, el cliente genera 3 overlays virtuales en lugar de 1.
+   */
+  bpmnByDestination?: BalanzasBpmnByDestination;
 };
 
 // ─── ISO week helpers ─────────────────────────────────────────────────────────
@@ -183,7 +211,7 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: true,
-    bpmnBinding: { elementId: "Task_B1AB_Pre_GV", overlayOffsetLeft: 0 },
+    bpmnBinding: { elementId: "Task_B1AB_Pre_Directo", overlayOffsetLeft: 0 },
   },
   {
     key: "preclasif-b1-b1a-weight",
@@ -202,7 +230,7 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: true,
-    bpmnBinding: { elementId: "Task_B1AB_Pre_GV", overlayOffsetLeft: 172 },
+    bpmnBinding: { elementId: "Task_B1AB_Pre_Directo", overlayOffsetLeft: 172 },
   },
   {
     key: "preclasif-b1a-b2-stems",
@@ -221,7 +249,7 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: true,
-    bpmnBinding: { elementId: "Task_B2_Pre_GV", overlayOffsetLeft: 0 },
+    bpmnBinding: { elementId: "Task_B2_Pre_Directo", overlayOffsetLeft: 0 },
   },
   {
     key: "preclasif-b1a-b2-weight",
@@ -240,7 +268,7 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: true,
-    bpmnBinding: { elementId: "Task_B2_Pre_GV", overlayOffsetLeft: 172 },
+    bpmnBinding: { elementId: "Task_B2_Pre_Directo", overlayOffsetLeft: 172 },
   },
   {
     key: "preclasif-b2-b3-weight",
@@ -259,7 +287,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
-    bpmnBinding: { elementId: "Task_General_Pre_GV", overlayOffsetLeft: 0 },
+    bpmnBinding: { elementId: "Task_General_Pre_Directo", overlayOffsetLeft: 0 },
+    bpmnByDestination: {
+      arcoiris: "Task_B3_Pre_Directo_Arcoiris",
+      blanco: "Task_B3_Pre_Directo_Blanco",
+      tinturado: "Task_B3_Pre_Directo_Tinturado",
+    },
   },
   {
     key: "preclasif-b1-b3-ideal",
@@ -278,7 +311,7 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
-    bpmnBinding: { elementId: "Task_General_Pre_GV", overlayOffsetLeft: 172 },
+    bpmnBinding: { elementId: "Task_General_Pre_Directo", overlayOffsetLeft: 172 },
   },
   // ── COSECHA GV ────────────────────────────────────────────────────────────
   {
@@ -375,6 +408,11 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasGrade: false,
     hasGradeGroup: false,
     bpmnBinding: { elementId: "Task_General_Apertura_Max10", overlayOffsetLeft: 0 },
+    bpmnByDestination: {
+      arcoiris: "Task_B2A_Apertura_Max10_Arcoiris",
+      blanco: "Task_B2A_Apertura_Max10_Blanco",
+      tinturado: "Task_B2A_Apertura_Max10_Tinturado",
+    },
   },
   {
     key: "gv-b1c-b2a-ideal",
@@ -490,6 +528,11 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasGrade: false,
     hasGradeGroup: false,
     bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 0 },
+    bpmnByDestination: {
+      arcoiris: "Task_B2A_Apertura_Directo_Arcoiris",
+      blanco: "Task_B2A_Apertura_Directo_Blanco",
+      tinturado: "Task_B2A_Apertura_Directo_Tinturado",
+    },
   },
   {
     key: "apertura-b1c-b2a-ideal",
@@ -648,6 +691,7 @@ async function loadNodeSummary(
       }),
       bpmnElementId: nodeDef.bpmnBinding?.elementId ?? null,
       overlayOffsetLeft: nodeDef.bpmnBinding?.overlayOffsetLeft ?? 0,
+      bpmnByDestination: nodeDef.bpmnByDestination,
     };
   } catch {
     return {
@@ -668,6 +712,7 @@ async function loadNodeSummary(
       })),
       bpmnElementId: nodeDef.bpmnBinding?.elementId ?? null,
       overlayOffsetLeft: nodeDef.bpmnBinding?.overlayOffsetLeft ?? 0,
+      bpmnByDestination: nodeDef.bpmnByDestination,
     };
   }
 }

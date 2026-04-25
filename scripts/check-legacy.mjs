@@ -234,14 +234,16 @@ const rules = [
     scopes: [SRC_MODULES, SRC_SHARED],
     expected: "El tab Rendimiento debe mostrar datos en cualquier sourceContext (incluído talento)",
   },
-  // BPMN preclasif debe apuntar a tasks `_Pre_GV` (no `_Pre_Directo`).
-  // Decisión confirmada en Audit final 2026-04-25.
+  // BPMN preclasif debe apuntar a `Task_*_Pre_Directo` (no `_Pre_GV`).
+  // Decisión confirmada en cierre Balanzas 2026-04-25:
+  // "PRECLASIFICACIÓN GV no tiene nodos clickeables (rama inactiva).
+  //  PRECLASIFICACIÓN como tabla es PRECLASIFICACIÓN DIRECTO."
   {
-    name: "balanzas-preclasif-pre-directo",
+    name: "balanzas-preclasif-pre-gv",
     severity: "ERROR",
-    pattern: /Task_[A-Za-z0-9]+_Pre_Directo/,
+    pattern: /Task_[A-Za-z0-9]+_Pre_GV/,
     scopes: ["src/lib/postcosecha-balanzas-core.ts"],
-    expected: "preclasif-* debe apuntar a Task_*_Pre_GV (Audit final 2026-04-25)",
+    expected: "preclasif-* debe apuntar a Task_*_Pre_Directo (rama GV está inactiva)",
   },
 ];
 

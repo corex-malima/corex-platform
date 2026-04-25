@@ -58,18 +58,86 @@ function nodeMatchesMetricMode(key: string, mode: BalanzasMetricMode): boolean {
   return key.endsWith("-weight");
 }
 
+/**
+ * Categorías canónicas de destino (Arcoíris / Blanco / Tinturado) usadas para
+ * el split visual de nodos terminales B2A/B3 en el BPMN.
+ *
+ * El `value` es lo que se envía al backend como filtro `destination` (uppercase
+ * tal como viene del DW); el `label` es el visible al usuario.
+ */
+const DESTINATION_SPLITS: Array<{ key: "arcoiris" | "blanco" | "tinturado"; value: string; label: string }> = [
+  { key: "arcoiris",  value: "ARCOIRIS",  label: "Arcoíris" },
+  { key: "blanco",    value: "BLANCO",    label: "Blanco" },
+  { key: "tinturado", value: "TINTURADO", label: "Tinturado" },
+];
+
+const PROCESS_NODE_SEPARATOR = "::";
+
+/**
+ * Codifica `nodeKey + destinationKey` en un único string para el process viewer.
+ * Decodificable con `decodeProcessNodeKey`.
+ */
+function encodeProcessNodeKey(nodeKey: string, destinationKey?: string): string {
+  return destinationKey ? `${nodeKey}${PROCESS_NODE_SEPARATOR}${destinationKey}` : nodeKey;
+}
+
+export function decodeProcessNodeKey(encoded: string): { nodeKey: string; destinationValue: string | null } {
+  const idx = encoded.indexOf(PROCESS_NODE_SEPARATOR);
+  if (idx === -1) return { nodeKey: encoded, destinationValue: null };
+  const destKey = encoded.slice(idx + PROCESS_NODE_SEPARATOR.length);
+  const split = DESTINATION_SPLITS.find((d) => d.key === destKey);
+  return {
+    nodeKey: encoded.slice(0, idx),
+    destinationValue: split ? split.value : null,
+  };
+}
+
 function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) {
-  return nodes
-    .filter((n) => n.bpmnElementId !== null && nodeMatchesMetricMode(n.key, mode))
-    .map((n) => ({
+  const out: Array<{
+    key: string;
+    label: string;
+    overlayOffsetLeft: number;
+    metrics: Array<{ label: string; formatted: string }>;
+    status: "ready" | "unavailable";
+    processBindings: Array<{ elementId: string }>;
+    destinationBreakdown: never[];
+  }> = [];
+
+  for (const n of nodes) {
+    if (!nodeMatchesMetricMode(n.key, mode)) continue;
+
+    // Caso especial: nodo con split por destino → 3 overlays virtuales
+    if (n.bpmnByDestination) {
+      for (const split of DESTINATION_SPLITS) {
+        const elementId = n.bpmnByDestination[split.key];
+        if (!elementId) continue;
+        out.push({
+          key: encodeProcessNodeKey(n.key, split.key),
+          label: `${n.shortLabel} · ${split.label}`,
+          overlayOffsetLeft: 0,
+          metrics: n.metrics.map((m) => ({ label: m.label, formatted: m.formatted })),
+          status: (n.rowCount > 0 ? "ready" : "unavailable") as "ready" | "unavailable",
+          processBindings: [{ elementId }],
+          destinationBreakdown: [],
+        });
+      }
+      continue;
+    }
+
+    // Caso normal: 1 overlay sobre bpmnElementId
+    if (n.bpmnElementId === null) continue;
+    out.push({
       key: n.key,
       label: n.label,
       overlayOffsetLeft: n.overlayOffsetLeft,
       metrics: n.metrics.map((m) => ({ label: m.label, formatted: m.formatted })),
       status: (n.rowCount > 0 ? "ready" : "unavailable") as "ready" | "unavailable",
-      processBindings: [{ elementId: n.bpmnElementId! }],
+      processBindings: [{ elementId: n.bpmnElementId }],
       destinationBreakdown: [],
-    }));
+    });
+  }
+
+  return out;
 }
 
 function buildQueryString(filters: BalanzasFilters) {
@@ -88,6 +156,12 @@ const balanzasFetcher = (url: string) =>
 export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorerProps) {
   const [filters, setFilters] = useState<BalanzasFilters>(initialData.filters);
   const [selectedNode, setSelectedNode] = useState<BalanzasNodeSummary | null>(null);
+  /**
+   * Destino preseleccionado al abrir el dialog desde un overlay split por
+   * destino (Arcoíris / Blanco / Tinturado). `null` cuando se abre desde un
+   * overlay normal sin split.
+   */
+  const [selectedDestination, setSelectedDestination] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   /**
    * Modo de métrica visible: Tallos vs Peso. NO se resetea con `Restablecer`.
@@ -128,10 +202,12 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
     setFilters(initialData.filters);
   }
 
-  function handleSelectNode(nodeKey: string) {
+  function handleSelectNode(encodedKey: string) {
+    const { nodeKey, destinationValue } = decodeProcessNodeKey(encodedKey);
     const node = nodeMap.get(nodeKey);
     if (node) {
       setSelectedNode(node);
+      setSelectedDestination(destinationValue);
       setDetailOpen(true);
     }
   }
@@ -246,6 +322,7 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
           node={selectedNode}
           filters={filters}
           open={detailOpen}
+          presetDestination={selectedDestination}
           onClose={() => setDetailOpen(false)}
         />
       ) : null}
