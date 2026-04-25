@@ -428,21 +428,29 @@ function HoursCamaPersonRow({
 }) {
   return (
     <tr className={cn("bg-muted/10 hover:bg-muted/25 transition-colors", isSelected && "bg-slate-900/8 dark:bg-slate-900/12")}>
-      {/* L5: Persona — columna descripción con indent máximo */}
+      {/* L5: Persona — affordance unificado con CycleDetailRows (Audit #3 Bloque B):
+            mismo InteractiveCell variant="link" para que el usuario vea la misma
+            ficha desde cualquier tabla jerárquica. */}
       <td className="border-b border-r border-border/30 px-3 py-1.5 pl-20">
-        <div className="flex items-center gap-2">
-          <span className="text-foreground leading-snug">{person.personName ?? <span className="italic text-muted-foreground">Sin nombre</span>}</span>
-          {onOpenPerson ? (
-            <InteractiveCell
-              variant="badge"
-              label={person.personId}
-              isSelected={isSelected}
-              onActivate={() => onOpenPerson(person.personId)}
-              tooltip="Abrir ficha del personal"
-              ariaLabel={`Abrir ficha del personal ${person.personId}`}
-            />
-          ) : <span className="text-[11px] text-muted-foreground">{person.personId}</span>}
-        </div>
+        {onOpenPerson ? (
+          <InteractiveCell
+            variant="link"
+            label={
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-foreground leading-snug">{person.personName ?? "Sin nombre"}</span>
+                <span className="text-[10px] text-muted-foreground/45">[{person.personId}]</span>
+              </span>
+            }
+            ariaLabel={`Abrir ficha del personal ${person.personName ?? person.personId}`}
+            onActivate={() => onOpenPerson(person.personId)}
+            tooltip="Abrir ficha del personal"
+          />
+        ) : (
+          <span className="inline-flex items-center gap-2">
+            <span className="text-foreground leading-snug">{person.personName ?? <span className="italic text-muted-foreground">Sin nombre</span>}</span>
+            <span className="text-[11px] text-muted-foreground">{person.personId}</span>
+          </span>
+        )}
       </td>
       <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-muted-foreground">{person.unitOfMeasure || "—"}</td>
       <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.unitsProduced)}</td>
