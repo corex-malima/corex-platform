@@ -9,5 +9,14 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    // Excluir specs E2E (Playwright opt-in, requiere `@playwright/test`).
+    // Mantener excludes default de vitest (node_modules, dist, .next, etc).
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.next/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "tests/e2e/**",
+    ],
   },
 });

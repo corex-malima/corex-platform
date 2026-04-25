@@ -15,7 +15,7 @@
     "canon:check": "node scripts/check-canon.mjs && npm run docs:check",
     "docs:check": "node scripts/check-docs.mjs",
     "legacy:check": "node scripts/check-legacy.mjs",
-    "e2e:smoke": "echo \"Set E2E_BASE_URL, E2E_USERNAME and E2E_PASSWORD before enabling Playwright smoke tests.\"",
+    "e2e:smoke": "echo \"Smoke E2E opt-in. Ver docs/testing.md (instalar @playwright/test, configurar E2E_BASE_URL/USERNAME/PASSWORD, luego: npx playwright test tests/e2e/smoke.spec.ts).\"",
     "canon:v2:stage": "node scripts/canon-stage-v2.mjs",
     "canon:v2:rasters": "node scripts/canon-build-rasters-v2.mjs",
     "canon:v2:vectors": "node scripts/canon-build-vectors-v2.mjs",
