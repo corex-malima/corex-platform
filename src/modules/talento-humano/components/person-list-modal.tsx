@@ -60,9 +60,9 @@ export function PersonListModal<T extends TalentoPersonRecord>({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPeople.map((person, index) => (
+                  {filteredPeople.map((person) => (
                     <ClickableTableRow
-                      key={`${person.personId}-${person.areaId}-${index}`}
+                      key={`${person.personId}-${person.areaId}`}
                       onSelect={() => setSelectedPerson(person)}
                       className="border-b border-border/50 last:border-0"
                     >

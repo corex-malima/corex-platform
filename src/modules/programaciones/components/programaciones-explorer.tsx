@@ -160,13 +160,13 @@ function EventPill({ record, onClick, highlighted }: { record: ProgramacionRecor
     >
       {/* Fumigación Dron badge */}
       {isDron && (
-        <span style={{ color: FUMIGATION_DRONE_BADGE_COLOR, fontSize: "9px", fontWeight: 700, flexShrink: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <span style={{ color: FUMIGATION_DRONE_BADGE_COLOR, fontSize: "11px", fontWeight: 700, flexShrink: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
           D
         </span>
       )}
       {/* ilumLabel badge (Inicio / Fin) */}
       {record.ilumLabel && (
-        <span style={{ color: spAccent, fontSize: "9px", fontWeight: 700, flexShrink: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <span style={{ color: spAccent, fontSize: "11px", fontWeight: 700, flexShrink: 0, textTransform: "uppercase", letterSpacing: "0.04em" }}>
           {record.ilumLabel}
         </span>
       )}
@@ -180,7 +180,7 @@ function EventPill({ record, onClick, highlighted }: { record: ProgramacionRecor
           background:    varietyColor,
           borderRadius:  "4px",
           padding:       "0 4px",
-          fontSize:      "9px",
+          fontSize:      "11px",
           fontWeight:    700,
           color:         "#fff",
           letterSpacing: "0.02em",
@@ -741,13 +741,13 @@ export function ProgramacionesExplorer({
               )}
               {selected && selectedEvents.length > 0 && (
                 <div className="space-y-2">
-                  {selectedEvents.map((ev, i) => {
+                  {selectedEvents.map((ev) => {
                     const areaStyle    = getAreaStyle(ev.areaId);
                     const spAccent     = getSpTypeAccent(ev.spType);
                     const varietyColor = getVarietyColor(ev.variety);
                     return (
                       <div
-                        key={i}
+                        key={`${ev.cycleKey}-${ev.blockId}-${ev.activityCode}-${ev.ilumLabel ?? "x"}`}
                         style={{ background: areaStyle.bg, borderTop: `1px solid ${areaStyle.border}`, borderRight: `1px solid ${areaStyle.border}`, borderBottom: `1px solid ${areaStyle.border}`, borderLeft: `4px solid ${spAccent}` }}
                         className="rounded-xl px-4 py-3"
                       >
