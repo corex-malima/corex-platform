@@ -66,13 +66,25 @@ Si un archivo transicional vive en `src/components/dashboard/*`, debe cumplir to
 - dominio/query nueva: maximo recomendado 700 lineas por archivo
 - cualquier excepcion requiere plan de split documentado
 
-## Balanzas BPMN binding contract
+## Balanzas SVG binding contract
 
-El viewer BPMN de Postcosecha/Balanzas (`/dashboard/postcosecha/balanzas`) vincula cada nodo de datos con un elemento del BPMN XML por `elementId` exacto. El contrato es estricto:
+El viewer del proceso Balanzas (`/dashboard/postcosecha/balanzas`) ya no usa
+bpmn-js. Es un **SVG hand-crafted** (`balanzas-process-svg-viewer.tsx`) que
+mapea cada `elementId` BPMN-style a coordenadas explícitas en `NODE_LAYOUT`
+(`balanzas-svg-layout.ts`). Contrato:
 
-- Cada entrada en `BalanzasNodeData.processBindings` DEBE declarar un `elementId` que corresponda a un `<bpmn:task>` presente en `public/processes/postcosecha-es.bpmn`.
-- Se eliminaron los fallbacks fuzzy (`minY/maxY` y match por nombre). `matchesProcessBinding` solo compara `binding.elementId === element.id` (ver `src/modules/postcosecha/lib/balanzas-process-engine-helpers.ts`).
-- `validateBindings` (en `src/modules/postcosecha/lib/balanzas-process-binding.ts`) corre tras cada `importXML` del viewer. En desarrollo (`NODE_ENV !== "production"`), si hay drift se emite `console.warn` con nodo, task y elementId faltantes.
-- Cambios en el BPMN XML (renombrar `<bpmn:task id>`, borrar tasks, reestructurar lanes) requieren sincronizar `processBindings[].elementId` en `src/lib/postcosecha-balanzas-core.ts`. De lo contrario los nodos afectados pierden highlight y click.
-- Nodos marcados `isInteractiveProcessNode === false` (raices `b1_preclasificacion`, `b1_apertura`) no se validan porque son decorativos.
-- La UI de detalle es una sola superficie: panel inline (`BalanzasProcessNodePanel`, tabs Resumen/Desglose/Metadatos) + drawer expandible (`BalanzasNodeDetailSheet` via `SheetShell`). No se reintroduce `DialogShell` para este flujo.
+- Cada entrada en `BalanzasNodeSummary.processBindings` (vía `bpmnElementId`
+  o `bpmnByDestination[arc|blc|tnt]`) DEBE existir como key en `NODE_LAYOUT`.
+- `NODE_LAYOUT` declara `{ cx, cy, w, h, kind: "task" | "general" }` por cada
+  uno de los 40 IDs de balanza; añadir/renombrar IDs en
+  `src/lib/postcosecha-balanzas-core.ts` requiere sincronizar `NODE_LAYOUT`.
+- Los overlays HTML (cards de métricas) se posicionan con
+  `style={{ left: rect.cx*zoom, top: (rect.cy-rect.h/2-4)*zoom }}` +
+  `-translate-x-1/2 -translate-y-full`, anclando la card centrada arriba
+  del nodo bound.
+- Nodos split por destino (key contiene `::`) renderizan card ULTRA-compacta
+  (140px wide, 1 métrica) para evitar solape entre las 3 sub-rows ARC/BLC/TNT.
+- La UI de detalle se abre vía `BalanzasNodeDetailDialog` (DialogShell central,
+  no SheetShell lateral). El selector global Tallos vs Peso filtra qué overlays
+  son visibles (sufijo `-stems` vs `-weight`); nodos especiales (`-ideal`,
+  `-ideal-grade`, `-b2-b3-weight`, `-b2-b2a-weight`) se muestran siempre.

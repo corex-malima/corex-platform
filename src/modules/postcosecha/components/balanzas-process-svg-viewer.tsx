@@ -164,10 +164,16 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
               const leftPx = rect.cx * zoom;
               const topPx = (rect.cy - rect.h / 2 - 4) * zoom;
               const isSelected = node.key === selectedNodeKey;
-              // Cards más compactas para nodos split por destino (3 sub-rows
-              // ARC/BLC/TNT en mismo column → 2 métricas máx evita stack vertical).
+              // Nodos split por destino (3 sub-rows ARC/BLC/TNT en mismo
+              // column) → card ULTRA-compacta: solo título + última métrica
+              // (típicamente el % diff/cumplimiento). Evita solape con la
+               // columna PELADO TALLOS Y CLASIFICADO / CLASIFICADO de al lado.
               const isDestSplit = node.key.includes("::");
-              const maxMetrics = isDestSplit ? 2 : 3;
+              const maxMetrics = isDestSplit ? 1 : 3;
+              const cardWidth = isDestSplit ? 140 : 168;
+              const visibleMetrics = isDestSplit
+                ? node.metrics.slice(-1) // última métrica = indicador clave
+                : node.metrics.slice(0, maxMetrics);
               return (
                 <button
                   key={`${node.key}-${b.elementId}`}
@@ -181,15 +187,15 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
                         : "border-emerald-500/80 bg-white/97 text-slate-900"
                       : "border-slate-400/60 bg-slate-100/96 text-slate-500",
                   )}
-                  style={{ left: leftPx, top: topPx, width: 168 }}
+                  style={{ left: leftPx, top: topPx, width: cardWidth }}
                 >
                   <div className="mb-1 truncate text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-700/90">
                     {node.label}
                   </div>
                   <table className="w-full border-collapse">
                     <tbody>
-                      {node.metrics.slice(0, maxMetrics).map((m, i) => {
-                        const isLast = i === Math.min(node.metrics.length, maxMetrics) - 1;
+                      {visibleMetrics.map((m, i) => {
+                        const isLast = i === visibleMetrics.length - 1;
                         const isNeg = m.formatted.startsWith("-");
                         const valueClass = isLast
                           ? node.status !== "ready"

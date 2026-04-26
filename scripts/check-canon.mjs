@@ -207,7 +207,6 @@ const hugeFileAllowlist = new Set([
   "src/modules/fenograma/components/fenograma-pivot-table.tsx",
   "src/modules/fenograma/components/harvest-curve-panel.tsx",
   "src/modules/postcosecha/components/balanzas-explorer.tsx",
-  "src/modules/postcosecha/components/balanzas-process-viewer.tsx",
   "src/modules/postcosecha/components/skus-explorer.tsx",
   "src/modules/postcosecha/hooks/use-clasificacion-en-blanco-explorer.ts",
   "src/modules/productividad/components/productividad-explorer.tsx",

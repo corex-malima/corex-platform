@@ -32,7 +32,7 @@ const textFetcher = (url: string) =>
 
 /**
  * Componente reusable para mostrar un BPMN en ventana flotante.
- * Sigue el patrón técnico de balanzas-process-viewer.tsx pero sin overlays.
+ * Único consumidor de bpmn-js en el repo (Balanzas migró a SVG hand-crafted).
  *
  * Punto de conexión del BPMN:
  * - El asset se espera como archivo estático en `public/processes/`.

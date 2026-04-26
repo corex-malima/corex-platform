@@ -116,7 +116,7 @@ const rules = [
     severity: "ERROR",
     pattern: /<div\b[^>]*\bonClick=/,
     scopes: [SRC_MODULES],
-    skipFile: /balanzas-process-viewer\.tsx|process-viewer-overlay\.tsx|campo-/,
+    skipFile: /process-viewer-overlay\.tsx|campo-/,
     expected: "Usar InteractiveCell, <button>, o ClickableTableRow para filas completas",
   },
   {
