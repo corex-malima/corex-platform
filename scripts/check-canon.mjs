@@ -58,6 +58,7 @@ const officialDocs = new Set([
   "docs/audits/AUD-6-testing-qa-smoke.md",
   "docs/audits/AUD-7-despliegue-runtime-docker.md",
   "docs/audits/AUD-8-documentacion-dod-gobernanza.md",
+  "docs/audits/AUD-9-auditoria-funcional-modulos.md",
 ]);
 
 const legacyDocPrefix = "> LEGACY / reference only.";
