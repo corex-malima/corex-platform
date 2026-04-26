@@ -1,6 +1,6 @@
 import { ClipboardList } from "lucide-react";
 
-import { ModulePlaceholder } from "@/components/dashboard/module-placeholder";
+import { ModulePlaceholder } from "@/shared/data-display/module-placeholder";
 import { requirePageAccess } from "@/lib/api-auth";
 
 export default async function PoscosechaRegistrosPage() {

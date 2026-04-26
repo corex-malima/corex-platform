@@ -48,6 +48,8 @@ const officialDocs = new Set([
   "docs/datos.md",
   "docs/modulos.md",
   "docs/arquitectura.md",
+  // Audits oficiales (vigentes; cada AUD-N entrega su entregable .md):
+  "docs/audits/AUD-1-ux-ui-canon.md",
 ]);
 
 const legacyDocPrefix = "> LEGACY / reference only.";
