@@ -53,6 +53,7 @@ const officialDocs = new Set([
   "docs/audits/AUD-2-arquitectura-modular.md",
   "docs/audits/AUD-3-security-api-rbac.md",
   "docs/audits/AUD-4-datos-sql-payloads.md",
+  "docs/audits/AUD-5-performance-cache-optimization.md",
 ]);
 
 const legacyDocPrefix = "> LEGACY / reference only.";
