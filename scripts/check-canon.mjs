@@ -55,6 +55,7 @@ const officialDocs = new Set([
   "docs/audits/AUD-4-datos-sql-payloads.md",
   "docs/audits/AUD-5-performance-cache-optimization.md",
   "docs/audits/AUD-6-testing-qa-smoke.md",
+  "docs/audits/AUD-7-despliegue-runtime-docker.md",
 ]);
 
 const legacyDocPrefix = "> LEGACY / reference only.";

@@ -14,6 +14,7 @@ services:
       NODE_ENV: production
       PORT: 7777
       HOSTNAME: 0.0.0.0
+      TZ: UTC
       POSTHARVEST_SOLVER_PYTHON: python3
     ports:
       - "7777:7777"
