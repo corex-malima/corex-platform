@@ -118,6 +118,31 @@
   --chart-info-soft: oklch(0.94 0.03 230);
   --chart-success-soft: oklch(0.94 0.04 155);
   --chart-warning-soft: oklch(0.95 0.06 85);
+
+  /* ── Balanzas SVG (proceso BPMN-style hand-crafted) ── */
+  --bal-task-fill:      #cfe2f3;
+  --bal-task-stroke:    #5a8fbf;
+  --bal-task-text:      #1d3a5e;
+  --bal-general-fill:   #f8b76a;
+  --bal-general-stroke: #c97926;
+  --bal-general-text:   #5a3010;
+  --bal-gw-fill:        #fff1c1;
+  --bal-gw-stroke:      #c69d2c;
+  --bal-start-fill:     #c8eccd;
+  --bal-start-stroke:   #3da050;
+  --bal-end-fill:       #f5c4c4;
+  --bal-end-stroke:     #c95050;
+  --bal-flow:           #26466e;
+  --bal-note-fill:      #f0f0f0;
+  --bal-note-stroke:    #b8b8b8;
+  --bal-note-text:      #555555;
+  --bal-clock-fill:     #fffbe7;
+  --bal-clock-stroke:   #9b7820;
+  --bal-route-text:     #555555;
+  --bal-dest-text:      #7a7a7a;
+  --bal-divider:        #cbd5e1;
+  --bal-grid:           rgba(0,0,0,0.05);
+  --bal-selected:       #1e40af;
 }
 
 .dark {

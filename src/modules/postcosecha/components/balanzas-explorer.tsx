@@ -23,8 +23,8 @@ import { BalanzasNodeDetailDialog } from "@/modules/postcosecha/components/balan
 
 const BalanzasProcessViewer = dynamic(
   () =>
-    import("@/modules/postcosecha/components/balanzas-process-viewer").then(
-      (mod) => mod.BalanzasProcessViewer,
+    import("@/modules/postcosecha/components/balanzas-process-svg-viewer").then(
+      (mod) => mod.BalanzasProcessSvgViewer,
     ),
   { ssr: false },
 );
@@ -310,7 +310,6 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
         <EmptyState label="No hay datos de balanzas para el período seleccionado." />
       ) : (
         <BalanzasProcessViewer
-          assetPath="/processes/postcosecha-es.bpmn"
           nodes={processNodes}
           selectedNodeKey={selectedNode?.key ?? null}
           onNodeSelect={handleSelectNode}
