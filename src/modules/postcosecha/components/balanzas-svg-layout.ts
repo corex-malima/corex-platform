@@ -8,21 +8,22 @@
  */
 
 export const VB_W = 2200;
-export const VB_H = 1320;
+export const VB_H = 1450;
 
 // Y centerlines (4 rows + raíz central) — gaps de ~330px entre rows para
 // que los overlay cards (que se anclan arriba de cada nodo) no choquen
 // con la fila superior.
 export const Y = {
-  preGV:        180,
-  preDirecto:   520,
-  raiz:         690,
-  aperturaGV:   860,
-  aperturaDir:  1200,
+  preGV:        200,
+  preDirecto:   570,
+  raiz:         750,
+  aperturaGV:   930,
+  aperturaDir:  1300,
 } as const;
 
-// Sub-row offsets para ARCOIRIS / BLANCO / TINTURADO — 70px entre cada uno
-export const SUB = { arc: -70, blc: 0, tnt: 70 } as const;
+// Sub-row offsets para ARCOIRIS / BLANCO / TINTURADO — 100px entre cada uno
+// para que los overlay cards (~85px alto) no se solapen verticalmente.
+export const SUB = { arc: -100, blc: 0, tnt: 100 } as const;
 
 // X columns (centers) — 2200w, columnas con espaciado generoso
 export const X = {

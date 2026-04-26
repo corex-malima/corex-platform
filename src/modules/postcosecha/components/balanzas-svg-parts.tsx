@@ -110,16 +110,16 @@ export function DestLabels() {
     <g fontFamily="var(--font-app), Inter, sans-serif" fontSize={9.5} fontWeight={700} fill={C.destText} textAnchor="middle">
       {[Y.preGV, Y.preDirecto].map((rowY, i) => (
         <g key={`destlbl-pre-${i}`}>
-          <text x={X.clasif - 60} y={rowY + arc}>ARCOÍRIS</text>
-          <text x={X.clasif - 60} y={rowY + blc}>BLANCO</text>
-          <text x={X.clasif - 60} y={rowY + tnt}>TINTURADO</text>
+          <text x={X.clasif - 95} y={rowY + arc}>ARCOÍRIS</text>
+          <text x={X.clasif - 95} y={rowY + blc}>BLANCO</text>
+          <text x={X.clasif - 95} y={rowY + tnt}>TINTURADO</text>
         </g>
       ))}
       {[Y.aperturaGV, Y.aperturaDir].map((rowY, i) => (
         <g key={`destlbl-ap-${i}`}>
-          <text x={X.clasifA - 80} y={rowY + arc}>ARCOÍRIS</text>
-          <text x={X.clasifA - 80} y={rowY + blc}>BLANCO</text>
-          <text x={X.clasifA - 80} y={rowY + tnt}>TINTURADO</text>
+          <text x={X.clasifA - 115} y={rowY + arc}>ARCOÍRIS</text>
+          <text x={X.clasifA - 115} y={rowY + blc}>BLANCO</text>
+          <text x={X.clasifA - 115} y={rowY + tnt}>TINTURADO</text>
         </g>
       ))}
     </g>

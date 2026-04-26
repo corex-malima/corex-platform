@@ -85,7 +85,7 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
 
       <div
         className="balanzas-process relative overflow-auto rounded-[24px] border border-border/70 bg-white/95 dark:bg-slate-900/70"
-        style={{ height: 1000 }}
+        style={{ height: 1080 }}
       >
         <div className="relative" style={{ width: renderedW, height: renderedH }}>
           <svg
@@ -164,6 +164,10 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
               const leftPx = rect.cx * zoom;
               const topPx = (rect.cy - rect.h / 2 - 4) * zoom;
               const isSelected = node.key === selectedNodeKey;
+              // Cards más compactas para nodos split por destino (3 sub-rows
+              // ARC/BLC/TNT en mismo column → 2 métricas máx evita stack vertical).
+              const isDestSplit = node.key.includes("::");
+              const maxMetrics = isDestSplit ? 2 : 3;
               return (
                 <button
                   key={`${node.key}-${b.elementId}`}
@@ -184,8 +188,8 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
                   </div>
                   <table className="w-full border-collapse">
                     <tbody>
-                      {node.metrics.slice(0, 3).map((m, i) => {
-                        const isLast = i === Math.min(node.metrics.length, 3) - 1;
+                      {node.metrics.slice(0, maxMetrics).map((m, i) => {
+                        const isLast = i === Math.min(node.metrics.length, maxMetrics) - 1;
                         const isNeg = m.formatted.startsWith("-");
                         const valueClass = isLast
                           ? node.status !== "ready"
