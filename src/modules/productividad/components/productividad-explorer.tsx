@@ -297,11 +297,14 @@ function groupActivitiesBySubCostCenter(sub: CycleLaborSubCostCenterSummary): Su
     .sort((left, right) => left.activityName.localeCompare(right.activityName, "es-EC", { numeric: true, sensitivity: "base" }));
 }
 
+type PersonSelection = { personId: string; cycleKey: string; camas30: number | null };
+
 // ── CycleDetailRows: lazy-loaded person-level drill-down ─────────────────────
 function CycleDetailRows({
-  cycleKey, cajas, camas30,
+  cycleKey, cajas, camas30, onSelectPerson,
 }: {
   cycleKey: string; cajas: number | null; camas30: number | null;
+  onSelectPerson: (selection: PersonSelection) => void;
 }) {
   const { data, error, isLoading } = useSWR(
     `/api/productividad/${encodeURIComponent(cycleKey)}/detail`,
@@ -310,7 +313,6 @@ function CycleDetailRows({
   );
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   function toggle(key: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -423,7 +425,7 @@ function CycleDetailRows({
                                     </span>
                                   }
                                   ariaLabel={`Abrir ficha del personal ${person.personName || person.personId}`}
-                                  onActivate={() => setSelectedPersonId(person.personId)}
+                                  onActivate={() => onSelectPerson({ personId: person.personId, cycleKey, camas30 })}
                                   tooltip="Abrir ficha del personal"
                                   stopPropagation
                                 />
@@ -452,13 +454,6 @@ function CycleDetailRows({
           </React.Fragment>
         );
       })}
-      <PersonProfileDialog
-        key={`person-profile-${cycleKey}-${selectedPersonId ?? "none"}`}
-        open={Boolean(selectedPersonId)}
-        personId={selectedPersonId ?? ""}
-        sourceContext={{ module: "productividad", cycleKey, camas30 }}
-        onClose={() => setSelectedPersonId(null)}
-      />
     </>
   );
 }
@@ -467,9 +462,11 @@ function CycleDetailRows({
 function ProductividadTable({
   yearGroups,
   onCycleClick,
+  onSelectPerson,
 }: {
   yearGroups: YearGroup[];
   onCycleClick: (row: ProductividadRow) => void;
+  onSelectPerson: (selection: PersonSelection) => void;
 }) {
   const [expandedYears, setExpandedYears] = useState<Set<string>>(
     () => new Set(yearGroups.map((yg) => yg.year)),
@@ -600,6 +597,7 @@ function ProductividadTable({
                           cycleKey={cycle.cycleKey}
                           cajas={cycle.cajas}
                           camas30={cycle.camas30}
+                          onSelectPerson={onSelectPerson}
                         />
                       )}
                     </React.Fragment>
@@ -618,6 +616,7 @@ function ProductividadTable({
 export function ProductividadExplorer({ initialData }: { initialData: ProductividadDashboardData }) {
   const [filters, setFilters] = useState<ProductividadFilters>(initialData.filters);
   const [selectedBlockRow, setSelectedBlockRow] = useState<BlockModalRow | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<PersonSelection | null>(null);
   const deferredFilters = useDeferredValue(filters);
 
   const initialFilterKey = useMemo(() => buildQueryString(initialData.filters), [initialData.filters]);
@@ -719,6 +718,7 @@ export function ProductividadExplorer({ initialData }: { initialData: Productivi
             <ProductividadTable
               yearGroups={yearGroups}
               onCycleClick={(row) => setSelectedBlockRow(buildBlockModalRow(row))}
+              onSelectPerson={setSelectedPerson}
             />
           </CardContent>
         </Card>
@@ -762,6 +762,18 @@ export function ProductividadExplorer({ initialData }: { initialData: Productivi
         onOpenBedMortalityCurve={blockModal.openBedMortalityCurve}
         onCloseMortalityCurve={blockModal.closeMortalityCurve}
         onClose={() => setSelectedBlockRow(null)}
+      />
+
+      <PersonProfileDialog
+        key={`person-profile-${selectedPerson?.cycleKey ?? "none"}-${selectedPerson?.personId ?? "none"}`}
+        open={Boolean(selectedPerson)}
+        personId={selectedPerson?.personId ?? ""}
+        sourceContext={{
+          module: "productividad",
+          cycleKey: selectedPerson?.cycleKey ?? "",
+          camas30: selectedPerson?.camas30 ?? null,
+        }}
+        onClose={() => setSelectedPerson(null)}
       />
     </div>
   );
