@@ -140,8 +140,8 @@ export function Notes() {
 
 function rowEdges(rowY: number, opts: { isApertura: boolean }) {
   const clasifX = opts.isApertura ? X.clasifA : X.clasif;
-  const clasifW = opts.isApertura ? B.taskWide.w : 100;
-  const peladoHalf = opts.isApertura ? B.task.w / 2 : 47;
+  const clasifW = opts.isApertura ? B.taskWide.w : 130;
+  const peladoHalf = opts.isApertura ? B.task.w / 2 : 57;
   const startEdge: [number, number] = [X.pelado + peladoHalf, rowY];
   const targetEdge: [number, number] = opts.isApertura ? [X.b1ab - B.evt.r, rowY] : [X.b1ab - B.task.w / 2, rowY];
   return (
@@ -154,11 +154,11 @@ function rowEdges(rowY: number, opts: { isApertura: boolean }) {
       <path d={polyPath([[X.gwDest + B.gw.w / 2, rowY + SUB.blc], [clasifX - clasifW / 2, rowY + SUB.blc]])} />
       <path d={polyPath([[X.gwDest, rowY + B.gw.h / 2], [X.gwDest, rowY + SUB.tnt], [clasifX - clasifW / 2, rowY + SUB.tnt]])} />
       {[SUB.arc, SUB.blc, SUB.tnt].map((dy, i) => (
-        <path key={`cl-end-${i}`} d={polyPath([[clasifX + clasifW / 2, rowY + dy], [X.b3b2a - 35, rowY + dy]])} />
+        <path key={`cl-end-${i}`} d={polyPath([[clasifX + clasifW / 2, rowY + dy], [X.b3b2a - 40, rowY + dy]])} />
       ))}
-      <path d={polyPath([[X.b3b2a + 35, rowY + SUB.arc], [X.gwCierre, rowY + SUB.arc], [X.gwCierre, rowY - B.gw.h / 2]])} />
-      <path d={polyPath([[X.b3b2a + 35, rowY + SUB.blc], [X.gwCierre - B.gw.w / 2, rowY]])} />
-      <path d={polyPath([[X.b3b2a + 35, rowY + SUB.tnt], [X.gwCierre, rowY + SUB.tnt], [X.gwCierre, rowY + B.gw.h / 2]])} />
+      <path d={polyPath([[X.b3b2a + 40, rowY + SUB.arc], [X.gwCierre, rowY + SUB.arc], [X.gwCierre, rowY - B.gw.h / 2]])} />
+      <path d={polyPath([[X.b3b2a + 40, rowY + SUB.blc], [X.gwCierre - B.gw.w / 2, rowY]])} />
+      <path d={polyPath([[X.b3b2a + 40, rowY + SUB.tnt], [X.gwCierre, rowY + SUB.tnt], [X.gwCierre, rowY + B.gw.h / 2]])} />
       <path d={polyPath([[X.gwCierre + B.gw.w / 2, rowY], [X.general - B.taskGen.w / 2, rowY]])} />
     </g>
   );
@@ -175,8 +175,8 @@ export function Edges() {
       <path d={polyPath([[X.b1 + B.task.w / 2, preB1Y], [X.gwRutas - B.gw.w / 2, preB1Y]])} />
       <path d={polyPath([[X.b1 + B.task.w / 2, apB1Y], [X.gwRutas - B.gw.w / 2, apB1Y]])} />
       <path d={polyPath([[X.gwRutas, preB1Y - B.gw.h / 2], [X.gwRutas, Y.preGV], [X.max10 - B.evt.r, Y.preGV]])} />
-      <path d={polyPath([[X.gwRutas, preB1Y + B.gw.h / 2], [X.gwRutas, Y.preDirecto], [X.pelado - 47, Y.preDirecto]])} />
-      <path d={polyPath([[X.max10 + B.evt.r, Y.preGV], [X.pelado - 47, Y.preGV]])} />
+      <path d={polyPath([[X.gwRutas, preB1Y + B.gw.h / 2], [X.gwRutas, Y.preDirecto], [X.pelado - 57, Y.preDirecto]])} />
+      <path d={polyPath([[X.max10 + B.evt.r, Y.preGV], [X.pelado - 57, Y.preGV]])} />
       <path d={polyPath([[X.gwRutas, apB1Y - B.gw.h / 2], [X.gwRutas, Y.aperturaGV], [X.pelado - B.task.w / 2, Y.aperturaGV]])} />
       <path d={polyPath([[X.gwRutas, apB1Y + B.gw.h / 2], [X.gwRutas, Y.aperturaDir], [X.pelado - B.task.w / 2, Y.aperturaDir]])} />
       {rowEdges(Y.preGV, { isApertura: false })}

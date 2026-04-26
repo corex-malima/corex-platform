@@ -85,7 +85,7 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
 
       <div
         className="balanzas-process relative overflow-auto rounded-[24px] border border-border/70 bg-white/95 dark:bg-slate-900/70"
-        style={{ height: 820 }}
+        style={{ height: 1000 }}
       >
         <div className="relative" style={{ width: renderedW, height: renderedH }}>
           <svg
