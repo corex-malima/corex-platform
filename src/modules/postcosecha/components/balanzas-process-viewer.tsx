@@ -103,12 +103,15 @@ function createOverlayElement(node: BalanzasProcessNodeView) {
   const element = document.createElement("button");
   element.type = "button";
   element.className = cn(
-    "balanzas-node-overlay rounded-2xl border px-2.5 py-2 text-left shadow-lg backdrop-blur-sm",
+    "balanzas-node-overlay group relative flex flex-col rounded-xl border-2 px-2 py-1.5 text-left shadow-[0_8px_24px_-12px_rgba(15,23,42,0.45)] backdrop-blur-sm transition-all hover:scale-[1.04] hover:shadow-[0_12px_32px_-12px_rgba(15,23,42,0.55)]",
     node.status === "ready"
-      ? "border-white/80 bg-white/96 text-slate-900"
-      : "border-slate-300/80 bg-slate-100/96 text-slate-600",
+      ? "border-emerald-500/70 bg-white/97 text-slate-900"
+      : "border-slate-400/60 bg-slate-100/96 text-slate-500",
   );
   element.dataset.nodeKey = node.key;
+  // Centrar horizontalmente sobre el nodo BPMN al que va anclado.
+  element.style.transform = "translateX(-50%)";
+  element.style.width = "168px";
 
   const lastIdx = node.metrics.length - 1;
   const rows = node.metrics
@@ -123,14 +126,14 @@ function createOverlayElement(node: BalanzasProcessNodeView) {
             : "text-emerald-700 font-bold"
         : "text-slate-700";
       return `<tr>
-        <td class="pr-3 text-[10px] text-slate-500 whitespace-nowrap">${m.label}</td>
-        <td class="text-[10px] tabular-nums whitespace-nowrap ${valueClass}">${m.formatted}</td>
+        <td class="pr-2 text-[10px] text-slate-500 whitespace-nowrap">${m.label}</td>
+        <td class="text-[10px] tabular-nums whitespace-nowrap text-right ${valueClass}">${m.formatted}</td>
       </tr>`;
     })
     .join("");
 
   element.innerHTML = `
-    <div class="mb-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400 truncate max-w-[160px]">${node.label}</div>
+    <div class="mb-1 text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-700/90 truncate">${node.label}</div>
     <table class="border-collapse w-full"><tbody>${rows}</tbody></table>
   `;
 
@@ -275,8 +278,11 @@ export function BalanzasProcessViewer({
           const overlay = createOverlayElement(node);
           overlay.addEventListener("click", () => onNodeSelectRef.current(node.key));
 
+          // Posicionar overlay centrado horizontalmente sobre el nodo BPMN
+          // (tasks de 120w → left=60 = centro). El transform translateX(-50%)
+          // del overlay completa el centrado. top:-4 lo monta sobre el nodo.
           overlays.add(elementId, {
-            position: { top: 4, left: node.overlayOffsetLeft },
+            position: { top: -4, left: 60 },
             html: overlay,
           });
           canvas.addMarker(elementId, "balanzas-node-overlay-marker");
