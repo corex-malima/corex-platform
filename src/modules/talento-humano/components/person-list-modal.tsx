@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 
 import { PersonInfoOverlay } from "@/modules/talento-humano/components/person-info-overlay";
 import { DialogShell } from "@/shared/overlays/dialog-shell";
+import { ClickableTableRow } from "@/shared/tables/clickable-table-row";
 import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
 import { StandardTable, StandardTd, StandardTh } from "@/shared/tables/standard-table";
 import { Input } from "@/shared/ui/input";
@@ -60,12 +61,16 @@ export function PersonListModal<T extends TalentoPersonRecord>({
                 </thead>
                 <tbody>
                   {filteredPeople.map((person, index) => (
-                    <tr key={`${person.personId}-${person.areaId}-${index}`} className="cursor-pointer border-b border-border/50 last:border-0 hover:bg-muted/30" onClick={() => setSelectedPerson(person)}>
+                    <ClickableTableRow
+                      key={`${person.personId}-${person.areaId}-${index}`}
+                      onSelect={() => setSelectedPerson(person)}
+                      className="border-b border-border/50 last:border-0"
+                    >
                       <StandardTd className="text-xs text-muted-foreground">{person.personId}</StandardTd>
                       <StandardTd className="text-xs font-medium">{person.personName}</StandardTd>
                       <StandardTd className="max-w-[180px] truncate text-xs text-muted-foreground">{person.areaName}</StandardTd>
                       <StandardTd className="text-xs text-muted-foreground">{person.gender ?? "-"}</StandardTd>
-                    </tr>
+                    </ClickableTableRow>
                   ))}
                 </tbody>
               </StandardTable>

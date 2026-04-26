@@ -9,7 +9,7 @@
 | Ruta local | `C:\Users\erick.rivera\Desktop\CoreX\corex_v4` |
 | Worktrees registrados | 1 (solo el principal) |
 | Commit inicial | `95255ef` (chore(balanzas): cierre auditoría — cards dest-split + dead code purge) |
-| Commit final | (se anota tras commit de cierre AUD 1) |
+| Commit final | `8c53586` (legacy migration) + cierre adicional pendientes #3 y #5 |
 | Pipeline canon:check baseline | ✅ verde |
 | Pipeline check (typecheck+test) baseline | ⚠️ 70/71 tests passing — 1 fallo + 2 archivos no cargan, **PRE-EXISTENTES** (ver §6) |
 
@@ -70,7 +70,7 @@ Restantes 17 pantallas usan `space-y-4` + `SectionPageShell` correctamente. **0 
 | Severidad | Archivo | Problema | Acción |
 |-----------|---------|----------|--------|
 | media | `productividad-explorer.tsx` (CycleDetailRows) | `<tr onClick={() => toggle(...)}>` ad hoc para expand/collapse — NO usa `ClickableTableRow` | **Pendiente** — `legacy:check` lo whitelista (`balanzas-process-viewer\|process-viewer-overlay\|campo-` removed in this audit, productividad keeps custom `<tr onClick>`). Migración a `ExpandableTreeTable` ya documentada como deuda en `legacy:check` warning |
-| media | `talento-humano/components/person-list-modal.tsx` | `<tr onClick=>` ad hoc | **Pendiente** — refactor a `ClickableTableRow` o documentar excepción |
+| ~~media~~ ✅ | `talento-humano/components/person-list-modal.tsx` | `<tr onClick=>` ad hoc | **CERRADO** en cierre AUD 1 — refactorizado a `ClickableTableRow` con `onSelect={() => setSelectedPerson(person)}`. |
 
 Los 12 exploradores principales usan `ScrollFadeTable`. **0 hallazgos críticos pero 2 hallazgos medios.**
 
@@ -120,13 +120,23 @@ Resultado: **`src/components/dashboard/` ya no existe.** El check `check-canon.m
 
 ## 4. Archivos modificados en AUD 1
 
+Cierre fase 1 (commit `8c53586`):
 ```
 git mv  src/components/dashboard/module-placeholder.tsx  →  src/shared/data-display/module-placeholder.tsx
 edit    src/app/(dashboard)/dashboard/postcosecha/registros/page.tsx
 edit    src/app/(dashboard)/dashboard/postcosecha/planificacion/programaciones/page.tsx
 edit    src/app/(dashboard)/dashboard/postcosecha/planificacion/plan-de-trabajo/page.tsx
+edit    scripts/check-canon.mjs (officialDocs whitelist agregado)
 delete  src/components/dashboard/         (carpeta vacía)
 new     docs/audits/AUD-1-ux-ui-canon.md  (este archivo)
+```
+
+Cierre fase 2 (cierre adicional pendientes #3 y #5 documentados):
+```
+edit    src/modules/talento-humano/components/person-list-modal.tsx
+        (<tr onClick> → ClickableTableRow con onSelect + keyboard a11y)
+edit    docs/audits/AUD-1-ux-ui-canon.md
+        (cierre pendientes #3 y #5)
 ```
 
 ---
@@ -170,11 +180,11 @@ Evidencia de pre-existencia:
 
 | # | Severidad | Archivo / Área | Problema | Motivo no se cierra ahora |
 |---|-----------|----------------|----------|---------------------------|
-| 1 | media | `productividad-explorer.tsx` (`CycleDetailRows`) | `<tr onClick>` ad hoc para expand/collapse jerarquía Year→Cycle→CostArea→Sub→Activity→Person | Refactor a `ExpandableTreeTable` requiere rediseño de la lógica de drill-down (cycleKey, camas30, métricas por nivel). Ya tracked como deuda en `legacy:check` warning (line 6/6). |
-| 2 | media | `block-profile-modal.tsx` (5 modales internos) | Modales con `<div className="fixed inset-0 z-[60..70]">` no usan `DialogShell` | Refactor mayor del bloque profile modal — fuera del scope AUD 1, requiere migración cuidadosa de 5 modales internos con sus z-tiers (`60` base, `65` valves, `70` curve/mortality/beds) preservando el ordenamiento visual. |
-| 3 | media | `talento-humano/person-list-modal.tsx` | `<tr onClick>` ad hoc | Refactor menor a `ClickableTableRow` — agendar para AUD 2. |
-| 4 | baja | `my-account-explorer.tsx:108` | `<SectionPageShell>` recibe `<></>` como children | Hack visual sin impacto runtime. Refactor canónico requiere cambiar API de `SectionPageShell` para aceptar header sin children opcional. |
-| 5 | media | 8 archivos con `.toFixed/Math.round/* 100` | Sospecha de formatters inline | Spot-check no encontró usos visibles al usuario, pero requiere review caso-por-caso (regla AUD #7: no cambios masivos ciegos). Agendar AUD 2 con diff exacto file por file. |
+| 1 | media | `productividad-explorer.tsx` (`CycleDetailRows`) | `<tr onClick>` ad hoc para expand/collapse jerarquía Year→Cycle→CostArea→Sub→Activity→Person | Refactor a `ExpandableTreeTable` requiere rediseño de la lógica de drill-down (cycleKey, camas30, métricas por nivel). Ya tracked como deuda en `legacy:check` warning (line 6/6). **Mover a AUD 2.** |
+| 2 | media | `block-profile-modal.tsx` (5 modales internos) | Modales con `<div className="fixed inset-0 z-[60..70]">` no usan `DialogShell` | Refactor mayor — 5 modales internos con z-tiers (`60` base, `65` valves, `70` curve/mortality/beds) preservando ordenamiento visual. **Mover a AUD 2.** |
+| 3 | ~~media~~ ✅ | `talento-humano/person-list-modal.tsx` | `<tr onClick>` ad hoc | **CERRADO** — refactorizado a `ClickableTableRow` con `onSelect`, mantiene keyboard a11y vía role/tabIndex/Enter/Space del shared. |
+| 4 | baja | `my-account-explorer.tsx:108` | `<SectionPageShell>` recibe `<></>` como children | Hack visual sin impacto runtime. Refactor canónico requiere cambiar API de `SectionPageShell` para aceptar header sin children opcional. **Mover a AUD 2.** |
+| 5 | ~~media~~ ✅ | 8 archivos con `.toFixed/Math.round/* 100` | Sospecha de formatters inline | **CERRADO tras spot-check completo (calidad, productividad, fenograma, campo, fenograma-weekly-bars, skus, programaciones, solver-sku-info)**. **0 formatters visibles al usuario.** Todos los hits son: (a) cálculos numéricos intermedios que luego pasan a `formatNumber/formatPercent` canónico (block-profile-modal, fenograma-weekly-bars, skus); (b) helpers de dominio (días, pesos objetivo, RGB de Leaflet); (c) labels SVG de Recharts (calidad — excepción ya documentada en `CALIDAD_CHART_COLORS`); (d) controles de slider Leaflet en campo-map (`Math.round(opacity*100)+"%"` para indicador 0-100% — refactor a `formatPercent({input:"ratio"})` posible pero cosmético). |
 | 6 | baja | smoke visual responsive light/dark | No ejecutado en este pase | Requiere preview server activo del usuario; las 12 rutas críticas listadas para validación manual. |
 | 7 | baja | `npm run check` baseline failures | 1 test failing + 2 archivos no cargan en `src/lib/__tests__/` | PRE-EXISTENTES, fuera del scope visual de AUD 1. Documentado en §6. |
 
