@@ -370,6 +370,330 @@ const B1C_B2A_IDEAL_DETAIL_COLUMN_LABELS: Record<string, string> = {
 
 const B1C_B2A_IDEAL_DETAIL_DATE_FILTER_KEYS: BalanzasDetailDateFilterKey[] = ["work_date"];
 
+const PRECLASIF_B1_B1A_WEIGHT_SUMMARY_METRICS: SummaryMetricDef[] = [
+  { col: "weight_b1_kg", label: "Peso_B1", agg: "sum", format: "kg" },
+  { col: "weight_b1ab_kg", label: "Peso_B1A", agg: "sum", format: "kg" },
+  {
+    col: "dispatch_pct_weight",
+    label: "Desp%",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b1ab_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+];
+
+const PRECLASIF_B1_B1A_WEIGHT_DETAIL_COLUMN_CONFIG: Record<string, BalanzasDetailColumnConfig> = {
+  weight_b1_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  weight_b1ab_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  dispatch_pct_weight: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b1ab_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+};
+
+const PRECLASIF_B1_B1A_WEIGHT_DETAIL_VISIBLE_COLUMNS = [
+  "work_date",
+  "destination",
+  "weight_b1_kg",
+  "weight_b1ab_kg",
+  "dispatch_pct_weight",
+];
+
+const PRECLASIF_B1_B1A_WEIGHT_DETAIL_COLUMN_LABELS: Record<string, string> = {
+  work_date: "Fecha",
+  destination: "Destino",
+  weight_b1_kg: "Peso_B1",
+  weight_b1ab_kg: "Peso_B1A",
+  dispatch_pct_weight: "Desp%",
+};
+
+const PRECLASIF_B1_B1A_WEIGHT_DETAIL_DATE_FILTER_KEYS: BalanzasDetailDateFilterKey[] = ["work_date"];
+
+const PRECLASIF_B1A_B2_WEIGHT_SUMMARY_METRICS: SummaryMetricDef[] = [
+  { col: "weight_b1ab_est", label: "Peso_B1A", agg: "sum", format: "kg" },
+  { col: "weight_b2", label: "Peso_B2", agg: "sum", format: "kg" },
+  {
+    col: "hydration_pct",
+    label: "HIDR%",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2",
+      denominatorKey: "weight_b1ab_est",
+    },
+  },
+];
+
+const PRECLASIF_B1A_B2_WEIGHT_DETAIL_COLUMN_CONFIG: Record<string, BalanzasDetailColumnConfig> = {
+  weight_per_stem_b1ab: {
+    format: "g",
+    aggregateMode: "sum",
+  },
+  weight_b1ab_est: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  weight_b2: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  hydration_pct: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2",
+      denominatorKey: "weight_b1ab_est",
+    },
+  },
+};
+
+const PRECLASIF_B1A_B2_WEIGHT_DETAIL_VISIBLE_COLUMNS = [
+  "work_date",
+  "lot_date",
+  "destination",
+  "weight_per_stem_b1ab",
+  "weight_b1ab_est",
+  "weight_b2",
+  "hydration_pct",
+];
+
+const PRECLASIF_B1A_B2_WEIGHT_DETAIL_COLUMN_LABELS: Record<string, string> = {
+  work_date: "Fecha",
+  lot_date: "Lote",
+  destination: "Destino",
+  weight_per_stem_b1ab: "Peso / Tallo",
+  weight_b1ab_est: "Peso_B1A",
+  weight_b2: "Peso_B2",
+  hydration_pct: "HIDR%",
+};
+
+const PRECLASIF_B1A_B2_WEIGHT_DETAIL_DATE_FILTER_KEYS: BalanzasDetailDateFilterKey[] = ["work_date", "lot_date"];
+
+const PRECLASIF_B2_B3_WEIGHT_SUMMARY_METRICS: SummaryMetricDef[] = [
+  { col: "weight_b2_kg", label: "Peso_B2", agg: "sum", format: "kg" },
+  { col: "weight_b3_kg", label: "Peso_B3", agg: "sum", format: "kg" },
+  {
+    col: "diff_pct_weight",
+    label: "%Dif_Peso",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b3_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+  { col: "weight_ideal_kg", label: "Peso_Ideal", agg: "sum", format: "kg" },
+];
+
+const PRECLASIF_B2_B3_WEIGHT_DETAIL_COLUMN_CONFIG: Record<string, BalanzasDetailColumnConfig> = {
+  weight_b2_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  weight_b3_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  diff_pct_weight: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b3_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+  weight_ideal_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+};
+
+const PRECLASIF_B2_B3_WEIGHT_DETAIL_VISIBLE_COLUMNS = [
+  "lot_date",
+  "destination",
+  "weight_b2_kg",
+  "weight_b3_kg",
+  "diff_pct_weight",
+  "weight_ideal_kg",
+];
+
+const PRECLASIF_B2_B3_WEIGHT_DETAIL_COLUMN_LABELS: Record<string, string> = {
+  lot_date: "Lote",
+  destination: "Destino",
+  weight_b2_kg: "Peso_B2",
+  weight_b3_kg: "Peso_B3",
+  diff_pct_weight: "%Dif_Peso",
+  weight_ideal_kg: "Peso_Ideal",
+};
+
+const PRECLASIF_B2_B3_WEIGHT_DETAIL_DATE_FILTER_KEYS: BalanzasDetailDateFilterKey[] = ["lot_date"];
+
+const PRECLASIF_B1_B3_IDEAL_SUMMARY_METRICS: SummaryMetricDef[] = [
+  { col: "weight_b1_kg", label: "Peso_B1", agg: "sum", format: "kg" },
+  { col: "weight_b1ab_kg", label: "Peso_B1A", agg: "sum", format: "kg" },
+  {
+    col: "dispatch_1_pct",
+    label: "Desp%",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b1ab_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+  { col: "weight_b2_kg", label: "Peso_B2", agg: "sum", format: "kg" },
+  {
+    col: "hydration_pct",
+    label: "HIDR%",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2_kg",
+      denominatorKey: "weight_b1ab_kg",
+    },
+  },
+  { col: "weight_b3_kg", label: "Peso_B3", agg: "sum", format: "kg" },
+  {
+    col: "dispatch_2_pct",
+    label: "Desp2%",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b3_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+  { col: "weight_ideal_kg", label: "Peso_Ideal", agg: "sum", format: "kg" },
+  {
+    col: "yield_b1_vs_b3",
+    label: "Aprovechamiento_B1VSB3",
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_b3_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+  {
+    col: "yield_b1_vs_ideal",
+    label: "Aprovechamiento_B1 VS PESO",
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_ideal_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+];
+
+const PRECLASIF_B1_B3_IDEAL_DETAIL_COLUMN_CONFIG: Record<string, BalanzasDetailColumnConfig> = {
+  weight_b1_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  weight_b1ab_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  dispatch_1_pct: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b1ab_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+  weight_b2_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  hydration_pct: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2_kg",
+      denominatorKey: "weight_b1ab_kg",
+    },
+  },
+  weight_b3_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  dispatch_2_pct: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b3_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+  weight_ideal_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  yield_b1_vs_b3: {
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_b3_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+  yield_b1_vs_ideal: {
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_ideal_kg",
+      denominatorKey: "weight_b1_kg",
+    },
+  },
+};
+
+const PRECLASIF_B1_B3_IDEAL_DETAIL_VISIBLE_COLUMNS = [
+  "work_date",
+  "destination",
+  "weight_b1_kg",
+  "weight_b1ab_kg",
+  "dispatch_1_pct",
+  "weight_b2_kg",
+  "hydration_pct",
+  "weight_b3_kg",
+  "dispatch_2_pct",
+  "weight_ideal_kg",
+  "yield_b1_vs_b3",
+  "yield_b1_vs_ideal",
+];
+
+const PRECLASIF_B1_B3_IDEAL_DETAIL_COLUMN_LABELS: Record<string, string> = {
+  work_date: "Fecha",
+  destination: "Destino",
+  weight_b1_kg: "Peso_B1",
+  weight_b1ab_kg: "Peso_B1A",
+  dispatch_1_pct: "Desp%",
+  weight_b2_kg: "Peso_B2",
+  hydration_pct: "HIDR%",
+  weight_b3_kg: "Peso_B3",
+  dispatch_2_pct: "Desp2%",
+  weight_ideal_kg: "Peso_Ideal",
+  yield_b1_vs_b3: "Aprovechamiento_B1VSB3",
+  yield_b1_vs_ideal: "Aprovechamiento_B1 VS PESO",
+};
+
+const PRECLASIF_B1_B3_IDEAL_DETAIL_DATE_FILTER_KEYS: BalanzasDetailDateFilterKey[] = ["work_date"];
+
 // ─── ISO week helpers ─────────────────────────────────────────────────────────
 
 function isoWeekYear(date: Date): number {
@@ -563,11 +887,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1_vs_b1a_xl_np_weight_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b1_kg",         label: "B1 kg",       agg: "sum", format: "kg" },
-      { col: "weight_b1ab_kg",       label: "B1AB kg",      agg: "sum", format: "kg" },
-      { col: "dispatch_pct_weight",  label: "Despacho %",  agg: "avg", format: "pct" },
-    ],
+    summaryMetrics: PRECLASIF_B1_B1A_WEIGHT_SUMMARY_METRICS,
+    detailColumnConfig: PRECLASIF_B1_B1A_WEIGHT_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: PRECLASIF_B1_B1A_WEIGHT_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: PRECLASIF_B1_B1A_WEIGHT_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: PRECLASIF_B1_B1A_WEIGHT_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: true,
@@ -601,11 +926,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1a_vs_b2_xl_np_weight_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b1ab_est",  label: "B1AB est. kg",    agg: "sum", format: "kg" },
-      { col: "weight_b2",        label: "B2 kg",          agg: "sum", format: "kg" },
-      { col: "hydration_pct",    label: "Hidratación %",  agg: "avg", format: "pct" },
-    ],
+    summaryMetrics: PRECLASIF_B1A_B2_WEIGHT_SUMMARY_METRICS,
+    detailColumnConfig: PRECLASIF_B1A_B2_WEIGHT_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: PRECLASIF_B1A_B2_WEIGHT_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: PRECLASIF_B1A_B2_WEIGHT_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: PRECLASIF_B1A_B2_WEIGHT_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: true,
@@ -620,11 +946,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b2_vs_b3_xl_np_weight_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b2_kg",    label: "B2 kg",        agg: "sum", format: "kg" },
-      { col: "weight_b3_kg",    label: "B3 kg",        agg: "sum", format: "kg" },
-      { col: "diff_pct_weight", label: "Diferencia %", agg: "avg", format: "pct" },
-    ],
+    summaryMetrics: PRECLASIF_B2_B3_WEIGHT_SUMMARY_METRICS,
+    detailColumnConfig: PRECLASIF_B2_B3_WEIGHT_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: PRECLASIF_B2_B3_WEIGHT_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: PRECLASIF_B2_B3_WEIGHT_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: PRECLASIF_B2_B3_WEIGHT_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
@@ -644,11 +971,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}preclasif_b1_vs_b3_ideal_weight_xl_np_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b1_kg",   label: "B1 kg",          agg: "sum", format: "kg" },
-      { col: "weight_b3_kg",   label: "B3 kg",          agg: "sum", format: "kg" },
-      { col: "yield_b1_vs_b3", label: "Rendimiento %",  agg: "avg", format: "pct" },
-    ],
+    summaryMetrics: PRECLASIF_B1_B3_IDEAL_SUMMARY_METRICS,
+    detailColumnConfig: PRECLASIF_B1_B3_IDEAL_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: PRECLASIF_B1_B3_IDEAL_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: PRECLASIF_B1_B3_IDEAL_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: PRECLASIF_B1_B3_IDEAL_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
