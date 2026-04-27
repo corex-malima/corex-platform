@@ -318,11 +318,16 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
 
       {selectedNode ? (
         <BalanzasNodeDetailDialog
+          key={`${selectedNode.key}:${selectedDestination ?? "base"}`}
           node={selectedNode}
           filters={filters}
           open={detailOpen}
           presetDestination={selectedDestination}
-          onClose={() => setDetailOpen(false)}
+          onClose={() => {
+            setDetailOpen(false);
+            setSelectedNode(null);
+            setSelectedDestination(null);
+          }}
         />
       ) : null}
     </div>

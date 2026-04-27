@@ -58,6 +58,16 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
     return m;
   }, [nodes]);
 
+  const overlayCountByElement = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const node of nodes) {
+      for (const binding of node.processBindings) {
+        counts.set(binding.elementId, (counts.get(binding.elementId) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [nodes]);
+
   const renderedW = VB_W * zoom;
   const renderedH = VB_H * zoom;
 
@@ -161,7 +171,8 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
             node.processBindings.map((b) => {
               const rect = NODE_LAYOUT[b.elementId];
               if (!rect) return null;
-              const leftPx = rect.cx * zoom;
+              const hasOverlaySiblings = (overlayCountByElement.get(b.elementId) ?? 0) > 1;
+              const leftPx = (rect.cx + (hasOverlaySiblings ? node.overlayOffsetLeft : 0)) * zoom;
               const topPx = (rect.cy - rect.h / 2 - 4) * zoom;
               const isSelected = node.key === selectedNodeKey;
               // Nodos split por destino (3 sub-rows ARC/BLC/TNT en mismo

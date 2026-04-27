@@ -31,6 +31,27 @@ export type BalanzasSummaryMetric = {
   formatted: string;
 };
 
+export type BalanzasDetailColumnFormat = "kg" | "g" | "pct" | "count" | "ratio";
+export type BalanzasDetailAggregateMode = "sum" | "derived-ratio" | "derived-quotient";
+
+export type BalanzasDetailAggregateSources = {
+  numeratorKey: string;
+  denominatorKey: string;
+};
+
+export type BalanzasDetailColumn = {
+  key: string;
+  label: string;
+  numeric: boolean;
+  format: BalanzasDetailColumnFormat | null;
+  aggregateMode: BalanzasDetailAggregateMode | null;
+  aggregateSources?: BalanzasDetailAggregateSources;
+};
+
+export type BalanzasDetailTableMode = "tree" | "flat";
+
+export type BalanzasDetailDateFilterKey = "work_date" | "lot_date";
+
 /**
  * Categoría de destino canónica (Arcoíris / Blanco / Tinturado).
  * Usada para el split visual en BPMN de los nodos terminales B2A/B3.
@@ -59,6 +80,7 @@ export type BalanzasNodeSummary = {
   dialogTitle: string;
   branch: "preclasif" | "gv" | "apertura";
   active: boolean;
+  detailTableMode: BalanzasDetailTableMode;
   rowCount: number;
   dateMin: string | null;
   dateMax: string | null;
@@ -87,8 +109,10 @@ export type BalanzasNodeDetail = {
   nodeLabel: string;
   branch: string;
   active: boolean;
+  tableMode: BalanzasDetailTableMode;
+  dateFilterKeys: BalanzasDetailDateFilterKey[];
   rows: BalanzasDetailRow[];
-  columns: { key: string; label: string; numeric: boolean }[];
+  columns: BalanzasDetailColumn[];
   destinations: string[];
   grades: string[];
   gradeGroups: string[];
@@ -98,7 +122,6 @@ export type BalanzasNodeDetail = {
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
-type FormatType = "kg" | "pct" | "count" | "ratio";
 type AggType = "sum" | "avg";
 
 type BalanzasBpmnBinding = {
@@ -109,8 +132,16 @@ type BalanzasBpmnBinding = {
 type SummaryMetricDef = {
   col: string;
   label: string;
-  agg: AggType;
-  format: FormatType;
+  format: BalanzasDetailColumnFormat;
+  agg?: AggType;
+  aggregateMode?: BalanzasDetailAggregateMode;
+  aggregateSources?: BalanzasDetailAggregateSources;
+};
+
+type BalanzasDetailColumnConfig = {
+  format: BalanzasDetailColumnFormat;
+  aggregateMode: BalanzasDetailAggregateMode;
+  aggregateSources?: BalanzasDetailAggregateSources;
 };
 
 type BalanzasNodeDef = {
@@ -123,6 +154,11 @@ type BalanzasNodeDef = {
   viewName: string;
   dateCol: "work_date" | "lot_date";
   summaryMetrics: SummaryMetricDef[];
+  detailColumnConfig?: Record<string, BalanzasDetailColumnConfig>;
+  detailTableMode?: BalanzasDetailTableMode;
+  detailVisibleColumns?: string[];
+  detailColumnLabels?: Record<string, string>;
+  detailDateFilterKeys?: BalanzasDetailDateFilterKey[];
   hasDestination: boolean;
   hasGrade: boolean;
   hasGradeGroup: boolean;
@@ -133,6 +169,206 @@ type BalanzasNodeDef = {
    */
   bpmnByDestination?: BalanzasBpmnByDestination;
 };
+
+const B2_B2A_WEIGHT_SUMMARY_METRICS: SummaryMetricDef[] = [
+  { col: "weight_b2_kg", label: "B2 kg", agg: "sum", format: "kg" },
+  { col: "weight_b2a_kg", label: "B2A kg", agg: "sum", format: "kg" },
+  {
+    col: "dispatch_pct",
+    label: "Desperdicio %",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+];
+
+const B2_B2A_WEIGHT_DETAIL_COLUMN_CONFIG: Record<string, BalanzasDetailColumnConfig> = {
+  weight_b2_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  weight_b2a_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  dispatch_pct: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+};
+
+const B2_B2A_WEIGHT_DETAIL_VISIBLE_COLUMNS = [
+  "work_date",
+  "lot_date",
+  "destination",
+  "weight_b2_kg",
+  "weight_b2a_kg",
+  "dispatch_pct",
+];
+
+const B2_B2A_WEIGHT_DETAIL_COLUMN_LABELS: Record<string, string> = {
+  work_date: "Fecha_entrega",
+  lot_date: "Lote",
+  destination: "Destino",
+  weight_b2_kg: "Peso_B2",
+  weight_b2a_kg: "Peso_B2A",
+  dispatch_pct: "%Desp_Peso",
+};
+
+const B2_B2A_WEIGHT_DETAIL_DATE_FILTER_KEYS: BalanzasDetailDateFilterKey[] = ["work_date", "lot_date"];
+
+const B1C_B2A_IDEAL_SUMMARY_METRICS: SummaryMetricDef[] = [
+  { col: "weight_b1c_kg", label: "Peso_B1C", agg: "sum", format: "kg" },
+  { col: "weight_b2_kg", label: "Peso_B2", agg: "sum", format: "kg" },
+  {
+    col: "hydration_pct",
+    label: "HIDR%",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2_kg",
+      denominatorKey: "weight_b1c_kg",
+    },
+  },
+  { col: "weight_b2a_kg", label: "Peso_B2A", agg: "sum", format: "kg" },
+  {
+    col: "dispatch_pct",
+    label: "Desp%",
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+  { col: "ideal_weight_kg", label: "Peso_Ideal", agg: "sum", format: "kg" },
+  {
+    col: "b2a_to_ideal_ratio",
+    label: "Dif_Peso%",
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "ideal_weight_kg",
+    },
+  },
+  {
+    col: "b2a_to_b1c_ratio",
+    label: "Aprovechamiento %_1cvs2A",
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "weight_b1c_kg",
+    },
+  },
+  {
+    col: "ideal_to_b1c_ratio",
+    label: "Aprovechamiento %_1cvsPesoIdeal",
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "ideal_weight_kg",
+      denominatorKey: "weight_b1c_kg",
+    },
+  },
+];
+
+const B1C_B2A_IDEAL_DETAIL_COLUMN_CONFIG: Record<string, BalanzasDetailColumnConfig> = {
+  weight_b1c_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  weight_b2_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  hydration_pct: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2_kg",
+      denominatorKey: "weight_b1c_kg",
+    },
+  },
+  weight_b2a_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  dispatch_pct: {
+    format: "pct",
+    aggregateMode: "derived-ratio",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "weight_b2_kg",
+    },
+  },
+  ideal_weight_kg: {
+    format: "kg",
+    aggregateMode: "sum",
+  },
+  b2a_to_ideal_ratio: {
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "ideal_weight_kg",
+    },
+  },
+  b2a_to_b1c_ratio: {
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "weight_b2a_kg",
+      denominatorKey: "weight_b1c_kg",
+    },
+  },
+  ideal_to_b1c_ratio: {
+    format: "pct",
+    aggregateMode: "derived-quotient",
+    aggregateSources: {
+      numeratorKey: "ideal_weight_kg",
+      denominatorKey: "weight_b1c_kg",
+    },
+  },
+};
+
+const B1C_B2A_IDEAL_DETAIL_VISIBLE_COLUMNS = [
+  "work_date",
+  "destination",
+  "weight_b1c_kg",
+  "weight_b2_kg",
+  "hydration_pct",
+  "weight_b2a_kg",
+  "dispatch_pct",
+  "ideal_weight_kg",
+  "b2a_to_ideal_ratio",
+  "b2a_to_b1c_ratio",
+  "ideal_to_b1c_ratio",
+];
+
+const B1C_B2A_IDEAL_DETAIL_COLUMN_LABELS: Record<string, string> = {
+  work_date: "Fecha",
+  destination: "Tipo",
+  weight_b1c_kg: "Peso_B1C",
+  weight_b2_kg: "Peso_B2",
+  hydration_pct: "HIDR%",
+  weight_b2a_kg: "Peso_B2A",
+  dispatch_pct: "Desp%",
+  ideal_weight_kg: "Peso_Ideal",
+  b2a_to_ideal_ratio: "Dif_Peso%",
+  b2a_to_b1c_ratio: "Aprovechamiento %_1cvs2A",
+  ideal_to_b1c_ratio: "Aprovechamiento %_1cvsPesoIdeal",
+};
+
+const B1C_B2A_IDEAL_DETAIL_DATE_FILTER_KEYS: BalanzasDetailDateFilterKey[] = ["work_date"];
 
 // ─── ISO week helpers ─────────────────────────────────────────────────────────
 
@@ -178,13 +414,118 @@ export function formatMonthName(monthNum: string): string {
 
 // ─── Metric formatting ────────────────────────────────────────────────────────
 
-function formatMetricValue(value: number | null, format: FormatType): string {
+function formatMetricValue(value: number | null, format: BalanzasDetailColumnFormat): string {
   if (value === null) return "—";
   switch (format) {
     case "kg": return formatFlexibleNumber(value) + " kg";
+    case "g": return formatFlexibleNumber(value * 1000) + " g";
     case "pct": return formatPercentShared(value, { input: "ratio" });
     case "count": return formatFlexibleNumber(value);
     case "ratio": return formatPercentShared(value, { input: "ratio" });
+  }
+}
+
+function buildSummaryMetricSelects(summaryMetrics: SummaryMetricDef[]) {
+  const selectMap = new Map<string, string>();
+
+  for (const metric of summaryMetrics) {
+    if (
+      (metric.aggregateMode === "derived-ratio" || metric.aggregateMode === "derived-quotient")
+      && metric.aggregateSources
+    ) {
+      const numeratorAlias = `__sum_${metric.aggregateSources.numeratorKey}`;
+      const denominatorAlias = `__sum_${metric.aggregateSources.denominatorKey}`;
+
+      if (!selectMap.has(numeratorAlias)) {
+        selectMap.set(
+          numeratorAlias,
+          `SUM(${metric.aggregateSources.numeratorKey}::numeric) AS ${numeratorAlias}`,
+        );
+      }
+      if (!selectMap.has(denominatorAlias)) {
+        selectMap.set(
+          denominatorAlias,
+          `SUM(${metric.aggregateSources.denominatorKey}::numeric) AS ${denominatorAlias}`,
+        );
+      }
+      continue;
+    }
+
+    const aggregate = metric.agg === "avg" ? "AVG" : "SUM";
+    selectMap.set(metric.col, `${aggregate}(${metric.col}::numeric) AS ${metric.col}`);
+  }
+
+  return Array.from(selectMap.values()).join(", ");
+}
+
+function resolveSummaryMetricValue(row: Record<string, unknown>, metric: SummaryMetricDef) {
+  if (
+    (metric.aggregateMode === "derived-ratio" || metric.aggregateMode === "derived-quotient")
+    && metric.aggregateSources
+  ) {
+    const numerator = toNumber(row[`__sum_${metric.aggregateSources.numeratorKey}`]);
+    const denominator = toNumber(row[`__sum_${metric.aggregateSources.denominatorKey}`]);
+
+    if (numerator === null || denominator === null || denominator === 0) {
+      return null;
+    }
+
+    return metric.aggregateMode === "derived-ratio"
+      ? (numerator / denominator) - 1
+      : numerator / denominator;
+  }
+
+  return toNumber(row[metric.col]);
+}
+
+function columnLabelForNode(nodeDef: BalanzasNodeDef, key: string) {
+  return nodeDef.detailColumnLabels?.[key] ?? columnLabel(key);
+}
+
+type BalanzasDetailLocalFilters = {
+  destinations: string[];
+  grades: string[];
+  gradeGroups: string[];
+  workDateFrom?: string;
+  workDateTo?: string;
+  lotDateFrom?: string;
+  lotDateTo?: string;
+};
+
+function applyLocalDetailFilters(
+  nodeDef: BalanzasNodeDef,
+  localFilters: BalanzasDetailLocalFilters,
+  conditions: string[],
+  values: unknown[],
+) {
+  if (localFilters.destinations.length > 0 && nodeDef.hasDestination) {
+    values.push(localFilters.destinations);
+    conditions.push(`destination = any($${values.length}::text[])`);
+  }
+  if (localFilters.grades.length > 0 && nodeDef.hasGrade) {
+    values.push(localFilters.grades);
+    conditions.push(`grade = any($${values.length}::text[])`);
+  }
+  if (localFilters.gradeGroups.length > 0 && nodeDef.hasGradeGroup) {
+    values.push(localFilters.gradeGroups);
+    conditions.push(`grade_group = any($${values.length}::text[])`);
+  }
+
+  if (localFilters.workDateFrom) {
+    values.push(localFilters.workDateFrom);
+    conditions.push(`work_date >= $${values.length}::date`);
+  }
+  if (localFilters.workDateTo) {
+    values.push(localFilters.workDateTo);
+    conditions.push(`work_date <= $${values.length}::date`);
+  }
+  if (localFilters.lotDateFrom) {
+    values.push(localFilters.lotDateFrom);
+    conditions.push(`lot_date >= $${values.length}::date`);
+  }
+  if (localFilters.lotDateTo) {
+    values.push(localFilters.lotDateTo);
+    conditions.push(`lot_date <= $${values.length}::date`);
   }
 }
 
@@ -347,6 +688,24 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
       { col: "weight_b1c_kg",   label: "B1C kg",       agg: "sum", format: "kg" },
       { col: "weight_diff_pct", label: "Diferencia %", agg: "avg", format: "pct" },
     ],
+    detailColumnConfig: {
+      weight_b1_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      weight_b1c_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      weight_diff_pct: {
+        format: "pct",
+        aggregateMode: "derived-ratio",
+        aggregateSources: {
+          numeratorKey: "weight_b1c_kg",
+          denominatorKey: "weight_b1_kg",
+        },
+      },
+    },
     hasDestination: false,
     hasGrade: false,
     hasGradeGroup: false,
@@ -381,10 +740,63 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     viewName: `${VIEW_PREFIX}gv_b1c_vs_b2_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
-      { col: "weight_b2_kg",            label: "B2 kg",          agg: "sum", format: "kg" },
-      { col: "weight_b1c_estimated_kg", label: "B1C est. kg",    agg: "sum", format: "kg" },
-      { col: "hydration_pct",           label: "Hidratación %",  agg: "avg", format: "pct" },
+      { col: "weight_b2_kg",            label: "B2 kg",         agg: "sum", format: "kg" },
+      { col: "weight_b1c_estimated_kg", label: "B1C est. kg",   agg: "sum", format: "kg" },
+      {
+        col: "hydration_pct",
+        label: "Hidratación %",
+        format: "pct",
+        aggregateMode: "derived-ratio",
+        aggregateSources: {
+          numeratorKey: "weight_b2_kg",
+          denominatorKey: "weight_b1c_estimated_kg",
+        },
+      },
     ],
+      detailColumnConfig: {
+        weight_per_stem_kg: {
+          format: "g",
+          aggregateMode: "sum",
+        },
+      weight_b2_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      weight_b1c_estimated_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      hydration_pct: {
+        format: "pct",
+        aggregateMode: "derived-ratio",
+        aggregateSources: {
+          numeratorKey: "weight_b2_kg",
+          denominatorKey: "weight_b1c_estimated_kg",
+        },
+      },
+    },
+    detailTableMode: "flat",
+    detailVisibleColumns: [
+      "work_date",
+      "lot_date",
+      "grade",
+      "destination",
+      "weight_per_stem_kg",
+      "weight_b2_kg",
+      "weight_b1c_estimated_kg",
+      "hydration_pct",
+    ],
+    detailColumnLabels: {
+      work_date: "Fecha",
+      lot_date: "Lote",
+      grade: "Grado",
+      destination: "Destino",
+      weight_per_stem_kg: "Peso / Tallo",
+      weight_b2_kg: "Peso_B2",
+      weight_b1c_estimated_kg: "Peso_B1c",
+      hydration_pct: "%HIDR",
+    },
+    detailDateFilterKeys: ["work_date", "lot_date"],
     hasDestination: true,
     hasGrade: true,
     hasGradeGroup: false,
@@ -399,11 +811,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}gv_b2_vs_b2a_weight_xl_np_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b2_kg",   label: "B2 kg",       agg: "sum", format: "kg" },
-      { col: "weight_b2a_kg",  label: "B2A kg",      agg: "sum", format: "kg" },
-      { col: "dispatch_pct",   label: "Despacho %",  agg: "avg", format: "pct" },
-    ],
+    summaryMetrics: B2_B2A_WEIGHT_SUMMARY_METRICS,
+    detailColumnConfig: B2_B2A_WEIGHT_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: B2_B2A_WEIGHT_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: B2_B2A_WEIGHT_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: B2_B2A_WEIGHT_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
@@ -423,11 +836,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}gv_b1c_vs_b2a_vs_ideal_weight_xl_np_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b2a_kg",      label: "B2A kg",    agg: "sum", format: "kg" },
-      { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
-      { col: "b2a_to_ideal_ratio", label: "B2A/Ideal", agg: "avg", format: "ratio" },
-    ],
+    summaryMetrics: B1C_B2A_IDEAL_SUMMARY_METRICS,
+    detailColumnConfig: B1C_B2A_IDEAL_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: B1C_B2A_IDEAL_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: B1C_B2A_IDEAL_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: B1C_B2A_IDEAL_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
@@ -467,6 +881,24 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
       { col: "weight_b1c_kg",   label: "B1C kg",       agg: "sum", format: "kg" },
       { col: "weight_diff_pct", label: "Diferencia %", agg: "avg", format: "pct" },
     ],
+    detailColumnConfig: {
+      weight_b1_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      weight_b1c_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      weight_diff_pct: {
+        format: "pct",
+        aggregateMode: "derived-ratio",
+        aggregateSources: {
+          numeratorKey: "weight_b1c_kg",
+          denominatorKey: "weight_b1_kg",
+        },
+      },
+    },
     hasDestination: false,
     hasGrade: false,
     hasGradeGroup: false,
@@ -501,10 +933,63 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2_weight_xl_np_cur`,
     dateCol: "work_date",
     summaryMetrics: [
-      { col: "weight_b2_kg",            label: "B2 kg",          agg: "sum", format: "kg" },
-      { col: "weight_b1c_estimated_kg", label: "B1C est. kg",    agg: "sum", format: "kg" },
-      { col: "hydration_pct",           label: "Hidratación %",  agg: "avg", format: "pct" },
+      { col: "weight_b2_kg",            label: "B2 kg",         agg: "sum", format: "kg" },
+      { col: "weight_b1c_estimated_kg", label: "B1C est. kg",   agg: "sum", format: "kg" },
+      {
+        col: "hydration_pct",
+        label: "Hidratación %",
+        format: "pct",
+        aggregateMode: "derived-ratio",
+        aggregateSources: {
+          numeratorKey: "weight_b2_kg",
+          denominatorKey: "weight_b1c_estimated_kg",
+        },
+      },
     ],
+      detailColumnConfig: {
+        weight_per_stem_kg: {
+          format: "g",
+          aggregateMode: "sum",
+        },
+      weight_b2_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      weight_b1c_estimated_kg: {
+        format: "kg",
+        aggregateMode: "sum",
+      },
+      hydration_pct: {
+        format: "pct",
+        aggregateMode: "derived-ratio",
+        aggregateSources: {
+          numeratorKey: "weight_b2_kg",
+          denominatorKey: "weight_b1c_estimated_kg",
+        },
+      },
+    },
+    detailTableMode: "flat",
+    detailVisibleColumns: [
+      "work_date",
+      "lot_date",
+      "grade",
+      "destination",
+      "weight_per_stem_kg",
+      "weight_b2_kg",
+      "weight_b1c_estimated_kg",
+      "hydration_pct",
+    ],
+    detailColumnLabels: {
+      work_date: "Fecha",
+      lot_date: "Lote",
+      grade: "Grado",
+      destination: "Destino",
+      weight_per_stem_kg: "Peso / Tallo",
+      weight_b2_kg: "Peso_B2",
+      weight_b1c_estimated_kg: "Peso_B1c",
+      hydration_pct: "%HIDR",
+    },
+    detailDateFilterKeys: ["work_date", "lot_date"],
     hasDestination: true,
     hasGrade: true,
     hasGradeGroup: false,
@@ -519,11 +1004,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b2_vs_b2a_weight_xl_np_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b2_kg",  label: "B2 kg",       agg: "sum", format: "kg" },
-      { col: "weight_b2a_kg", label: "B2A kg",      agg: "sum", format: "kg" },
-      { col: "dispatch_pct",  label: "Despacho %",  agg: "avg", format: "pct" },
-    ],
+    summaryMetrics: B2_B2A_WEIGHT_SUMMARY_METRICS,
+    detailColumnConfig: B2_B2A_WEIGHT_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: B2_B2A_WEIGHT_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: B2_B2A_WEIGHT_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: B2_B2A_WEIGHT_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
@@ -543,15 +1029,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     active: true,
     viewName: `${VIEW_PREFIX}apertura_b1c_vs_b2a_vs_ideal_weight_xl_np_cur`,
     dateCol: "work_date",
-    summaryMetrics: [
-      { col: "weight_b2a_kg",      label: "B2A kg",    agg: "sum", format: "kg" },
-      { col: "ideal_weight_kg",    label: "Ideal kg",  agg: "sum", format: "kg" },
-      { col: "b2a_to_ideal_ratio", label: "B2A/Ideal", agg: "avg", format: "ratio" },
-    ],
+    summaryMetrics: B1C_B2A_IDEAL_SUMMARY_METRICS,
+    detailColumnConfig: B1C_B2A_IDEAL_DETAIL_COLUMN_CONFIG,
+    detailTableMode: "flat",
+    detailVisibleColumns: B1C_B2A_IDEAL_DETAIL_VISIBLE_COLUMNS,
+    detailColumnLabels: B1C_B2A_IDEAL_DETAIL_COLUMN_LABELS,
+    detailDateFilterKeys: B1C_B2A_IDEAL_DETAIL_DATE_FILTER_KEYS,
     hasDestination: true,
     hasGrade: false,
     hasGradeGroup: false,
-    bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 172 },
+    bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 0 },
   },
   {
     key: "apertura-b2a-ideal-grade",
@@ -662,9 +1149,7 @@ async function loadNodeSummary(
 ): Promise<BalanzasNodeSummary> {
   const { conditions, values } = buildTemporalConditions(nodeDef.dateCol, filters);
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const aggExprs = nodeDef.summaryMetrics
-    .map((m) => `${m.agg === "sum" ? "SUM" : "AVG"}(${m.col}::numeric) AS ${m.col}`)
-    .join(", ");
+  const aggExprs = buildSummaryMetricSelects(nodeDef.summaryMetrics);
   const sql = `
     SELECT COUNT(*) AS row_count, MIN(${nodeDef.dateCol}) AS date_min, MAX(${nodeDef.dateCol}) AS date_max
     ${aggExprs ? `, ${aggExprs}` : ""}
@@ -682,11 +1167,12 @@ async function loadNodeSummary(
       dialogTitle: nodeDef.dialogTitle,
       branch: nodeDef.branch,
       active: nodeDef.active,
+      detailTableMode: nodeDef.detailTableMode ?? "tree",
       rowCount: toNumber(row.row_count) ?? 0,
       dateMin: row.date_min ? String(row.date_min).slice(0, 10) : null,
       dateMax: row.date_max ? String(row.date_max).slice(0, 10) : null,
       metrics: nodeDef.summaryMetrics.map((m) => {
-        const raw = toNumber(row[m.col]);
+        const raw = resolveSummaryMetricValue(row, m);
         return { col: m.col, label: m.label, value: raw, formatted: formatMetricValue(raw, m.format) };
       }),
       bpmnElementId: nodeDef.bpmnBinding?.elementId ?? null,
@@ -701,6 +1187,7 @@ async function loadNodeSummary(
       dialogTitle: nodeDef.dialogTitle,
       branch: nodeDef.branch,
       active: nodeDef.active,
+      detailTableMode: nodeDef.detailTableMode ?? "tree",
       rowCount: 0,
       dateMin: null,
       dateMax: null,
@@ -722,25 +1209,13 @@ async function loadNodeSummary(
 export async function loadNodeDetail(
   nodeKey: string,
   filters: BalanzasFilters,
-  localFilters: { destinations: string[]; grades: string[]; gradeGroups: string[] },
+  localFilters: BalanzasDetailLocalFilters,
 ): Promise<BalanzasNodeDetail> {
   const nodeDef = BALANZAS_NODES.find((n) => n.key === nodeKey);
   if (!nodeDef) throw new Error(`Nodo balanzas no encontrado: ${nodeKey}`);
 
   const { conditions, values } = buildTemporalConditions(nodeDef.dateCol, filters);
-
-  if (localFilters.destinations.length > 0 && nodeDef.hasDestination) {
-    values.push(localFilters.destinations);
-    conditions.push(`destination = any($${values.length}::text[])`);
-  }
-  if (localFilters.grades.length > 0 && nodeDef.hasGrade) {
-    values.push(localFilters.grades);
-    conditions.push(`grade = any($${values.length}::text[])`);
-  }
-  if (localFilters.gradeGroups.length > 0 && nodeDef.hasGradeGroup) {
-    values.push(localFilters.gradeGroups);
-    conditions.push(`grade_group = any($${values.length}::text[])`);
-  }
+  applyLocalDetailFilters(nodeDef, localFilters, conditions, values);
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
@@ -752,9 +1227,7 @@ export async function loadNodeDetail(
     nodeDef.hasGradeGroup ? "grade_group" : "null::text AS grade_group",
   ].join(", ");
 
-  const aggExprs = nodeDef.summaryMetrics
-    .map((m) => `${m.agg === "sum" ? "SUM" : "AVG"}(${m.col}::numeric) AS ${m.col}`)
-    .join(", ");
+  const aggExprs = buildSummaryMetricSelects(nodeDef.summaryMetrics);
 
   const [dataRes, optRes, summaryRes] = await Promise.all([
     query<BalanzasDetailRow>(
@@ -766,22 +1239,34 @@ export async function loadNodeDetail(
       optVals,
     ),
     query<Record<string, unknown>>(
-      `SELECT COUNT(*) AS row_count, MIN(${nodeDef.dateCol}) AS date_min, MAX(${nodeDef.dateCol}) AS date_max ${aggExprs ? `, ${aggExprs}` : ""} FROM ${nodeDef.viewName} ${optWhere}`,
-      optVals,
+      `SELECT COUNT(*) AS row_count, MIN(${nodeDef.dateCol}) AS date_min, MAX(${nodeDef.dateCol}) AS date_max ${aggExprs ? `, ${aggExprs}` : ""} FROM ${nodeDef.viewName} ${where}`,
+      values,
     ),
   ]);
 
   const rows = dataRes.rows;
   const sampleRow = rows[0] ?? {};
-  const columns = Object.keys(sampleRow).map((key) => ({
-    key,
-    label: columnLabel(key),
-    numeric: typeof sampleRow[key] === "number",
-  }));
+  const detailColumnConfig = nodeDef.detailColumnConfig ?? {};
+  const visibleColumnKeys = nodeDef.detailVisibleColumns ?? Object.keys(sampleRow);
+  const columns = visibleColumnKeys
+    .filter((key) => key in sampleRow)
+    .map<BalanzasDetailColumn>((key) => {
+    const config = detailColumnConfig[key];
+    const numeric = Boolean(config) || typeof sampleRow[key] === "number";
+
+    return {
+      key,
+      label: columnLabelForNode(nodeDef, key),
+      numeric,
+      format: numeric ? config?.format ?? "count" : null,
+      aggregateMode: numeric ? config?.aggregateMode ?? "sum" : null,
+      aggregateSources: numeric ? config?.aggregateSources : undefined,
+    };
+    });
 
   const sRow = summaryRes.rows[0] ?? {};
   const metrics: BalanzasSummaryMetric[] = nodeDef.summaryMetrics.map((m) => {
-    const raw = toNumber(sRow[m.col]);
+    const raw = resolveSummaryMetricValue(sRow, m);
     return { col: m.col, label: m.label, value: raw, formatted: formatMetricValue(raw, m.format) };
   });
 
@@ -790,6 +1275,8 @@ export async function loadNodeDetail(
     nodeLabel: nodeDef.label,
     branch: nodeDef.branch,
     active: nodeDef.active,
+    tableMode: nodeDef.detailTableMode ?? "tree",
+    dateFilterKeys: nodeDef.detailDateFilterKeys ?? [],
     rows,
     columns,
     destinations: [...new Set(optRes.rows.map((r) => r.destination).filter((v): v is string => !!v))].sort(),
@@ -927,6 +1414,7 @@ export function createEmptyBalanzasDashboardData(
   filters: BalanzasFilters,
   _message?: string,
 ): BalanzasDashboardData {
+  void _message;
   return { filters, options: { weeks: [], months: [], years: [] }, nodes: [] };
 }
 

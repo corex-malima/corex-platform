@@ -4,6 +4,11 @@ import { useMemo } from "react";
 
 import { ExpandableTreeTable, type ExpandableTreeTableColumn, type TreeNode } from "@/shared/tables/expandable-tree-table";
 import type { BalanzasNodeDetail } from "@/lib/postcosecha-balanzas";
+import {
+  aggregateBalanzasMetrics,
+  buildBalanzasLeafMetrics,
+  formatBalanzasTableMetric,
+} from "@/modules/postcosecha/components/balanzas-table-metrics";
 
 export type BalanzasGroupBy = "destination" | "grade" | "gradeGroup" | null;
 
@@ -59,40 +64,6 @@ function isoWeekFromDate(value: unknown): string | null {
   return `${yyShort}${wwPad}`;
 }
 
-function asNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function aggregateMetrics(rows: BalanzasRow[], numericColumns: string[]) {
-  const result: Record<string, number | null> = {};
-  for (const col of numericColumns) {
-    let sum = 0;
-    let any = false;
-    for (const row of rows) {
-      const num = asNumber(row[col]);
-      if (num !== null) {
-        sum += num;
-        any = true;
-      }
-    }
-    result[col] = any ? sum : null;
-  }
-  return result;
-}
-
-/**
- * Sanitiza valor numérico para mostrar al usuario.
- * `null`, `undefined`, `NaN`, `Infinity`, `-Infinity` → em-dash `"—"`.
- * Nunca renderiza valores crudos como `null`, `NaN`, `#DIV/0`, `Infinity`.
- */
-function formatMetric(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "—";
-  if (!Number.isFinite(value)) return "—";
-  return value.toLocaleString("es-EC", { maximumFractionDigits: 2 });
-}
-
 function formatLeafCell(value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -139,10 +110,7 @@ export function BalanzasExpandableTable({
     () => (groupBy ? findGroupByColumn(detail.columns, groupBy) : null),
     [detail.columns, groupBy],
   );
-  const numericColumns = useMemo(
-    () => detail.columns.filter((c) => c.numeric).map((c) => c.key),
-    [detail.columns],
-  );
+  const numericColumns = useMemo(() => detail.columns.filter((c) => c.numeric), [detail.columns]);
 
   const tree = useMemo<TreeNode<BalanzasNodeData>[]>(() => {
     if (!detail.rows.length) return [];
@@ -164,7 +132,7 @@ export function BalanzasExpandableTable({
     });
 
     return sortedWeeks.map(([weekKey, weekRows]) => {
-      const weekMetrics = aggregateMetrics(weekRows, numericColumns);
+      const weekMetrics = aggregateBalanzasMetrics(weekRows, numericColumns);
       const weekData: BalanzasNodeData = {
         rowCount: weekRows.length,
         metrics: weekMetrics,
@@ -188,7 +156,7 @@ export function BalanzasExpandableTable({
         weekChildren = Array.from(subBuckets.entries())
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([groupKey, groupRows]) => {
-            const groupMetrics = aggregateMetrics(groupRows, numericColumns);
+            const groupMetrics = aggregateBalanzasMetrics(groupRows, numericColumns);
             const groupData: BalanzasNodeData = {
               rowCount: groupRows.length,
               metrics: groupMetrics,
@@ -196,7 +164,7 @@ export function BalanzasExpandableTable({
             const leafChildren: TreeNode<BalanzasNodeData>[] = groupRows.map((row, idx) => ({
               id: `${weekKey}/${groupKey}/leaf-${idx}`,
               label: dateColumn ? formatLeafCell(row[dateColumn]) : `Fila ${idx + 1}`,
-              data: { rowCount: 1, metrics: aggregateMetrics([row], numericColumns), rawRow: row },
+              data: { rowCount: 1, metrics: buildBalanzasLeafMetrics(row, numericColumns), rawRow: row },
               isLeaf: true,
             }));
             return {
@@ -212,7 +180,7 @@ export function BalanzasExpandableTable({
         weekChildren = weekRows.map((row, idx) => ({
           id: `${weekKey}/leaf-${idx}`,
           label: dateColumn ? formatLeafCell(row[dateColumn]) : `Fila ${idx + 1}`,
-          data: { rowCount: 1, metrics: aggregateMetrics([row], numericColumns), rawRow: row },
+          data: { rowCount: 1, metrics: buildBalanzasLeafMetrics(row, numericColumns), rawRow: row },
           isLeaf: true,
         }));
       }
@@ -240,7 +208,7 @@ export function BalanzasExpandableTable({
         key: col.key,
         label: col.label,
         align: "right",
-        render: (node) => formatMetric(node.data.metrics[col.key] ?? null),
+        render: (node) => formatBalanzasTableMetric(node.data.metrics[col.key] ?? null, col),
       })),
     ];
   }, [detail.columns]);
