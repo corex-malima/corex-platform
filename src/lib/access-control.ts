@@ -139,11 +139,6 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/calidad/punto-apertura"],
   },
   {
-    pathnamePrefix: "/api/dead-plants-reseed",
-    policy: "resource-bound",
-    requiredResources: ["/dashboard/dead-plants-reseed"],
-  },
-  {
     pathnamePrefix: "/api/me/profile",
     policy: "resource-bound",
     requiredResources: ["/dashboard/mi-cuenta"],

@@ -11,6 +11,7 @@ export type PuntoAperturaFilters = {
   spType: string;
   month: string;
   year: string;
+  date: string;
   dominantClass: string;
   bloque: string;
 };
@@ -121,6 +122,7 @@ export const defaultPuntoAperturaFilters: PuntoAperturaFilters = {
   spType: "all",
   month: "all",
   year: "all",
+  date: "",
   dominantClass: "all",
   bloque: "all",
 };
@@ -132,6 +134,7 @@ export function normalizePuntoAperturaFilters(input: Partial<PuntoAperturaFilter
     spType: normalizeSelect(input.spType),
     month: normalizeSelect(input.month),
     year: normalizeSelect(input.year),
+    date: normalizeDate(input.date),
     dominantClass: normalizeSelect(input.dominantClass),
     bloque: normalizeSelect(input.bloque),
   };
@@ -142,10 +145,21 @@ function normalizeSelect(value: string | null | undefined) {
   return normalized ? normalized : "all";
 }
 
+function normalizeDate(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+}
+
 function sqlArrayFilter(alias: string, column: string, values: string[], params: unknown[]) {
   if (!values.length) return "";
   params.push(values);
   return ` and ${alias}.${column} = any($${params.length}::text[])`;
+}
+
+function sqlDateFilter(alias: string, column: string, value: string, params: unknown[]) {
+  if (!value) return "";
+  params.push(value);
+  return ` and ${alias}.${column}::date = $${params.length}::date`;
 }
 
 function buildBaseSql(whereSql = "") {
@@ -178,7 +192,7 @@ function buildBaseSql(whereSql = "") {
         t.ciclo::text as ciclo,
         coalesce(cp.area, 'Sin area') as area,
         coalesce(cp.sp_type, 'Sin tipo') as sp_type,
-        to_char(t.fecha::date, 'YYYY-MM') as record_month,
+        extract(month from t.fecha::date)::int::text as record_month,
         extract(year from t.fecha::date)::text as record_year,
         coalesce(c.iso_week_id, concat(c.iso_year::text, '-', lpad(c.iso_week::text, 2, '0'))) as iso_week_id,
         coalesce(t.ptoapertura_boton, 0)::numeric as boton,
@@ -250,7 +264,7 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
         coalesce(c.iso_week_id, concat(c.iso_year::text, '-', lpad(c.iso_week::text, 2, '0'))) as iso_week_id,
         coalesce(cp.area, 'Sin area') as area,
         coalesce(cp.sp_type, 'Sin tipo') as sp_type,
-        to_char(t.fecha::date, 'YYYY-MM') as record_month,
+        extract(month from t.fecha::date)::int::text as record_month,
         extract(year from t.fecha::date)::text as record_year,
         case greatest(
           coalesce(t.ptoapertura_boton, 0),
@@ -281,7 +295,7 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
       array(select distinct iso_week_id from filtered where iso_week_id is not null order by iso_week_id desc) as iso_weeks,
       array(select distinct area from filtered where area is not null order by area) as areas,
       array(select distinct sp_type from filtered where sp_type is not null order by sp_type) as sp_types,
-      array(select distinct record_month from filtered where record_month is not null order by record_month desc) as months,
+      array(select distinct record_month from filtered where record_month is not null order by record_month::int) as months,
       array(select distinct record_year from filtered where record_year is not null order by record_year desc) as years,
       array(select distinct dominant_class from filtered where dominant_class is not null order by dominant_class) as dominant_classes,
       array(select distinct nullif(t2.bloque, '') from ${SOURCE_TABLE} t2 where nullif(t2.bloque, '') is not null order by 1) as bloques
@@ -328,6 +342,7 @@ export async function getPuntoAperturaDashboardData(
     sqlArrayFilter("u", "sp_type", decodeMultiSelectValue(filters.spType), params),
     sqlArrayFilter("u", "record_month", decodeMultiSelectValue(filters.month), params),
     sqlArrayFilter("u", "record_year", decodeMultiSelectValue(filters.year), params),
+    sqlDateFilter("u", "fecha", filters.date, params),
     sqlArrayFilter("u", "dominante_clase", decodeMultiSelectValue(filters.dominantClass), params),
     sqlArrayFilter("u", "bloque", decodeMultiSelectValue(filters.bloque), params),
   ].filter(Boolean);

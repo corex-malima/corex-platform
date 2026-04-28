@@ -231,7 +231,7 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
         actions={<BalanzasMetricSelector value={metricMode} onChange={setMetricMode} />}
       >
         <FilterPanel>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <MultiSelectField
               id="balanzas-week"
               label="Semana"
@@ -258,8 +258,6 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
               onChange={(v) => update("year", v)}
               emptyLabel="Todos los años"
             />
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_200px]">
             <DateField
               id="balanzas-from"
               label="Fecha desde"

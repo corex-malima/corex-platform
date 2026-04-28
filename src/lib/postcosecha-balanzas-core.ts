@@ -1432,41 +1432,71 @@ function buildTemporalConditions(
 
 // ─── Filter options ───────────────────────────────────────────────────────────
 
-const OPTIONS_SOURCE = `${VIEW_PREFIX}gv_b1_vs_b1c_weight_xl_np_cur`;
 const OPTIONS_CACHE_TTL = 3 * 60 * 1000;
 
+/**
+ * Union DISTINCT de las fechas de todos los nodos activos. Cada nodo aporta su
+ * propia columna de fecha (`work_date` o `lot_date`); la unión natural de SQL
+ * (UNION sin ALL) deduplica los valores. Esto reemplaza el `OPTIONS_SOURCE`
+ * único anterior, asegurando que las opciones de Semana / Mes / Año reflejen
+ * todas las vistas activas y no sólo `gv_b1_vs_b1c_weight_xl_np_cur`.
+ */
+function buildActiveNodeDateUnionSql() {
+  return BALANZAS_NODES
+    .filter((node) => node.active)
+    .map((node) => `SELECT ${node.dateCol}::date AS d FROM ${node.viewName}`)
+    .join("\n      UNION\n      ");
+}
+
 async function loadFilterOptionsImpl(): Promise<BalanzasFilterOptions> {
-  const [weeksRes, monthsRes, yearsRes] = await Promise.all([
-    query<{ week_val: string }>(
-      `SELECT week_val FROM (
-         SELECT DISTINCT lpad((extract(isoyear from work_date) % 100)::int::text, 2, '0')
-                      || lpad(extract(week from work_date)::int::text, 2, '0') AS week_val
-         FROM ${OPTIONS_SOURCE}
-       ) t ORDER BY week_val DESC`,
+  const sql = `
+    WITH all_dates AS (
+      ${buildActiveNodeDateUnionSql()}
     ),
-    query<{ month_val: string }>(
-      `SELECT month_val FROM (
-         SELECT DISTINCT extract(month from work_date)::int::text AS month_val
-         FROM ${OPTIONS_SOURCE}
-       ) t ORDER BY month_val::int ASC`,
-    ),
-    query<{ year_val: string }>(
-      `SELECT year_val FROM (
-         SELECT DISTINCT extract(year from work_date)::int::text AS year_val
-         FROM ${OPTIONS_SOURCE}
-       ) t ORDER BY year_val::int DESC`,
-    ),
-  ]);
+    distinct_dates AS (
+      SELECT DISTINCT d FROM all_dates WHERE d IS NOT NULL
+    )
+    SELECT
+      (
+        SELECT array_agg(week_val ORDER BY week_val DESC)
+        FROM (
+          SELECT DISTINCT
+            lpad((extract(isoyear from d) % 100)::int::text, 2, '0')
+            || lpad(extract(week from d)::int::text, 2, '0') AS week_val
+          FROM distinct_dates
+        ) w
+      ) AS weeks,
+      (
+        SELECT array_agg(month_val ORDER BY month_val::int ASC)
+        FROM (
+          SELECT DISTINCT extract(month from d)::int::text AS month_val
+          FROM distinct_dates
+        ) m
+      ) AS months,
+      (
+        SELECT array_agg(year_val ORDER BY year_val::int DESC)
+        FROM (
+          SELECT DISTINCT extract(year from d)::int::text AS year_val
+          FROM distinct_dates
+        ) y
+      ) AS years
+  `;
+
+  const result = await query<{ weeks: string[] | null; months: string[] | null; years: string[] | null }>(sql);
+  const row = result.rows[0];
+  const weeks = row?.weeks ?? [];
+  const months = row?.months ?? [];
+  const years = row?.years ?? [];
 
   return {
-    weeks: weeksRes.rows.map((r) => ({ value: r.week_val, label: formatWeekLabel(r.week_val) })),
-    months: monthsRes.rows.map((r) => ({ value: r.month_val, label: formatMonthName(r.month_val) })),
-    years: yearsRes.rows.map((r) => ({ value: r.year_val, label: r.year_val })),
+    weeks: weeks.map((value) => ({ value, label: formatWeekLabel(value) })),
+    months: months.map((value) => ({ value, label: formatMonthName(value) })),
+    years: years.map((value) => ({ value, label: value })),
   };
 }
 
 function loadFilterOptions(): Promise<BalanzasFilterOptions> {
-  return cachedAsync("balanzas:options:v3", OPTIONS_CACHE_TTL, loadFilterOptionsImpl);
+  return cachedAsync("balanzas:options:v4", OPTIONS_CACHE_TTL, loadFilterOptionsImpl);
 }
 
 // ─── Node summary ─────────────────────────────────────────────────────────────
