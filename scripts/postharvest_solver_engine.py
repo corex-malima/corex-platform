@@ -336,7 +336,7 @@ OBJECTIVE_TOLERANCE = 1e-4
 INTEGRAL_TOLERANCE = 1e-5
 WEIGHT_TOLERANCE = 1e-2
 MACRO_WEIGHT_MIN_RATIO = 0.97
-MACRO_WEIGHT_MAX_RATIO = 1.01
+MACRO_WEIGHT_TARGET_RATIO = 1.0
 
 
 def sku_allows_euro_stem_flex(sku: Any) -> bool:
@@ -520,8 +520,9 @@ def solve_pipeline(
         order_position: pulp.LpVariable(f"stage1_recipe_stem_gap_{order_position}", lowBound=0)
         for order_position in range(n_orders)
     }
-    stage1_macro_low = pulp.LpVariable("stage1_macro_low", lowBound=0)
-    stage1_macro_high = pulp.LpVariable("stage1_macro_high", lowBound=0)
+    stage1_macro_floor_shortfall = pulp.LpVariable("stage1_macro_floor_shortfall", lowBound=0)
+    stage1_macro_target_low = pulp.LpVariable("stage1_macro_target_low", lowBound=0)
+    stage1_macro_target_high = pulp.LpVariable("stage1_macro_target_high", lowBound=0)
     stage1_over_ideal = {
         order_position: pulp.LpVariable(f"stage1_over_ideal_{order_position}", lowBound=0)
         for order_position in range(n_orders)
@@ -621,6 +622,7 @@ def solve_pipeline(
     stage1_status_ideal = "No aplica"
     stage1_status_stems = "No aplica"
     stage1_macro_violation_opt = 0.0
+    stage1_macro_target_deviation_opt = 0.0
     stage1_recipe_gap_opt = 0.0
     stage1_overweight_opt = 0.0
     stage1_ideal_deviation_opt = 0.0
@@ -649,12 +651,16 @@ def solve_pipeline(
         for order_position in range(n_orders)
     )
     stage1_problem += (
-        stage1_macro_low >= MACRO_WEIGHT_MIN_RATIO * fulfilled_ideal_expr - total_stage1_weight_expr
-    ), "stage1_macro_low_balance"
+        stage1_macro_floor_shortfall >= MACRO_WEIGHT_MIN_RATIO * fulfilled_ideal_expr - total_stage1_weight_expr
+    ), "stage1_macro_floor_balance"
     stage1_problem += (
-        stage1_macro_high >= total_stage1_weight_expr - MACRO_WEIGHT_MAX_RATIO * fulfilled_ideal_expr
-    ), "stage1_macro_high_balance"
-    stage1_macro_violation_expr = stage1_macro_low + stage1_macro_high
+        stage1_macro_target_low >= MACRO_WEIGHT_TARGET_RATIO * fulfilled_ideal_expr - total_stage1_weight_expr
+    ), "stage1_macro_target_low_balance"
+    stage1_problem += (
+        stage1_macro_target_high >= total_stage1_weight_expr - MACRO_WEIGHT_TARGET_RATIO * fulfilled_ideal_expr
+    ), "stage1_macro_target_high_balance"
+    stage1_macro_violation_expr = stage1_macro_floor_shortfall
+    stage1_macro_target_deviation_expr = stage1_macro_target_low + stage1_macro_target_high
     stage1_problem.setObjective(-stage1_macro_violation_expr)
     stage1_status_macro = solve_or_raise(
         stage1_problem,
@@ -667,6 +673,20 @@ def solve_pipeline(
     stage1_problem += (
         stage1_macro_violation_expr <= stage1_macro_violation_opt + objective_fix_tolerance(stage1_macro_violation_opt)
     ), "stage1_fix_macro_violation"
+
+    stage1_problem.setObjective(-stage1_macro_target_deviation_expr)
+    stage1_status_macro = solve_or_raise(
+        stage1_problem,
+        stage1_solver,
+        "No se pudo acercar el peso macro estimado al ideal",
+        integer_vars=list(stage1_b.values()) + list(stage1_fulfilled_by_date.values()),
+        allow_feasible_incumbent=True,
+    )
+    stage1_macro_target_deviation_opt = float(pulp.value(stage1_macro_target_deviation_expr) or 0.0)
+    stage1_problem += (
+        stage1_macro_target_deviation_expr
+        <= stage1_macro_target_deviation_opt + objective_fix_tolerance(stage1_macro_target_deviation_opt)
+    ), "stage1_fix_macro_target_deviation"
 
     stage1_recipe_gap_expr = pulp.lpSum(stage1_recipe_stem_gap[order_position] for order_position in range(n_orders))
     stage1_problem.setObjective(-stage1_recipe_gap_expr)
@@ -704,7 +724,7 @@ def solve_pipeline(
     stage1_status_ideal = solve_or_raise(
         stage1_problem,
         stage1_solver,
-        "No se pudo minimizar la desviacion estimada respecto al ideal",
+        "No se pudo minimizar la desviacion estimada por pedido respecto al ideal",
         integer_vars=list(stage1_b.values()) + list(stage1_fulfilled_by_date.values()),
         allow_feasible_incumbent=True,
     )
@@ -769,6 +789,7 @@ def solve_pipeline(
     stage2_status_weight = "No aplica"
     preferred_violation_opt = 0.0
     macro_violation_opt = 0.0
+    macro_target_deviation_opt = 0.0
     balance_overweight_opt = 0.0
     recipe_gap_opt = 0.0
     overweight_opt = 0.0
@@ -848,8 +869,9 @@ def solve_pipeline(
             order_position: pulp.LpVariable(f"stage2_extra_grades_{order_position}", lowBound=0)
             for order_position in active_order_positions
         }
-        stage2_macro_low = pulp.LpVariable("stage2_macro_low", lowBound=0)
-        stage2_macro_high = pulp.LpVariable("stage2_macro_high", lowBound=0)
+        stage2_macro_floor_shortfall = pulp.LpVariable("stage2_macro_floor_shortfall", lowBound=0)
+        stage2_macro_target_low = pulp.LpVariable("stage2_macro_target_low", lowBound=0)
+        stage2_macro_target_high = pulp.LpVariable("stage2_macro_target_high", lowBound=0)
         stage2_max_overweight_ratio = pulp.LpVariable("stage2_max_overweight_ratio", lowBound=0)
 
         for order_position in active_order_positions:
@@ -980,12 +1002,16 @@ def solve_pipeline(
             )
         )
         stage2_problem += (
-            stage2_macro_low >= MACRO_WEIGHT_MIN_RATIO * resolved_ideal_total - actual_weight_expr
-        ), "stage2_macro_low_balance"
+            stage2_macro_floor_shortfall >= MACRO_WEIGHT_MIN_RATIO * resolved_ideal_total - actual_weight_expr
+        ), "stage2_macro_floor_balance"
         stage2_problem += (
-            stage2_macro_high >= actual_weight_expr - MACRO_WEIGHT_MAX_RATIO * resolved_ideal_total
-        ), "stage2_macro_high_balance"
-        macro_violation_expr = stage2_macro_low + stage2_macro_high
+            stage2_macro_target_low >= MACRO_WEIGHT_TARGET_RATIO * resolved_ideal_total - actual_weight_expr
+        ), "stage2_macro_target_low_balance"
+        stage2_problem += (
+            stage2_macro_target_high >= actual_weight_expr - MACRO_WEIGHT_TARGET_RATIO * resolved_ideal_total
+        ), "stage2_macro_target_high_balance"
+        macro_violation_expr = stage2_macro_floor_shortfall
+        macro_target_deviation_expr = stage2_macro_target_low + stage2_macro_target_high
         balance_overweight_expr = stage2_max_overweight_ratio
 
         stage2_problem.setObjective(macro_violation_expr)
@@ -1000,6 +1026,20 @@ def solve_pipeline(
         stage2_problem += (
             macro_violation_expr <= macro_violation_opt + objective_fix_tolerance(macro_violation_opt)
         ), "stage2_fix_macro_violation"
+
+        stage2_problem.setObjective(macro_target_deviation_expr)
+        stage2_status_weight = solve_or_raise(
+            stage2_problem,
+            stage2_solver,
+            "No se pudo acercar el peso macro final al ideal",
+            integer_vars=list(stage2_u.values()),
+            allow_feasible_incumbent=True,
+        )
+        macro_target_deviation_opt = float(pulp.value(macro_target_deviation_expr) or 0.0)
+        stage2_problem += (
+            macro_target_deviation_expr
+            <= macro_target_deviation_opt + objective_fix_tolerance(macro_target_deviation_opt)
+        ), "stage2_fix_macro_target_deviation"
 
         stage2_problem.setObjective(balance_overweight_expr)
         stage2_status_balance = solve_or_raise(
@@ -1065,18 +1105,6 @@ def solve_pipeline(
         stage2_problem += (
             preferred_violation_expr <= preferred_violation_opt + objective_fix_tolerance(preferred_violation_opt)
         ), "stage2_fix_preferred_violation"
-
-        stage2_problem.setObjective(actual_weight_expr)
-        stage2_status_weight = solve_or_raise(
-            stage2_problem,
-            build_cbc_solver(),
-            "No se pudo minimizar el peso final real",
-        )
-
-        actual_weight_opt = float(pulp.value(actual_weight_expr) or 0.0)
-        stage2_problem += (
-            actual_weight_expr <= actual_weight_opt + objective_fix_tolerance(actual_weight_opt)
-        ), "stage2_fix_actual_weight"
 
         stage2_problem.setObjective(stem_violation_expr)
         stage2_status_stems = solve_or_raise(
@@ -1314,11 +1342,13 @@ def solve_pipeline(
         )
         else "Feasible con time limit",
         "stage1_macro_violation_opt": stage1_macro_violation_opt,
+        "stage1_macro_target_deviation_opt": stage1_macro_target_deviation_opt,
         "stage1_recipe_gap_opt": stage1_recipe_gap_opt,
         "stage1_overweight_opt": stage1_overweight_opt,
         "stage1_ideal_deviation_opt": stage1_ideal_deviation_opt,
         "fulfilled_ideal_opt": fulfilled_ideal_opt,
         "macro_violation_opt": macro_violation_opt,
+        "macro_target_deviation_opt": macro_target_deviation_opt if active_order_positions else 0.0,
         "balance_overweight_opt": balance_overweight_opt,
         "recipe_gap_opt": recipe_gap_opt,
         "preferred_violation_opt": preferred_violation_opt,
