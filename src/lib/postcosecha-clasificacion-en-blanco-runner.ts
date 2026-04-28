@@ -16,6 +16,7 @@ import type {
   PoscosechaClasificacionRecipeResult,
   PoscosechaClasificacionResult,
   PoscosechaClasificacionRunInput,
+  PoscosechaClasificacionRunMode,
   SolverDateKey,
 } from "@/lib/postcosecha-clasificacion-en-blanco-types";
 import {

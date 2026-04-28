@@ -1,0 +1,37 @@
+import { NextRequest, NextResponse } from "next/server";
+
+import { requireAuth } from "@/lib/api-auth";
+import { handleApiError } from "@/lib/api-error";
+import { loadScheduledFollowups } from "@/lib/talento-humano-seguimientos-schedule";
+import type { EmployeeFollowupFilters } from "@/modules/talento-humano/seguimientos/server/types";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  const authError = await requireAuth(request);
+  if (authError) return authError;
+
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const asOfDate = searchParams.get("asOfDate")?.trim() || new Date().toISOString().slice(0, 10);
+
+    const filters: EmployeeFollowupFilters = {
+      asOfDate,
+      personSearch: searchParams.get("q")?.trim() || undefined,
+      associatedWorker: searchParams.get("associatedWorker")?.trim() || undefined,
+      route: (searchParams.get("route")?.trim() as "AGR" | "ADM" | "" | undefined) || undefined,
+      status: (searchParams.get("status")?.trim() as EmployeeFollowupFilters["status"]) || "all",
+      dateFrom: searchParams.get("dateFrom")?.trim() || undefined,
+      dateTo: searchParams.get("dateTo")?.trim() || undefined,
+      uniqueFollowUpCode: searchParams.get("uniqueFollowUpCode")?.trim() || undefined,
+    };
+
+    const rows = await loadScheduledFollowups(filters);
+
+    return NextResponse.json({ rows }, {
+      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+    });
+  } catch (error) {
+    return handleApiError(error, "No se pudo buscar seguimientos programados.");
+  }
+}

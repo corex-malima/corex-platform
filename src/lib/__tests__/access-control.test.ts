@@ -34,6 +34,18 @@ describe("access control", () => {
     expect(getApiAccessRule("/api/unknown")).toBeNull();
   });
 
+  it("registers TTHH seguimientos API rule", () => {
+    expect(getApiAccessRule("/api/talento-humano/seguimientos")?.requiredResources).toEqual([
+      "/dashboard/talento-humano/seguimientos",
+    ]);
+    expect(getApiAccessRule("/api/talento-humano/seguimientos/boot")?.requiredResources).toEqual([
+      "/dashboard/talento-humano/seguimientos",
+    ]);
+    expect(getApiAccessRule("/api/talento-humano/seguimientos/responses/abc-123")?.requiredResources).toEqual([
+      "/dashboard/talento-humano/seguimientos",
+    ]);
+  });
+
   it("derives viewer resources from active non-admin modules", () => {
     const viewerResources = getBaseAllowedResources("viewer");
     const activeNonAdmin = ACTIVE_MODULES

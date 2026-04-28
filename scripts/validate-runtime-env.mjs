@@ -66,6 +66,10 @@ if (process.env.NODE_ENV === "production") {
       name: "CAMP_DATABASE_NAME",
       hint: "Necesario para el pool db_camp usado por el modulo Campo.",
     },
+    {
+      name: "HUMAN_TALENT_DATABASE_NAME",
+      hint: "Necesario para Seguimientos Trabajo Social. Ver docs/datos.md. Alternativa: HUMAN_TALENT_DATABASE_URL.",
+    },
   ];
 
   for (const { name, hint } of recommendedInProduction) {

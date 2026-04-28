@@ -46,6 +46,10 @@ export const PANEL_ACCESS_RESOURCES: AccessResource[] = [
   { resourceKey: "panel:person-sheet.info",        label: "Ficha del personal / Informacion",  section: "Paneles" },
   { resourceKey: "panel:person-sheet.performance", label: "Ficha del personal / Rendimiento",  section: "Paneles" },
   { resourceKey: "panel:person-sheet.medical",     label: "Ficha del personal / Ficha medica", section: "Paneles" },
+  { resourceKey: "panel:tthh.followups.view",      label: "Seguimientos / Ver",                section: "Paneles" },
+  { resourceKey: "panel:tthh.followups.write",     label: "Seguimientos / Registrar",          section: "Paneles" },
+  { resourceKey: "panel:tthh.followups.sensitive", label: "Seguimientos / Ver datos sensibles", section: "Paneles" },
+  { resourceKey: "panel:tthh.followups.admin",     label: "Seguimientos / Corregir y anular",  section: "Paneles" },
 ];
 
 const MODULE_ACCESS_RESOURCES: AccessResource[] = ALL_MANAGED_MODULES.map((module) => ({
@@ -213,6 +217,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     pathnamePrefix: "/api/programaciones",
     policy: "resource-bound",
     requiredResources: ["/dashboard/programaciones"],
+  },
+  {
+    pathnamePrefix: "/api/talento-humano/seguimientos",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/talento-humano/seguimientos"],
   },
   {
     pathnamePrefix: "/api/talento-humano/activos",
