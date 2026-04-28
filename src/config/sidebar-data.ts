@@ -31,6 +31,7 @@ export type NavGroup = {
 
 const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   Indicadores: TrendingUp,
+  Bodega: DatabaseZap,
   Campo: Sprout,
   Postcosecha: Factory,
   "Talento Humano": Users,
