@@ -40,6 +40,7 @@ Usar `src/server/security/rate-limit.ts`.
   - `admin:users` (`ADMIN_USERS_RATE_LIMIT`).
   - `dead-plants-reseed:write` (`DEAD_PLANTS_RESEED_RATE_LIMIT` / `DEAD_PLANTS_RESEED_RATE_LIMIT_WINDOW_MS`) para `POST /api/dead-plants-reseed/capture` y `PATCH /api/dead-plants-reseed/records`.
   - `chat` (`CHAT_RATE_LIMIT`).
+  - `tthh-followups:write` (`TTHH_FOLLOWUPS_WRITE_RATE_LIMIT` / `TTHH_FOLLOWUPS_WRITE_RATE_LIMIT_WINDOW_MS`) para POST/PATCH en `/api/talento-humano/seguimientos/responses`.
 
 ## Logging
 
@@ -61,6 +62,10 @@ Registro actual (`src/lib/access-control.ts`, `PANEL_ACCESS_RESOURCES`):
 - `panel:person-sheet.info` - Ficha del personal > Informacion
 - `panel:person-sheet.performance` - Ficha del personal > Rendimiento
 - `panel:person-sheet.medical` - Ficha del personal > Ficha medica (gatea tambien `/api/medical/person/*`)
+- `panel:tthh.followups.view` - Seguimientos / Ver
+- `panel:tthh.followups.write` - Seguimientos / Registrar (requerido para POST /responses)
+- `panel:tthh.followups.sensitive` - Seguimientos / Ver datos sensibles (sin el, los campos de familia/embarazo/conflictos/RRHH retornan null)
+- `panel:tthh.followups.admin` - Seguimientos / Corregir y anular (requerido para PATCH /responses)
 
 Flujo para agregar uno nuevo:
 
@@ -83,3 +88,7 @@ Viewers heredan todos los paneles por defecto (opt-out); el admin los bloquea po
 - `LOG_FORMAT`
 - `CHAT_ENABLED`
 - `CHAT_RATE_LIMIT`
+- `HUMAN_TALENT_DATABASE_NAME` (db satelite para Seguimientos; default `db_human_talent`)
+- `HUMAN_TALENT_DATABASE_URL` (alternativa a split config; prioridad sobre DATABASE_HOST/PORT/USER/PASSWORD)
+- `TTHH_FOLLOWUPS_WRITE_RATE_LIMIT`
+- `TTHH_FOLLOWUPS_WRITE_RATE_LIMIT_WINDOW_MS`

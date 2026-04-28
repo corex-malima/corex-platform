@@ -356,6 +356,58 @@ Referencia completa de todos los endpoints REST de CoreX v4. Reemplaza el archiv
 
 ---
 
+## Talento Humano — Seguimientos Trabajo Social
+
+**Política:** `resource-bound` → requiere acceso a `/dashboard/talento-humano/seguimientos`.  
+**Prefijo:** `/api/talento-humano/seguimientos`
+
+### `GET /api/talento-humano/seguimientos/boot`
+Carga inicial: catálogos del módulo, lista de trabajadoras sociales y permisos del usuario.  
+**Response:** `EmployeeFollowupBootPayload` — `{ catalogs, associatedWorkers, permissions }`
+
+### `GET /api/talento-humano/seguimientos/followup-search`
+Lista seguimientos programados con filtros.  
+**Query params:** `asOfDate`, `q` (persona), `associatedWorker`, `route` (AGR|ADM), `status` (pending|registered|annulled), `dateFrom`, `dateTo`, `uniqueFollowUpCode`  
+**Response:** `{ rows: EmployeeScheduledFollowupRow[] }` — máx. 500 filas.  
+**Arquitectura:** composición en API — DW (`gld.vw_tthh_asg_followup_scd2`) + db_human_talent (estado de respuesta), merge en TypeScript.
+
+### `GET /api/talento-humano/seguimientos/person-search`
+Búsqueda de personas por nombre o código.  
+**Query params:** `q` (min. 2 chars), `asOfDate`  
+**Response:** `{ results: EmployeeFollowupPersonSearchResult[] }`
+
+### `GET /api/talento-humano/seguimientos/person/[personId]`
+Ficha completa de un colaborador con área vigente PIT.  
+**Query params:** `asOfDate`  
+**Response:** `EmployeeFollowupPersonDetail`
+
+### `GET /api/talento-humano/seguimientos/responses`
+Lista respuestas registradas con filtros.  
+**Query params:** `personId`, `uniqueFollowUpCode`, `route`, `dateFrom`, `dateTo`  
+**Response:** `{ rows: EmployeeFollowupResponseSummary[] }`
+
+### `POST /api/talento-humano/seguimientos/responses`
+Registra una nueva respuesta AGR o ADM.  
+**RBAC adicional:** requiere `panel:tthh.followups.write` o superadmin.  
+**Rate limit:** `TTHH_FOLLOWUPS_WRITE_RATE_LIMIT` (default 30) / `TTHH_FOLLOWUPS_WRITE_RATE_LIMIT_WINDOW_MS` (default 60000).  
+**Body:** `CreateFollowupResponseInput` — todos los campos AGR/ADM como opcionales según ruta + `selections: EmployeeFollowupSelectionInput[]`.  
+**Response:** `{ eventId, correctionGroupId }` — status 201.  
+**Transacción:** insert en fact + insert en tabla puente dentro de la misma transacción en db_human_talent.
+
+### `GET /api/talento-humano/seguimientos/responses/[eventId]`
+Detalle de una respuesta específica.  
+**RBAC sensible:** sin `panel:tthh.followups.sensitive`, los campos de familia/embarazo, RRHH, conflictos, observaciones de dificultad y retención retornan `null`.  
+**Response:** `EmployeeFollowupResponseDetail`
+
+### `PATCH /api/talento-humano/seguimientos/responses/[eventId]`
+Corrige, anula o reactiva una respuesta existente.  
+**RBAC adicional:** requiere `panel:tthh.followups.admin` o superadmin.  
+**Rate limit:** mismo que POST.  
+**Body:** `{ action: "update" | "annul" | "reactivate", changeReason, invalidReasonCode?, ...campos }`  
+**Transacción (versionado):** marca versión anterior con `is_latest_valid_version=false` → inserta nueva versión con `response_version+1`, `supersedes_event_id` apuntando a la anterior.
+
+---
+
 ## Notas generales
 
 ### Encoding de path params

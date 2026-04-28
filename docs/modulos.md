@@ -19,6 +19,7 @@ Referencia por módulo activo: propósito, datos, KPIs, archivos clave y endpoin
 | [Composición Laboral](#composicion-laboral) | `/dashboard/talento-humano/composicion-laboral` | Dashboard |
 | [Demografía Personal](#demografia-personal) | `/dashboard/talento-humano/demografia-personal` | Dashboard |
 | [Rotación Laboral](#rotacion-laboral) | `/dashboard/talento-humano/rotacion-laboral` | Dashboard |
+| [Seguimientos Trabajo Social](#seguimientos-trabajo-social) | `/dashboard/talento-humano/seguimientos` | Dashboard |
 | [Programaciones](#programaciones) | `/dashboard/programaciones` | Gestión |
 | [Administrar SKUs](#administrar-skus) | `/dashboard/postcosecha/administrar-maestros/skus` | Gestión |
 | [Clasificación en Blanco](#clasificacion-en-blanco) | `/dashboard/postcosecha/planificacion/solver/clasificacion-en-blanco` | Gestión |
@@ -468,6 +469,50 @@ Vistas `gld.mv_camp_ind_bal_apertura_*` para cada nodo de balanza (BAL1→BAL1C,
 - `PATCH /api/me/profile` — `profilePatchSchema.partial()` acepta los 12 campos; la UI solo envía 3 campos editables + pass-through
 
 **Migración DB:** `alter table public.usr_dim_profile_pref_scd0 add column if not exists contact_email text;` (idempotente).
+
+---
+
+## Seguimientos Trabajo Social
+
+**Clave catálogo:** `talento-seguimientos`
+**Ruta:** `/dashboard/talento-humano/seguimientos`
+**Sección:** Dashboard / Indicadores / Talento Humano
+
+Permite a Trabajo Social consultar los seguimientos programados (AGR o ADM) y registrar las respuestas estructuradas directamente desde la interfaz.
+
+**Datos:**
+- Seguimientos programados: `gld.vw_tthh_asg_followup_scd2` (base principal DW).
+- Perfil persona (punto en el tiempo): `slv.tthh_dim_person_profile_scd2` + `slv.tthh_asgn_person_area_event_scd2` (base principal).
+- Respuestas registradas: `db_human_talent.public.tthh_fact_employee_followup_response_cur` (cluster secundario).
+- Selecciones multiselect: `db_human_talent.public.tthh_asgn_employee_followup_catalog_selection_cur`.
+- Catálogos: `db_human_talent.public.common_dim_catalog_item_scd2`.
+
+La composición DW + db_human_talent se realiza **en la API** (no por SQL JOIN) ya que son clusters separados.
+
+**Rutas de seguimiento:**
+- `AGR` — Para colaboradores con `job_classification_code = 'AGRICOLA'` o `follow_up_type` agrícola.
+- `ADM` — Para colaboradores con `job_classification_code = 'ADMINISTRATIVO'`.
+
+**KPIs disponibles:** Programados, Pendientes, Registrados, Anulados.
+
+**Versionado de respuestas:** Cada respuesta tiene `correction_group_id` (identifica la cadena de correcciones), `response_version` (incrementa por corrección), `supersedes_event_id` (apunta a la versión anterior) e `is_latest_valid_version` (true solo en la última versión activa).
+
+**RBAC:**
+- `panel:tthh.followups.view` — Ver seguimientos.
+- `panel:tthh.followups.write` — Registrar respuestas (POST).
+- `panel:tthh.followups.sensitive` — Ver campos sensibles (familia, embarazo, conflictos, RRHH).
+- `panel:tthh.followups.admin` — Corregir y anular (PATCH).
+
+**Archivos clave:**
+- `src/app/(dashboard)/dashboard/talento-humano/seguimientos/page.tsx`
+- `src/modules/talento-humano/seguimientos/components/seguimientos-page.tsx`
+- `src/modules/talento-humano/seguimientos/components/followup-workspace.tsx`
+- `src/lib/talento-humano-seguimientos-schedule.ts`
+- `src/lib/talento-humano-seguimientos-responses.ts`
+- `src/lib/human-talent-db.ts`
+- `sql/db_human_talent.sql`
+
+**API endpoints:** `GET /api/talento-humano/seguimientos/boot`, `GET /api/talento-humano/seguimientos/followup-search`, `POST /api/talento-humano/seguimientos/responses` (+ más — ver `docs/apis.md`).
 
 ---
 

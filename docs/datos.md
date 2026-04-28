@@ -479,3 +479,79 @@ Ver tests: `src/shared/lib/__tests__/format.test.ts` (12 casos cubren ambos cont
 **Regla:** la pantalla muestra siempre `YYWW`. Si el backend devuelve otro formato (`YYYYWW`, `YYYY-WW`), `formatIsoWeekLabel` lo normaliza al `displayValue` del filtro. El value almacenado puede seguir siendo el del backend (para queries) — solo el LABEL visible se canoniza.
 
 `WeekField` (`src/shared/filters/week-field.tsx`) está disponible para casos de selección puntual de una semana. Para rangos / multi-selección, los explorers actuales usan `SingleSelectField` / `MultiSelectField` con la lista de `availableWeeks` del endpoint + `displayValue={formatIsoWeekLabel}` — patrón válido y documentado aquí.
+
+---
+
+## Base de datos satelite: db_human_talent
+
+El módulo Seguimientos Trabajo Social usa una segunda base de datos en el mismo host (`HUMAN_TALENT_DATABASE_NAME=db_human_talent`), o en un host distinto si se configura `HUMAN_TALENT_DATABASE_URL`. **Esta base está en un cluster PostgreSQL separado del DW** — no hay `CROSS DATABASE JOIN` ni FDW.
+
+### Tablas en `public`
+
+| Tabla | Propósito |
+|-------|-----------|
+| `common_dim_catalog_group_scd2` | Grupos de catálogo |
+| `common_dim_catalog_item_scd2` | Items de catálogo (itemCode, itemLabelEs, displayOrder) |
+| `common_asgn_catalog_usage_cur` | Relación columna → catálogo (auditable) |
+| `tthh_fact_employee_followup_response_cur` | Fact principal de respuestas (versionada) |
+| `tthh_asgn_employee_followup_catalog_selection_cur` | Tabla puente para multiselección |
+
+### Versionado de correcciones
+
+Cada respuesta registrada tiene:
+- `correction_group_id uuid` — identifica la cadena de correcciones (misma para todas las versiones de un mismo registro original).
+- `response_version int` — empieza en 1, incrementa por corrección.
+- `supersedes_event_id uuid` — apunta al `event_id` de la versión anterior (null en v1).
+- `is_latest_valid_version bool` — true solo en la última versión activa por `(unique_follow_up_code, person_id)`.
+
+Cuando se corrige un registro: la versión antigua pone `is_latest_valid_version=false`, se inserta una nueva con `response_version+1`, `supersedes_event_id` y `correction_group_id` del mismo grupo.
+
+### Tabla puente multiselección
+
+`tthh_asgn_employee_followup_catalog_selection_cur` soporta campos de selección múltiple con `selection_group_code`:
+
+| Grupo (`selection_group_code`) | Campo UI |
+|-------------------------------|----------|
+| `work_difficulty` | Dificultades en el trabajo |
+| `work_like_most` | Lo que más le gusta del trabajo |
+| `improvement_opportunity` | Oportunidad de mejora |
+| `short_retention_reason` | Razones para salir pronto |
+
+**No** existen columnas `work_like_most_code` ni `improvement_opportunity_code` en la fact — estos campos siempre van en la tabla puente.
+
+### Fuentes DW (base principal, solo lectura)
+
+| Vista/Tabla | Uso |
+|-------------|-----|
+| `gld.vw_tthh_asg_followup_scd2` | Seguimientos programados (person_id, follow_up_type, follow_up_code, unique_follow_up_code, follow_up_date) |
+| `slv.tthh_dim_person_profile_scd2` | Perfil persona (is_current=true, is_valid=true) |
+| `slv.tthh_asgn_person_area_event_scd2` | Asignaciones de área (event_type='CA', PIT con asOfDate) |
+| `slv.camp_dim_area_profile_scd2` | Perfil área (area_name, area_general) |
+
+### Derivación de ruta
+
+```typescript
+deriveFollowupRoute(followUpType, jobClassificationCode):
+  "AGRICOLA" → "AGR"
+  "ADMINISTRATIVO" → "ADM"
+  follow_up_type "AGR*" → "AGR"
+  follow_up_type "ADM*" → "ADM"
+  fallback → "AGR"
+```
+
+Implementado en `src/lib/talento-humano-seguimientos-person.ts`.
+
+### Composición en API
+
+`loadScheduledFollowups()` hace **dos queries separadas**:
+1. `query()` (pool principal) → seguimientos DW + perfil persona + área vigente PIT.
+2. `queryHumanTalent()` (pool secundario) → respuestas latest valid por `(unique_follow_up_code, person_id)`.
+3. Merge en TypeScript → calcula `status: "pending" | "registered" | "annulled"`.
+
+### Aplicar el SQL
+
+```bash
+node scripts/apply-human-talent-sql.mjs
+# Lee HUMAN_TALENT_DATABASE_URL o split config desde .env.local
+# Aplica sql/db_human_talent.sql (idempotente: CREATE TABLE IF NOT EXISTS, INSERT ... ON CONFLICT DO NOTHING)
+```
