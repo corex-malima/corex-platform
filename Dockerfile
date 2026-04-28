@@ -40,26 +40,35 @@ ENV HOSTNAME=0.0.0.0
 
 WORKDIR /app
 
-# LaTeX runtime para pdf-canon (canon.cls):
-#   - texlive-latex-extra        → tcolorbox, adjustbox, titlesec, multirow, etc.
-#   - texlive-fonts-recommended  → wrappers .sty (tgpagella.sty, helvet.sty)
-#   - texlive-fonts-extra        → inconsolata, fuentes auxiliares
-#   - texlive-lang-spanish       → babel[spanish] requerido por canon.cls
+# LaTeX runtime mínimo viable para pdf-canon (canon.cls):
+#   - texlive-latex-base         → fontenc, inputenc, geometry, xcolor, graphicx, ifthen, hyperref
+#   - texlive-latex-recommended  → microtype, etoolbox, booktabs, longtable, array, multirow,
+#                                  enumitem, float, caption, fancyhdr, lastpage
+#   - texlive-latex-extra        → tcolorbox[most], adjustbox, titlesec
+#   - texlive-fonts-recommended  → helvet (sans), wrappers tgpagella.sty
 #   - texlive-pictures           → tikz (lo carga tcolorbox[most])
-#   - tex-gyre                   → archivos de fuente TeX Gyre Pagella; con
-#                                  --no-install-recommends NO se arrastra como
-#                                  Recommends de texlive-fonts-recommended y
-#                                  por eso "tgpagella.sty not found" aparecia
-#                                  aun teniendo el .sty: faltaban los .pfb/.tfm.
-#   - lmodern                    → fallback tipográfico
-# `mktexlsr` regenera la base ls-R de kpathsea para que pdflatex localice los
-# .sty/.tfm recien instalados sin depender del trigger del paquete.
+#   - texlive-lang-spanish       → babel[spanish,es-noindentfirst]
+#   - tex-gyre                   → archivos de fuente TeX Gyre Pagella (.pfb/.tfm). Con
+#                                  --no-install-recommends NO se arrastra como Recommends
+#                                  de texlive-fonts-recommended y por eso 'tgpagella.sty
+#                                  not found' aparecía aun teniendo el .sty.
+#
+# Removido respecto a versiones previas:
+#   - texlive-fonts-extra (~200 MB) — solo se usaba por inconsolata; canon.cls ahora usa
+#     Computer Modern Typewriter (default) para `\CodePath{...}` y `CodeBlock`.
+#   - lmodern — fallback no necesario; CMTT viene con texlive-latex-base.
+#   - mktexlsr — innecesario; los triggers de dpkg refrescan kpathsea automáticamente
+#     al instalar paquetes texlive-*.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
      python3 python3-pip python3-numpy python3-pandas \
-     texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra texlive-lang-spanish \
-     texlive-pictures tex-gyre lmodern \
-  && mktexlsr \
+     texlive-latex-base \
+     texlive-latex-recommended \
+     texlive-latex-extra \
+     texlive-fonts-recommended \
+     texlive-pictures \
+     texlive-lang-spanish \
+     tex-gyre \
   && pip3 install --no-cache-dir --break-system-packages pulp \
   && ln -sf python3 /usr/bin/python \
   && rm -rf /var/lib/apt/lists/* \

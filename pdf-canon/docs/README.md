@@ -74,11 +74,15 @@ bash scripts/build_pdf.sh examples/example_informe_ejecutivo.tex
 ## Requisitos
 
 - **pdflatex** — TeX Live 2022+ o MiKTeX 22+
-- Paquetes incluidos en `texlive-latex-extra` + `texlive-fonts-recommended`:
-  `geometry`, `fontenc`, `inputenc`, `tgpagella`, `helvet`, `inconsolata`,
+- Paquetes Debian mínimos: `texlive-latex-base`, `texlive-latex-recommended`,
+  `texlive-latex-extra`, `texlive-fonts-recommended`, `texlive-pictures`,
+  `texlive-lang-spanish`, `tex-gyre`
+- Paquetes LaTeX usados:
+  `geometry`, `fontenc`, `inputenc`, `tgpagella`, `helvet`,
   `microtype`, `booktabs`, `longtable`, `adjustbox`, `xcolor`, `graphicx`,
   `fancyhdr`, `titlesec`, `enumitem`, `tcolorbox`, `float`, `caption`,
   `hyperref`, `ifthen`, `etoolbox`, `babel`, `lastpage`
+- Mono: Computer Modern Typewriter (default LaTeX, sin dependencia extra)
 
 ## Logo
 

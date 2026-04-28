@@ -16,7 +16,9 @@
 \RequirePackage[utf8]{inputenc}
 \RequirePackage{tgpagella}          % TeX Gyre Pagella (body)
 \RequirePackage[scaled=0.94]{helvet}% Helvetica scaled (sans)
-\RequirePackage{inconsolata}        % Inconsolata (mono)
+% Mono: Computer Modern Typewriter (default LaTeX). Antes: inconsolata, pero
+% requeria texlive-fonts-extra (~200 MB). El default cubre \CodePath{...} y
+% CodeBlock con mono legible y mantiene la imagen Docker liviana.
 \RequirePackage{microtype}
 
 %% ── Layout ────────────────────────────────────────────────────────────

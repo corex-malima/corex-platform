@@ -295,7 +295,11 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
       array(select distinct iso_week_id from filtered where iso_week_id is not null order by iso_week_id desc) as iso_weeks,
       array(select distinct area from filtered where area is not null order by area) as areas,
       array(select distinct sp_type from filtered where sp_type is not null order by sp_type) as sp_types,
-      array(select distinct record_month from filtered where record_month is not null order by record_month::int) as months,
+      array(
+        select record_month
+        from (select distinct record_month from filtered where record_month is not null) m
+        order by record_month::int
+      ) as months,
       array(select distinct record_year from filtered where record_year is not null order by record_year desc) as years,
       array(select distinct dominant_class from filtered where dominant_class is not null order by dominant_class) as dominant_classes,
       array(select distinct nullif(t2.bloque, '') from ${SOURCE_TABLE} t2 where nullif(t2.bloque, '') is not null order by 1) as bloques
