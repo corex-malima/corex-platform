@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCurrentUserAccess } from "@/lib/api-auth";
 import { apiJsonError, handleApiError } from "@/lib/api-error";
 import { getRequestId } from "@/lib/request-id";
+import { checkRequestRateLimit, getEnvNumber } from "@/server/security/rate-limit";
 import {
   listTthhCatalogs,
   setTthhCatalogValidity,
@@ -32,6 +33,19 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
+
+  const rl = checkRequestRateLimit({
+    request,
+    scope: "tthh-catalogs:write",
+    suffix: access.username,
+    limit: getEnvNumber("TTHH_CATALOGS_WRITE_RATE_LIMIT", 20),
+    windowMs: getEnvNumber("TTHH_CATALOGS_WRITE_RATE_LIMIT_WINDOW_MS", 60_000),
+  });
+  if (!rl.allowed) {
+    return apiJsonError("Demasiados intentos. Intente más tarde.", 429, requestId, {
+      "Retry-After": String(rl.retryAfterSeconds),
+    });
+  }
 
   try {
     const body = await request.json();
