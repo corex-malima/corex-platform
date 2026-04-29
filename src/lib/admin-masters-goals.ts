@@ -1,0 +1,391 @@
+import type { PoolClient } from "pg";
+
+import { queryAdmin, withAdminTransaction } from "@/lib/admin-db";
+
+export type AdminGoalTarget = {
+  targetCode: string;
+  targetName: string;
+  targetDescription: string | null;
+  parentTargetCode: string | null;
+  levelIndex: number;
+  levelLabel: string | null;
+  metricCode: string | null;
+  metricName: string | null;
+  unitCode: string | null;
+  unitSymbol: string | null;
+  operatorCode: string | null;
+  operatorLabel: string | null;
+  valueMin: number | null;
+  valueMax: number | null;
+  valueText: string | null;
+  notesText: string | null;
+  domainCodes: string[];
+  typeItemCodes: string[];
+  validFrom: string;
+  validTo: string | null;
+  actorId: string | null;
+  changeReason: string;
+};
+
+export type AdminGoalTargetHistoryEntry = AdminGoalTarget & {
+  recordId: string;
+  isCurrent: boolean;
+  isValid: boolean;
+  loadedAt: string;
+};
+
+type TargetRow = {
+  target_code: string;
+  target_name: string;
+  target_description: string | null;
+  parent_target_code: string | null;
+  level_index: number | string;
+  level_label: string | null;
+  metric_code: string | null;
+  metric_name: string | null;
+  unit_code: string | null;
+  unit_symbol: string | null;
+  operator_code: string | null;
+  operator_label: string | null;
+  value_min: string | number | null;
+  value_max: string | number | null;
+  value_text: string | null;
+  notes_text: string | null;
+  valid_from: Date | string;
+  valid_to: Date | string | null;
+  actor_id: string | null;
+  change_reason: string;
+};
+
+type DomainBridgeRow = { target_code: string; domain_code: string };
+type TypeBridgeRow = { target_code: string; type_item_code: string };
+
+const RUN_ID = "corex_admin_goals";
+
+function toIso(v: Date | string): string {
+  return v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+}
+
+function toIsoOrNull(v: Date | string | null): string | null {
+  return v === null ? null : toIso(v);
+}
+
+function toNumberOrNull(v: string | number | null): number | null {
+  if (v === null) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function mapRow(
+  r: TargetRow,
+  domainsByTarget: Map<string, string[]>,
+  typesByTarget: Map<string, string[]>,
+): AdminGoalTarget {
+  return {
+    targetCode: r.target_code,
+    targetName: r.target_name,
+    targetDescription: r.target_description,
+    parentTargetCode: r.parent_target_code,
+    levelIndex: Number(r.level_index),
+    levelLabel: r.level_label,
+    metricCode: r.metric_code,
+    metricName: r.metric_name,
+    unitCode: r.unit_code,
+    unitSymbol: r.unit_symbol,
+    operatorCode: r.operator_code,
+    operatorLabel: r.operator_label,
+    valueMin: toNumberOrNull(r.value_min),
+    valueMax: toNumberOrNull(r.value_max),
+    valueText: r.value_text,
+    notesText: r.notes_text,
+    domainCodes: domainsByTarget.get(r.target_code) ?? [],
+    typeItemCodes: typesByTarget.get(r.target_code) ?? [],
+    validFrom: toIso(r.valid_from),
+    validTo: toIsoOrNull(r.valid_to),
+    actorId: r.actor_id,
+    changeReason: r.change_reason,
+  };
+}
+
+export async function listActiveGoalTargets(): Promise<AdminGoalTarget[]> {
+  try {
+    const [targets, domains, types] = await Promise.all([
+      queryAdmin<TargetRow>(
+        `SELECT * FROM public.vw_adm_goal_target_active ORDER BY level_index, target_code`,
+      ),
+      queryAdmin<DomainBridgeRow>(
+        `SELECT target_code, domain_code FROM public.adm_asgn_goal_target_domain_scd2
+         WHERE is_current = true AND is_valid = true`,
+      ),
+      queryAdmin<TypeBridgeRow>(
+        `SELECT target_code, type_item_code FROM public.adm_asgn_goal_target_type_scd2
+         WHERE is_current = true AND is_valid = true`,
+      ),
+    ]);
+
+    const domainsByTarget = new Map<string, string[]>();
+    domains.rows.forEach((r) => {
+      const list = domainsByTarget.get(r.target_code) ?? [];
+      list.push(r.domain_code);
+      domainsByTarget.set(r.target_code, list);
+    });
+
+    const typesByTarget = new Map<string, string[]>();
+    types.rows.forEach((r) => {
+      const list = typesByTarget.get(r.target_code) ?? [];
+      list.push(r.type_item_code);
+      typesByTarget.set(r.target_code, list);
+    });
+
+    return targets.rows.map((r) => mapRow(r, domainsByTarget, typesByTarget));
+  } catch {
+    return [];
+  }
+}
+
+export async function listGoalTargetHistory(targetCode: string): Promise<AdminGoalTargetHistoryEntry[]> {
+  const result = await queryAdmin<TargetRow & { record_id: string; is_current: boolean; is_valid: boolean; loaded_at: Date | string }>(
+    `SELECT t.target_code, t.target_name, t.target_description, t.parent_target_code,
+            t.level_index, t.level_label, t.metric_code,
+            m.metric_name, m.unit_code, u.unit_symbol,
+            t.operator_code, op.item_label_es AS operator_label,
+            t.value_min, t.value_max, t.value_text, t.notes_text,
+            t.valid_from, t.valid_to,
+            t.record_id, t.is_current, t.is_valid, t.loaded_at,
+            t.actor_id, t.change_reason
+     FROM public.adm_dim_goal_target_scd2 t
+     LEFT JOIN public.adm_dim_metric_scd2 m
+       ON m.metric_code = t.metric_code AND m.is_current AND m.is_valid
+     LEFT JOIN public.adm_dim_unit_of_measure_scd2 u
+       ON u.unit_code = m.unit_code AND u.is_current AND u.is_valid
+     LEFT JOIN public.adm_dim_catalog_item_scd2 op
+       ON op.catalog_code = 'comparison_operators' AND op.item_code = t.operator_code
+       AND op.is_current AND op.is_valid
+     WHERE t.target_code = $1
+     ORDER BY t.valid_from DESC, t.loaded_at DESC`,
+    [targetCode],
+  );
+  return result.rows.map((r) => ({
+    ...mapRow(r, new Map(), new Map()),
+    recordId: r.record_id,
+    isCurrent: r.is_current,
+    isValid: r.is_valid,
+    loadedAt: toIso(r.loaded_at),
+  }));
+}
+
+export type UpsertGoalTargetInput = {
+  targetCode: string;
+  targetName: string;
+  targetDescription?: string | null;
+  parentTargetCode?: string | null;
+  levelIndex: number;
+  levelLabel?: string | null;
+  metricCode?: string | null;
+  operatorCode?: string | null;
+  valueMin?: number | null;
+  valueMax?: number | null;
+  valueText?: string | null;
+  notesText?: string | null;
+  domainCodes?: string[];
+  typeItemCodes?: string[];
+  validFromDate: string;  // ISO date string YYYY-MM-DD (user-defined)
+  actorId?: string;
+  changeReason?: string;
+};
+
+async function insertBridges(
+  client: PoolClient,
+  targetCode: string,
+  validFromIso: string,
+  domainCodes: string[],
+  typeItemCodes: string[],
+  actorId: string | null,
+  changeReason: string,
+): Promise<void> {
+  for (const dc of domainCodes) {
+    await client.query(
+      `INSERT INTO public.adm_asgn_goal_target_domain_scd2
+        (target_code, domain_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3::timestamptz, true, true, $4, $5, $6)`,
+      [targetCode, dc, validFromIso, RUN_ID, actorId, changeReason],
+    );
+  }
+  for (const ti of typeItemCodes) {
+    await client.query(
+      `INSERT INTO public.adm_asgn_goal_target_type_scd2
+        (target_code, type_item_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3::timestamptz, true, true, $4, $5, $6)`,
+      [targetCode, ti, validFromIso, RUN_ID, actorId, changeReason],
+    );
+  }
+}
+
+async function closeBridges(
+  client: PoolClient,
+  targetCode: string,
+  closeAtIso: string,
+  actorId: string | null,
+  changeReason: string,
+): Promise<void> {
+  await client.query(
+    `UPDATE public.adm_asgn_goal_target_domain_scd2
+     SET is_current = false, valid_to = $2::timestamptz, loaded_at = now(),
+         actor_id = $3, change_reason = $4
+     WHERE target_code = $1 AND is_current = true AND is_valid = true`,
+    [targetCode, closeAtIso, actorId, changeReason],
+  );
+  await client.query(
+    `UPDATE public.adm_asgn_goal_target_type_scd2
+     SET is_current = false, valid_to = $2::timestamptz, loaded_at = now(),
+         actor_id = $3, change_reason = $4
+     WHERE target_code = $1 AND is_current = true AND is_valid = true`,
+    [targetCode, closeAtIso, actorId, changeReason],
+  );
+}
+
+export async function createGoalTarget(input: UpsertGoalTargetInput): Promise<void> {
+  await withAdminTransaction(async (client) => {
+    const validFromIso = `${input.validFromDate}T00:00:00Z`;
+
+    await client.query(
+      `INSERT INTO public.adm_dim_goal_target_scd2
+        (target_code, target_name, target_description, parent_target_code,
+         level_index, level_label, metric_code, operator_code,
+         value_min, value_max, value_text, notes_text,
+         valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+               $13::timestamptz, true, true, $14, $15, $16)`,
+      [
+        input.targetCode,
+        input.targetName,
+        input.targetDescription ?? null,
+        input.parentTargetCode ?? null,
+        input.levelIndex,
+        input.levelLabel ?? null,
+        input.metricCode ?? null,
+        input.operatorCode ?? null,
+        input.valueMin ?? null,
+        input.valueMax ?? null,
+        input.valueText ?? null,
+        input.notesText ?? null,
+        validFromIso,
+        RUN_ID,
+        input.actorId ?? null,
+        input.changeReason ?? "manual_create",
+      ],
+    );
+
+    await insertBridges(
+      client,
+      input.targetCode,
+      validFromIso,
+      input.domainCodes ?? [],
+      input.typeItemCodes ?? [],
+      input.actorId ?? null,
+      input.changeReason ?? "manual_create",
+    );
+  });
+}
+
+/**
+ * SCD2 update con valid_from definido por usuario.
+ * Cierra version anterior con valid_to = (nuevo valid_from - 1 dia 00:00 UTC).
+ */
+export async function updateGoalTarget(input: UpsertGoalTargetInput): Promise<void> {
+  await withAdminTransaction(async (client) => {
+    const newValidFromIso = `${input.validFromDate}T00:00:00Z`;
+    // valid_to = nuevo valid_from - 1 dia (a las 23:59:59.999 UTC del dia anterior)
+    const newDate = new Date(newValidFromIso);
+    const closeDate = new Date(newDate.getTime() - 1);
+    const closeIso = closeDate.toISOString();
+
+    // Verificar que existe version actual
+    const current = await client.query<{ valid_from: Date }>(
+      `SELECT valid_from FROM public.adm_dim_goal_target_scd2
+       WHERE target_code = $1 AND is_current = true AND is_valid = true LIMIT 1`,
+      [input.targetCode],
+    );
+
+    if (current.rowCount === 0) {
+      throw new Error(`No existe meta activa con codigo ${input.targetCode}`);
+    }
+
+    const currentValidFrom = current.rows[0].valid_from;
+    if (currentValidFrom && new Date(newValidFromIso) <= new Date(currentValidFrom)) {
+      throw new Error(
+        `Nueva fecha de inicio (${input.validFromDate}) debe ser posterior a la version vigente`,
+      );
+    }
+
+    // Cerrar version anterior
+    await client.query(
+      `UPDATE public.adm_dim_goal_target_scd2
+       SET is_current = false, valid_to = $2::timestamptz, loaded_at = now(),
+           actor_id = $3, change_reason = $4
+       WHERE target_code = $1 AND is_current = true AND is_valid = true`,
+      [input.targetCode, closeIso, input.actorId ?? null, input.changeReason ?? "manual_update"],
+    );
+
+    await closeBridges(
+      client,
+      input.targetCode,
+      closeIso,
+      input.actorId ?? null,
+      input.changeReason ?? "manual_update",
+    );
+
+    // Insertar nueva version
+    await client.query(
+      `INSERT INTO public.adm_dim_goal_target_scd2
+        (target_code, target_name, target_description, parent_target_code,
+         level_index, level_label, metric_code, operator_code,
+         value_min, value_max, value_text, notes_text,
+         valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+               $13::timestamptz, true, true, $14, $15, $16)`,
+      [
+        input.targetCode,
+        input.targetName,
+        input.targetDescription ?? null,
+        input.parentTargetCode ?? null,
+        input.levelIndex,
+        input.levelLabel ?? null,
+        input.metricCode ?? null,
+        input.operatorCode ?? null,
+        input.valueMin ?? null,
+        input.valueMax ?? null,
+        input.valueText ?? null,
+        input.notesText ?? null,
+        newValidFromIso,
+        RUN_ID,
+        input.actorId ?? null,
+        input.changeReason ?? "manual_update",
+      ],
+    );
+
+    await insertBridges(
+      client,
+      input.targetCode,
+      newValidFromIso,
+      input.domainCodes ?? [],
+      input.typeItemCodes ?? [],
+      input.actorId ?? null,
+      input.changeReason ?? "manual_update",
+    );
+  });
+}
+
+export async function setGoalTargetValidity(
+  targetCode: string,
+  isValid: boolean,
+  actorId: string | null,
+  changeReason: string = "manual_update",
+): Promise<void> {
+  await queryAdmin(
+    `UPDATE public.adm_dim_goal_target_scd2
+     SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
+     WHERE target_code = $1 AND is_current = true`,
+    [targetCode, isValid, actorId, changeReason],
+  );
+}

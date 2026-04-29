@@ -224,6 +224,31 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/programaciones"],
   },
   {
+    pathnamePrefix: "/api/admin/administracion-maestros/dominios",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/admin/administracion-maestros/dominios"],
+  },
+  {
+    pathnamePrefix: "/api/admin/administracion-maestros/catalogos",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/admin/administracion-maestros/catalogos"],
+  },
+  {
+    pathnamePrefix: "/api/admin/administracion-maestros/unidades",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/admin/administracion-maestros/unidades"],
+  },
+  {
+    pathnamePrefix: "/api/admin/administracion-maestros/metricas",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/admin/administracion-maestros/metricas"],
+  },
+  {
+    pathnamePrefix: "/api/admin/administracion-maestros/metas-objetivos",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/admin/administracion-maestros/metas-objetivos"],
+  },
+  {
     pathnamePrefix: "/api/admin/administracion-maestros",
     policy: "resource-bound",
     requiredResources: [
