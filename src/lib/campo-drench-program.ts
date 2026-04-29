@@ -44,8 +44,8 @@ type CurrentLineRow = {
   source_product_name: string | null;
   source_product_code: string | null;
   source_unit_code: string | null;
-  quantity_value: number | string | null;
-  quantity_reference: string | null;
+  product_quantity_value: number | string | null;
+  product_quantity_reference: string | null;
   notes: string | null;
   is_active: boolean | null;
   valid_from: Date | string | null;
@@ -122,20 +122,31 @@ function buildRuleCode(phenologicalWeek: number, cycleType: DrenchProgramCycleTy
   return `${phenologicalWeek} ${cycleType} ${normalizeCode(varietyCode)}`;
 }
 
-function sanitizeLines(lines: DrenchProgramLineInput[]) {
-  const sanitized = lines.map((line, index) => ({
-    lineOrder: index + 1,
-    applicationMethod: normalizeOptionalText(line.applicationMethod),
-    litersPerBed: toNumber(line.litersPerBed),
-    productId: normalizeOptionalText(line.productId),
-    sourceProductName: normalizeOptionalText(line.sourceProductName),
-    sourceProductCode: normalizeOptionalText(line.sourceProductCode),
-    sourceUnitCode: normalizeOptionalText(line.sourceUnitCode),
-    quantityValue: toNumber(line.quantityValue),
-    quantityReference: normalizeOptionalText(line.quantityReference),
-    notes: normalizeOptionalText(line.notes),
-    isActive: boolValue(line.isActive, true),
-  }));
+async function sanitizeLines(lines: DrenchProgramLineInput[]) {
+  const bodegaProducts = await listCurrentBodegaProducts();
+  const productMap = new Map(bodegaProducts.map((product) => [product.productId, product]));
+
+  const sanitized = lines.map((line, index) => {
+    const normalizedProductId = normalizeOptionalText(line.productId);
+    const matchedProduct = normalizedProductId ? productMap.get(normalizedProductId) ?? null : null;
+    if (normalizedProductId && !matchedProduct) {
+      throw new Error("Una de las lineas referencia un producto de Bodega que ya no esta vigente.");
+    }
+
+    return {
+      lineOrder: index + 1,
+      applicationMethod: normalizeOptionalText(line.applicationMethod),
+      litersPerBed: toNumber(line.litersPerBed),
+      productId: normalizedProductId,
+      sourceProductName: matchedProduct ? matchedProduct.productName : normalizeOptionalText(line.sourceProductName),
+      sourceProductCode: matchedProduct ? matchedProduct.productCode : normalizeOptionalText(line.sourceProductCode),
+      sourceUnitCode: matchedProduct ? matchedProduct.baseUnitCode : normalizeOptionalText(line.sourceUnitCode),
+      productQuantityValue: toNumber(line.productQuantityValue),
+      productQuantityReference: normalizeOptionalText(line.productQuantityReference),
+      notes: normalizeOptionalText(line.notes),
+      isActive: boolValue(line.isActive, true),
+    };
+  });
 
   for (const line of sanitized) {
     if (!line.productId && !line.sourceProductName) {
@@ -146,14 +157,14 @@ function sanitizeLines(lines: DrenchProgramLineInput[]) {
   return sanitized;
 }
 
-function sanitizeRuleInput(input: DrenchProgramRuleInput) {
+async function sanitizeRuleInput(input: DrenchProgramRuleInput) {
   const phenologicalWeek = toInt(input.phenologicalWeek);
   const cycleType = normalizeCode(input.cycleType);
   const varietyCode = normalizeCode(input.varietyCode);
   const activityId = normalizeCode(input.activityId ?? DRENCH_ACTIVITY_ID) || DRENCH_ACTIVITY_ID;
   const notes = normalizeOptionalText(input.notes);
   const changeReason = normalizeOptionalText(input.changeReason);
-  const lines = sanitizeLines(input.lines);
+  const lines = await sanitizeLines(input.lines);
 
   if (!phenologicalWeek || phenologicalWeek <= 0) {
     throw new Error("La semana fenológica debe ser mayor a cero.");
@@ -239,8 +250,8 @@ async function initializeDrenchProgramMasterInternal(client?: PoolClient) {
       source_product_name text null,
       source_product_code text null,
       source_unit_code text null,
-      quantity_value numeric(18, 6) null,
-      quantity_reference text null,
+      product_quantity_value numeric(18, 6) null,
+      product_quantity_reference text null,
       notes text null,
       is_active boolean not null,
       is_valid boolean not null,
@@ -280,6 +291,16 @@ async function initializeDrenchProgramMasterInternal(client?: PoolClient) {
       on ${RULE_LINE_TABLE} (rule_id, line_order)
       where is_current = true
   `);
+
+  await runTypedQuery(`
+    alter table ${RULE_LINE_TABLE}
+    rename column quantity_value to product_quantity_value
+  `).catch(() => undefined);
+
+  await runTypedQuery(`
+    alter table ${RULE_LINE_TABLE}
+    rename column quantity_reference to product_quantity_reference
+  `).catch(() => undefined);
 }
 
 export async function initializeDrenchProgramMaster() {
@@ -332,8 +353,8 @@ async function getCurrentLineRows() {
         line.source_product_name,
         line.source_product_code,
         line.source_unit_code,
-        line.quantity_value,
-        line.quantity_reference,
+        line.product_quantity_value,
+        line.product_quantity_reference,
         line.notes,
         line.is_active,
         line.valid_from,
@@ -368,9 +389,9 @@ function mapLineRows(
       productName: product?.productName ?? null,
       sourceProductName: row.source_product_name,
       sourceProductCode: row.source_product_code,
-      sourceUnitCode: row.source_unit_code,
-      quantityValue: toNumber(row.quantity_value),
-      quantityReference: row.quantity_reference,
+      sourceUnitCode: product?.baseUnitCode ?? row.source_unit_code,
+      productQuantityValue: toNumber(row.product_quantity_value),
+      productQuantityReference: row.product_quantity_reference,
       notes: row.notes,
       isActive: boolValue(row.is_active, true),
       validFrom: formatTimestamp(row.valid_from),
@@ -431,6 +452,15 @@ async function getCurrentRuleById(ruleId: string) {
   return rules.find((rule) => rule.ruleId === ruleId) ?? null;
 }
 
+async function getCurrentRulesByGroup(cycleType: DrenchProgramCycleType, varietyCode: string) {
+  const rules = await listCurrentDrenchProgramRules();
+  const normalizedVarietyCode = normalizeCode(varietyCode);
+  return rules.filter((rule) =>
+    rule.cycleType === cycleType
+    && normalizeCode(rule.varietyCode) === normalizedVarietyCode,
+  );
+}
+
 async function ensureUniqueCurrentRuleKey(
   phenologicalWeek: number,
   cycleType: DrenchProgramCycleType,
@@ -454,7 +484,7 @@ async function ensureUniqueCurrentRuleKey(
 
 export async function createDrenchProgramRule(input: DrenchProgramRuleInput, actorId: string) {
   await initializeDrenchProgramMaster();
-  const sanitized = sanitizeRuleInput(input);
+  const sanitized = await sanitizeRuleInput(input);
   await ensureUniqueCurrentRuleKey(
     sanitized.phenologicalWeek,
     sanitized.cycleType,
@@ -510,7 +540,7 @@ export async function createDrenchProgramRule(input: DrenchProgramRuleInput, act
           insert into ${RULE_LINE_TABLE} (
             record_id, line_id, rule_id, valid_from, valid_to, is_current, line_order,
             application_method, liters_per_bed, product_id, source_product_name, source_product_code, source_unit_code,
-            quantity_value, quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
+            product_quantity_value, product_quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
           ) values ($1, $2, $3, $4, null, true, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $4, $16, $17, $18)
         `,
         [
@@ -525,8 +555,8 @@ export async function createDrenchProgramRule(input: DrenchProgramRuleInput, act
           line.sourceProductName,
           line.sourceProductCode,
           line.sourceUnitCode,
-          line.quantityValue,
-          line.quantityReference,
+          line.productQuantityValue,
+          line.productQuantityReference,
           line.notes,
           line.isActive,
           runId,
@@ -547,7 +577,7 @@ export async function updateDrenchProgramRule(ruleId: string, input: DrenchProgr
     throw new Error("No se encontró la regla vigente de drench que intentas editar.");
   }
 
-  const sanitized = sanitizeRuleInput(input);
+  const sanitized = await sanitizeRuleInput(input);
   await ensureUniqueCurrentRuleKey(
     sanitized.phenologicalWeek,
     sanitized.cycleType,
@@ -616,7 +646,7 @@ export async function updateDrenchProgramRule(ruleId: string, input: DrenchProgr
           insert into ${RULE_LINE_TABLE} (
             record_id, line_id, rule_id, valid_from, valid_to, is_current, line_order,
             application_method, liters_per_bed, product_id, source_product_name, source_product_code, source_unit_code,
-            quantity_value, quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
+            product_quantity_value, product_quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
           ) values ($1, $2, $3, $4, null, true, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $4, $16, $17, $18)
         `,
         [
@@ -631,8 +661,8 @@ export async function updateDrenchProgramRule(ruleId: string, input: DrenchProgr
           line.sourceProductName,
           line.sourceProductCode,
           line.sourceUnitCode,
-          line.quantityValue,
-          line.quantityReference,
+          line.productQuantityValue,
+          line.productQuantityReference,
           line.notes,
           line.isActive,
           runId,
@@ -644,6 +674,88 @@ export async function updateDrenchProgramRule(ruleId: string, input: DrenchProgr
   });
 
   return getCurrentRuleById(ruleId);
+}
+
+export async function deleteDrenchProgramRule(ruleId: string, actorId: string) {
+  await initializeDrenchProgramMaster();
+  const current = await getCurrentRuleById(ruleId);
+  if (!current) {
+    throw new Error("No se encontro la semana de drench que intentas eliminar.");
+  }
+
+  const now = new Date();
+  const runId = makeRunId("drench_rule_delete");
+
+  await withCampTransaction(async (client) => {
+    await initializeDrenchProgramMasterInternal(client);
+
+    await client.query(
+      `update ${RULE_REF_TABLE} set is_current = false, is_valid = false, valid_to = $2 where rule_id = $1 and is_current = true`,
+      [ruleId, now],
+    );
+    await client.query(
+      `update ${RULE_DIM_TABLE} set is_current = false, is_valid = false, valid_to = $2 where rule_id = $1 and is_current = true`,
+      [ruleId, now],
+    );
+    await client.query(
+      `update ${RULE_LINE_TABLE} set is_current = false, is_valid = false, valid_to = $2 where rule_id = $1 and is_current = true`,
+      [ruleId, now],
+    );
+
+    await client.query(
+      `
+        insert into ${RULE_REF_TABLE} (
+          record_id, rule_id, valid_from, valid_to, is_current, is_valid, loaded_at, run_id, actor_id, change_reason
+        ) values ($1, $2, $3, $3, false, false, $3, $4, $5, $6)
+      `,
+      [makeRecordId(), ruleId, now, runId, actorId, "DELETE_FROM_COREX_UI"],
+    );
+  });
+
+  return {
+    ruleId,
+    deleted: true,
+  };
+}
+
+export async function deleteDrenchProgramGroup(
+  cycleType: DrenchProgramCycleType,
+  varietyCode: string,
+  actorId: string,
+) {
+  await initializeDrenchProgramMaster();
+  const currentRules = await getCurrentRulesByGroup(cycleType, varietyCode);
+  if (!currentRules.length) {
+    throw new Error("No se encontro el grupo base vigente que intentas eliminar.");
+  }
+
+  const ruleIds = currentRules.map((rule) => rule.ruleId);
+  const normalizedVarietyCode = normalizeCode(varietyCode);
+  const now = new Date();
+
+  await withCampTransaction(async (client) => {
+    await initializeDrenchProgramMasterInternal(client);
+
+    await client.query(
+      `update ${RULE_REF_TABLE} set is_current = false, is_valid = false, valid_to = $2 where rule_id = any($1::text[]) and is_current = true`,
+      [ruleIds, now],
+    );
+    await client.query(
+      `update ${RULE_DIM_TABLE} set is_current = false, is_valid = false, valid_to = $3 where cycle_type = $1 and upper(regexp_replace(trim(variety_code), '\\s+', ' ', 'g')) = $2 and is_current = true`,
+      [cycleType, normalizedVarietyCode, now],
+    );
+    await client.query(
+      `update ${RULE_LINE_TABLE} set is_current = false, is_valid = false, valid_to = $2 where rule_id = any($1::text[]) and is_current = true`,
+      [ruleIds, now],
+    );
+  });
+
+  return {
+    cycleType,
+    varietyCode: normalizedVarietyCode,
+    deleted: true,
+    rulesAffected: ruleIds.length,
+  };
 }
 
 export async function getCurrentDrenchProgramSummary() {

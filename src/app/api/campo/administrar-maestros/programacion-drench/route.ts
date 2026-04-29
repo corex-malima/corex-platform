@@ -7,6 +7,7 @@ import { checkRateLimit } from "@/server/security/rate-limit";
 import type { DrenchProgramRuleInput, DrenchProgramRulePayload } from "@/lib/campo-drench-program-types";
 import {
   createDrenchProgramRule,
+  deleteDrenchProgramGroup,
   listCurrentDrenchAssignableProducts,
   listCurrentDrenchProgramRules,
 } from "@/lib/campo-drench-program";
@@ -79,5 +80,38 @@ export async function POST(request: NextRequest) {
     }
 
     return handleApiError(error, "No se pudo crear la regla de drench.");
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const authError = await requireAuth(request);
+  if (authError) return authError;
+
+  try {
+    const payload = await request.json() as { cycleType?: string; varietyCode?: string };
+    const cycleType = String(payload.cycleType ?? "").trim().toUpperCase();
+    const varietyCode = String(payload.varietyCode ?? "").trim().toUpperCase();
+
+    if (!cycleType || !varietyCode) {
+      return jsonError("Debes indicar el tipo de ciclo y la variedad del grupo base.", 400);
+    }
+
+    const actorId = (await getSession()) ?? "corex_campo_drench_ui";
+    const data = await deleteDrenchProgramGroup(cycleType as "S" | "P", varietyCode, actorId);
+
+    return NextResponse.json(
+      { data },
+      {
+        headers: {
+          "Cache-Control": "private, no-store",
+        },
+      },
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      return jsonError(error.message, 400);
+    }
+
+    return handleApiError(error, "No se pudo eliminar el grupo base de drench.");
   }
 }

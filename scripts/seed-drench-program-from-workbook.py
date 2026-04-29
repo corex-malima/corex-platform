@@ -52,8 +52,8 @@ class ParsedLine:
     source_product_name: str
     source_product_code: str | None
     source_unit_code: str | None
-    quantity_value: float | None
-    quantity_reference: str | None
+    product_quantity_value: float | None
+    product_quantity_reference: str | None
     product_id: str | None
 
 
@@ -177,8 +177,8 @@ def initialize_tables(cur: psycopg.Cursor[Any]) -> None:
           source_product_name text null,
           source_product_code text null,
           source_unit_code text null,
-          quantity_value numeric(18, 6) null,
-          quantity_reference text null,
+          product_quantity_value numeric(18, 6) null,
+          product_quantity_reference text null,
           notes text null,
           is_active boolean not null,
           is_valid boolean not null,
@@ -187,6 +187,40 @@ def initialize_tables(cur: psycopg.Cursor[Any]) -> None:
           actor_id text not null,
           change_reason text not null
         )
+        """
+    )
+    cur.execute(
+        f"""
+        do $$
+        begin
+          if exists (
+            select 1
+            from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'field_bridge_drench_program_rule_line_scd2'
+              and column_name = 'quantity_value'
+          ) then
+            alter table {RULE_LINE_TABLE}
+            rename column quantity_value to product_quantity_value;
+          end if;
+        end $$;
+        """
+    )
+    cur.execute(
+        f"""
+        do $$
+        begin
+          if exists (
+            select 1
+            from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'field_bridge_drench_program_rule_line_scd2'
+              and column_name = 'quantity_reference'
+          ) then
+            alter table {RULE_LINE_TABLE}
+            rename column quantity_reference to product_quantity_reference;
+          end if;
+        end $$;
         """
     )
     cur.execute(
@@ -335,8 +369,8 @@ def parse_rules(
                     source_product_name=source_product_name,
                     source_product_code=source_product_code,
                     source_unit_code=source_unit_code,
-                    quantity_value=to_number(row[quantity_idx] if len(row) > quantity_idx else None),
-                    quantity_reference=quantity_reference or None,
+                    product_quantity_value=to_number(row[quantity_idx] if len(row) > quantity_idx else None),
+                    product_quantity_reference=quantity_reference or None,
                     product_id=product_id,
                 )
             )
@@ -459,7 +493,7 @@ def reseed_rules(cur: psycopg.Cursor[Any], rules: list[ParsedRule], actor_id: st
                 insert into {RULE_LINE_TABLE} (
                   record_id, line_id, rule_id, valid_from, valid_to, is_current, line_order,
                   application_method, liters_per_bed, product_id, source_product_name, source_product_code, source_unit_code,
-                  quantity_value, quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
+                  product_quantity_value, product_quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
                 )
                 values (%s, %s, %s, %s, null, true, %s, %s, %s, %s, %s, %s, %s, %s, %s, null, true, true, %s, %s, %s, %s)
                 """,
@@ -475,8 +509,8 @@ def reseed_rules(cur: psycopg.Cursor[Any], rules: list[ParsedRule], actor_id: st
                     line.source_product_name,
                     line.source_product_code,
                     line.source_unit_code,
-                    line.quantity_value,
-                    line.quantity_reference,
+                    line.product_quantity_value,
+                    line.product_quantity_reference,
                     now,
                     run_id,
                     actor_id,

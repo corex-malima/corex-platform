@@ -12,8 +12,8 @@ export type DrenchProgramLineRecord = {
   sourceProductName: string | null;
   sourceProductCode: string | null;
   sourceUnitCode: string | null;
-  quantityValue: number | null;
-  quantityReference: string | null;
+  productQuantityValue: number | null;
+  productQuantityReference: string | null;
   notes: string | null;
   isActive: boolean;
   validFrom: string | null;
@@ -50,8 +50,8 @@ export type DrenchProgramLineInput = {
   sourceProductName?: string | null;
   sourceProductCode?: string | null;
   sourceUnitCode?: string | null;
-  quantityValue?: number | null;
-  quantityReference?: string | null;
+  productQuantityValue?: number | null;
+  productQuantityReference?: string | null;
   notes?: string | null;
   isActive?: boolean;
 };
