@@ -367,7 +367,8 @@ export async function updateFollowupResponse(
         $47, $48,
         $49, $50,
         $51, $52,
-        'corex', $53, $54, $55, $56, $57, $58
+        $53,
+        'corex', $54, $55, $56, $57, $58, $59
       )
       `,
       [
