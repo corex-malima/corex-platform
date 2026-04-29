@@ -11,7 +11,6 @@ import type {
 } from "@/modules/talento-humano/seguimientos/server/types";
 import { ScheduledFollowupTable } from "@/modules/talento-humano/seguimientos/components/scheduled-followup-table";
 import { FollowupRegistrationPanel } from "@/modules/talento-humano/seguimientos/components/followup-registration-panel";
-import { FollowupResponseViewer } from "@/modules/talento-humano/seguimientos/components/followup-response-viewer";
 
 type Permissions = { canWrite: boolean; canSensitive: boolean; canAdmin: boolean };
 
@@ -67,24 +66,15 @@ export function FollowupWorkspace({
 
       {hasSelected && selectedFollowup && (
         <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
-          {selectedFollowup.status === "registered" && selectedFollowup.responseEventId ? (
-            <FollowupResponseViewer
-              key={`view::${selectedFollowup.responseEventId}`}
-              followup={selectedFollowup}
-              catalogs={catalogs}
-              onClose={() => onSelectFollowup(null)}
-            />
-          ) : (
-            <FollowupRegistrationPanel
-              key={`${selectedFollowup.uniqueFollowUpCode}::${selectedFollowup.personId}`}
-              followup={selectedFollowup}
-              catalogs={catalogs}
-              permissions={permissions}
-              asOfDate={asOfDate}
-              onSaved={onFollowupUpdated}
-              onClose={() => onSelectFollowup(null)}
-            />
-          )}
+          <FollowupRegistrationPanel
+            key={`${selectedFollowup.uniqueFollowUpCode}::${selectedFollowup.personId}::${selectedFollowup.responseEventId ?? "new"}`}
+            followup={selectedFollowup}
+            catalogs={catalogs}
+            permissions={permissions}
+            asOfDate={asOfDate}
+            onSaved={onFollowupUpdated}
+            onClose={() => onSelectFollowup(null)}
+          />
         </div>
       )}
     </div>

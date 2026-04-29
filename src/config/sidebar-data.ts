@@ -78,7 +78,13 @@ function buildGroupItems(groupTitle: "Dashboard" | "Gestion" | "Administracion")
     });
   }
 
-  return rootItems;
+  return sortNavItems(rootItems);
+}
+
+function sortNavItems(items: NavItem[]): NavItem[] {
+  return [...items]
+    .map((item) => item.items ? { ...item, items: sortNavItems(item.items) } : item)
+    .sort((left, right) => left.label.localeCompare(right.label, "es", { sensitivity: "base" }));
 }
 
 export const sidebarGroups: NavGroup[] = [

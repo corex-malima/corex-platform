@@ -132,6 +132,7 @@ export type EmployeeFollowupResponseDetail = EmployeeFollowupResponseSummary & {
   hrSupportNeedOtherDetail: string | null;   // sensitive
   familyPregnancyRelationCode: string | null; // sensitive
   familyPregnancyObservation: string | null;  // sensitive
+  developedActivitiesDescription: string | null;
   hasInconvenienceCode: string | null;
   inconvenienceDate: string | null;
   inconvenienceActivityCode: string | null;
@@ -188,6 +189,7 @@ export type EmployeeFollowupResponseInput = {
   hrSupportNeedOtherDetail?: string | null;
   familyPregnancyRelationCode?: string | null;
   familyPregnancyObservation?: string | null;
+  developedActivitiesDescription?: string | null;
   hasInconvenienceCode?: string | null;
   inconvenienceDate?: string | null;
   inconvenienceActivityCode?: string | null;
@@ -277,6 +279,7 @@ export type FollowupResponseQueryRow = {
   hr_support_need_other_detail: string | null;
   family_pregnancy_relation_code: string | null;
   family_pregnancy_observation: string | null;
+  developed_activities_description: string | null;
   has_inconvenience_code: string | null;
   inconvenience_date: string | null;
   inconvenience_activity_code: string | null;

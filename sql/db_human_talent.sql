@@ -168,6 +168,7 @@ create table if not exists public.tthh_fact_employee_followup_response_cur (
   family_pregnancy_observation text,
 
   -- AGR — inconvenientes
+  developed_activities_description text,
   has_inconvenience_code text,
   inconvenience_date date,
   inconvenience_activity_code text,
@@ -258,6 +259,9 @@ create index if not exists ix_tthh_fact_followup_code
 
 create index if not exists ix_tthh_fact_followup_person
   on public.tthh_fact_employee_followup_response_cur (person_id);
+
+alter table public.tthh_fact_employee_followup_response_cur
+  add column if not exists developed_activities_description text;
 
 create index if not exists ix_tthh_fact_followup_route
   on public.tthh_fact_employee_followup_response_cur (followup_route_code);

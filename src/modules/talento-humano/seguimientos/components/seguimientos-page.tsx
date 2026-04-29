@@ -15,6 +15,7 @@ import { DateField } from "@/shared/filters/date-field";
 import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { SearchInput } from "@/shared/forms/search-input";
 import { Label } from "@/shared/ui/label";
+import { Button } from "@/shared/ui/button";
 import { formatMonthNumeric } from "@/shared/lib/format";
 
 import type {
@@ -124,6 +125,11 @@ export function SeguimientosPage({ initialCatalogs, initialWorkers, initialDateO
     setSelectedFollowup(null);
   }
 
+  function resetFilters() {
+    setFilters(DEFAULT_FILTERS);
+    setSelectedFollowup(null);
+  }
+
   return (
     <div className="space-y-4">
       <SectionPageShell
@@ -133,7 +139,7 @@ export function SeguimientosPage({ initialCatalogs, initialWorkers, initialDateO
         icon={<UserSquare className="h-5 w-5" />}
       >
         <FilterPanel>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-8">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-9">
             <div className="min-w-0 space-y-2">
               <Label htmlFor="filter-person-search">Buscar</Label>
               <SearchInput
@@ -194,11 +200,16 @@ export function SeguimientosPage({ initialCatalogs, initialWorkers, initialDateO
               value={filters.dateTo ?? ""}
               onChange={(v) => setFilter("dateTo", v || undefined)}
             />
+            <div className="flex items-end">
+              <Button type="button" variant="outline" className="h-11 w-full rounded-[16px]" onClick={resetFilters}>
+                Reestablecer filtros
+              </Button>
+            </div>
           </div>
-          <KpiGrid>
+          <KpiGrid columns={3}>
             <MetricTile label="Programados" value={String(totalScheduled)} />
             <MetricTile label="Pendientes" value={String(totalPending)} />
-            <MetricTile label="Registrados" value={String(totalRegistered)} />
+            <MetricTile label="Realizados" value={String(totalRegistered)} />
           </KpiGrid>
         </FilterPanel>
       </SectionPageShell>

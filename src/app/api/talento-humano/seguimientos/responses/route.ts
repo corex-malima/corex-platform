@@ -6,7 +6,7 @@ import { getRequestId } from "@/lib/request-id";
 import { canAccessResource } from "@/lib/access-control";
 import { checkRequestRateLimit, getEnvNumber } from "@/server/security/rate-limit";
 import { createFollowupResponseSchema } from "@/lib/talento-humano-seguimientos-schemas";
-import { createFollowupResponse, listFollowupResponses } from "@/lib/talento-humano-seguimientos-responses";
+import { createOrUpdateFollowupResponse, listFollowupResponses } from "@/lib/talento-humano-seguimientos-responses";
 import { createRequestId } from "@/lib/request-id";
 
 export const dynamic = "force-dynamic";
@@ -78,10 +78,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const runId = createRequestId();
-    const result = await createFollowupResponse(parsed.data, access.username, runId);
+    const result = await createOrUpdateFollowupResponse(parsed.data, access.username, runId);
 
     return NextResponse.json(result, {
-      status: 201,
+      status: result.mode === "created" ? 201 : 200,
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {

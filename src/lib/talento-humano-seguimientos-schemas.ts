@@ -69,6 +69,7 @@ export const createFollowupResponseSchema = z
     hrSupportNeedOtherDetail: nullableText(500),
     familyPregnancyRelationCode: nullableCode,
     familyPregnancyObservation: nullableText(2000),
+    developedActivitiesDescription: nullableText(2000),
     hasInconvenienceCode: nullableCode,
     inconvenienceDate: isoDate().nullish().transform((v) => v || null),
     inconvenienceActivityCode: nullableCode,
@@ -98,6 +99,41 @@ export const createFollowupResponseSchema = z
     selections: z.array(employeeFollowupSelectionInputSchema).default([]),
   })
   // Validaciones cross-field
+  .refine(
+    (v) => {
+      if (v.followupRouteCode === "AGR") {
+        return v.selections.some((s) => s.selectionGroupCode === "work_difficulty")
+          && Boolean(v.coworkerTreatmentRatingCode)
+          && Boolean(v.supervisorTreatmentRatingCode)
+          && Boolean(v.areaManagerTreatmentRatingCode)
+          && v.selections.some((s) => s.selectionGroupCode === "work_like_most")
+          && v.selections.some((s) => s.selectionGroupCode === "improvement_opportunity")
+          && Boolean(v.retentionIntentionCode)
+          && Boolean(v.hrSupportNeedCode)
+          && Boolean(v.familyPregnancyRelationCode)
+          && Boolean(v.hasInconvenienceCode);
+      }
+      return true;
+    },
+    { message: "Complete las preguntas obligatorias AGR.", path: ["followupRouteCode"] },
+  )
+  .refine(
+    (v) => {
+      if (v.followupRouteCode === "ADM") {
+        return Boolean(v.inductionSufficientCode)
+          && Boolean(v.transportProblemCode)
+          && Boolean(v.teamWelcomeCode)
+          && Boolean(v.roleClaritySatisfactionCode)
+          && Boolean(v.workEnvironmentSatisfactionCode)
+          && Boolean(v.equipmentSatisfactionCode)
+          && Boolean(v.recentWorkSatisfactionCode)
+          && Boolean(v.workAspectToImproveCode)
+          && Boolean(v.finalRetentionIntentionCode);
+      }
+      return true;
+    },
+    { message: "Complete las preguntas obligatorias ADM.", path: ["followupRouteCode"] },
+  )
   .refine(
     (v) => {
       if (v.hasInconvenienceCode === "yes") {
@@ -218,6 +254,7 @@ export const updateFollowupResponseSchema = z
     hrSupportNeedOtherDetail: nullableText(500),
     familyPregnancyRelationCode: nullableCode,
     familyPregnancyObservation: nullableText(2000),
+    developedActivitiesDescription: nullableText(2000),
     hasInconvenienceCode: nullableCode,
     inconvenienceDate: isoDate().nullish().transform((v) => v || null),
     inconvenienceActivityCode: nullableCode,

@@ -102,6 +102,29 @@ export async function getFollowupResponseDetail(
   return mapResponseRowToDetail(row, selections, includeSensitive);
 }
 
+export async function getLatestFollowupResponseDetailByUnique(
+  uniqueFollowUpCode: string,
+  personId: string,
+  includeSensitive: boolean,
+): Promise<EmployeeFollowupResponseDetail | null> {
+  const result = await queryHumanTalent<{ event_id: string }>(
+    `
+    SELECT event_id
+    FROM public.tthh_fact_employee_followup_response_cur
+    WHERE unique_follow_up_code = $1
+      AND person_id = $2
+      AND is_latest_valid_version = true
+      AND is_valid = true
+    ORDER BY response_version DESC
+    LIMIT 1
+    `,
+    [uniqueFollowUpCode, personId],
+  );
+
+  const eventId = result.rows[0]?.event_id;
+  return eventId ? getFollowupResponseDetail(eventId, includeSensitive) : null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Crear respuesta (transaction: fact + selections)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,6 +155,7 @@ export async function createFollowupResponse(
         agr_satisfaction_observation, retention_intention_code,
         retention_reason_observation, hr_support_need_code, hr_support_need_other_detail,
         family_pregnancy_relation_code, family_pregnancy_observation,
+        developed_activities_description,
         has_inconvenience_code, inconvenience_date, inconvenience_activity_code,
         inconvenience_activity_other_detail, inconvenience_type_code,
         inconvenience_type_other_detail,
@@ -156,17 +180,17 @@ export async function createFollowupResponse(
         $22, $23,
         $24, $25, $26,
         $27, $28,
-        $29, $30, $31,
-        $32, $33,
-        $34,
-        $35, $36, $37,
-        $38, $39, $40,
-        $41, $42,
-        $43, $44,
-        $45, $46,
-        $47, $48,
-        $49, $50,
-        'corex', true, $51, $52, $53, $54
+        $29, $30, $31, $32,
+        $33, $34,
+        $35,
+        $36, $37, $38,
+        $39, $40, $41,
+        $42, $43,
+        $44, $45,
+        $46, $47,
+        $48, $49,
+        $50, $51,
+        'corex', true, $52, $53, $54, $55
       )
       `,
       [
@@ -182,6 +206,7 @@ export async function createFollowupResponse(
         input.agrSatisfactionObservation ?? null, input.retentionIntentionCode ?? null,
         input.retentionReasonObservation ?? null, input.hrSupportNeedCode ?? null, input.hrSupportNeedOtherDetail ?? null,
         input.familyPregnancyRelationCode ?? null, input.familyPregnancyObservation ?? null,
+        input.developedActivitiesDescription ?? null,
         input.hasInconvenienceCode ?? null, input.inconvenienceDate ?? null, input.inconvenienceActivityCode ?? null,
         input.inconvenienceActivityOtherDetail ?? null, input.inconvenienceTypeCode ?? null,
         input.inconvenienceTypeOtherDetail ?? null,
@@ -218,6 +243,32 @@ export async function createFollowupResponse(
 
     return { eventId, correctionGroupId };
   });
+}
+
+export async function createOrUpdateFollowupResponse(
+  input: CreateFollowupResponseInput,
+  actorId: string,
+  runId: string,
+): Promise<{ eventId: string; correctionGroupId?: string; newEventId?: string; newVersion?: number; mode: "created" | "updated" }> {
+  const existing = await getLatestFollowupResponseDetailByUnique(input.uniqueFollowUpCode, input.personId, true);
+
+  if (!existing) {
+    const created = await createFollowupResponse(input, actorId, runId);
+    return { ...created, mode: "created" };
+  }
+
+  const updated = await updateFollowupResponse(
+    existing.eventId,
+    {
+      ...input,
+      action: "update",
+      changeReason: input.changeReason || "manual_update",
+    },
+    actorId,
+    runId,
+  );
+
+  return { ...updated, eventId: updated.newEventId, mode: "updated" };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -284,6 +335,7 @@ export async function updateFollowupResponse(
         agr_satisfaction_observation, retention_intention_code,
         retention_reason_observation, hr_support_need_code, hr_support_need_other_detail,
         family_pregnancy_relation_code, family_pregnancy_observation,
+        developed_activities_description,
         has_inconvenience_code, inconvenience_date, inconvenience_activity_code,
         inconvenience_activity_other_detail, inconvenience_type_code,
         inconvenience_type_other_detail,
@@ -316,7 +368,8 @@ export async function updateFollowupResponse(
         $45, $46,
         $47, $48,
         $49, $50,
-        'corex', $51, $52, $53, $54, $55, $56
+        $51, $52,
+        'corex', $53, $54, $55, $56, $57, $58
       )
       `,
       [
@@ -341,6 +394,7 @@ export async function updateFollowupResponse(
         pick(input.hrSupportNeedOtherDetail, current.hr_support_need_other_detail),
         pick(input.familyPregnancyRelationCode, current.family_pregnancy_relation_code),
         pick(input.familyPregnancyObservation, current.family_pregnancy_observation),
+        pick(input.developedActivitiesDescription, current.developed_activities_description),
         pick(input.hasInconvenienceCode, current.has_inconvenience_code),
         pick(input.inconvenienceDate, current.inconvenience_date),
         pick(input.inconvenienceActivityCode, current.inconvenience_activity_code),

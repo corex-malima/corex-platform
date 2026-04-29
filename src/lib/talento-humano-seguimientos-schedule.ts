@@ -19,7 +19,6 @@ type ScheduledFollowupDwRow = ScheduledFollowupQueryRow & {
 
 type ResponseStatusRow = {
   unique_follow_up_code: string;
-  person_id: string;
   event_id: string;
   is_valid: boolean;
 };
@@ -162,11 +161,11 @@ export async function loadScheduledFollowups(
 
   // ── 2. db_human_talent: estado de respuestas latest valid ─────────────────
   const statusParams: unknown[] = [];
-  const keyTuples = dwResult.rows
+  const uniqueCodes = Array.from(new Set(dwResult.rows.map((row) => row.unique_follow_up_code).filter(Boolean)));
+  const keyPlaceholders = uniqueCodes
     .map((row) => {
-      statusParams.push(row.unique_follow_up_code, row.person_id);
-      const base = statusParams.length - 1;
-      return `($${base}, $${base + 1})`;
+      statusParams.push(row);
+      return `$${statusParams.length}`;
     })
     .join(",");
 
@@ -179,19 +178,18 @@ export async function loadScheduledFollowups(
         `
         SELECT DISTINCT ON (unique_follow_up_code, person_id)
           unique_follow_up_code,
-          person_id,
           event_id,
           is_valid
         FROM public.tthh_fact_employee_followup_response_cur
         WHERE is_latest_valid_version = true
           AND is_valid = true
-          AND (unique_follow_up_code, person_id) IN (${keyTuples})
+          AND unique_follow_up_code IN (${keyPlaceholders})
         ORDER BY unique_follow_up_code, person_id, response_version DESC
         `,
         statusParams,
       );
       for (const row of statusResult.rows) {
-        statusMap.set(`${row.unique_follow_up_code}::${row.person_id}`, row);
+        statusMap.set(row.unique_follow_up_code, row);
       }
     }
   } catch {
@@ -209,7 +207,7 @@ export async function loadScheduledFollowups(
         return null;
       }
 
-      const statusRow = statusMap.get(`${row.unique_follow_up_code}::${row.person_id}`);
+      const statusRow = statusMap.get(row.unique_follow_up_code);
       let status: EmployeeFollowupStatus = "pending";
       if (statusRow) status = "registered";
 

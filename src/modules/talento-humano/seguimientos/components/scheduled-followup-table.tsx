@@ -15,7 +15,7 @@ type SortKey = "personName" | "followUpDate" | "derivedRoute" | "status";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pendiente",
-  registered: "Registrado",
+  registered: "Realizado",
 };
 
 const STATUS_VARIANTS: Record<string, "outline" | "success"> = {

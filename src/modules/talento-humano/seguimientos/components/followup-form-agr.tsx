@@ -34,6 +34,7 @@ export type AgrFormState = {
   hrSupportOther: string;
   familyPregnancyRelation: string;
   familyPregnancyObs: string;
+  developedActivitiesDescription: string;
   hasInconvenience: string;
   inconvenienceDate: string;
   inconvenienceActivity: string;
@@ -118,6 +119,7 @@ export function FollowupFormAgr({ state, setField, asOfDate, ...opts }: Props) {
       </FormSection>
 
       <FormSection title="Actividades desarrolladas">
+        <TextareaField id="developed-activities-description" label="Descripcion de actividades desarrolladas" value={s.developedActivitiesDescription} onChange={sf("developedActivitiesDescription")} rows={2} placeholder="Describa brevemente las actividades desarrolladas" />
         <SingleSelectField id="has-inconvenience" label="Inconvenientes *" value={s.hasInconvenience} options={opts.yesNoOpts} displayValue={opts.yesNoDV} onChange={sf("hasInconvenience")} />
         {s.hasInconvenience === "yes" ? (
           <>

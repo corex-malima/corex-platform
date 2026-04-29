@@ -69,6 +69,7 @@ export function mapResponseRowToDetail(
     hrSupportNeedOtherDetail: sensitive(row.hr_support_need_other_detail),
     familyPregnancyRelationCode: sensitive(row.family_pregnancy_relation_code),
     familyPregnancyObservation: sensitive(row.family_pregnancy_observation),
+    developedActivitiesDescription: row.developed_activities_description,
     hasInconvenienceCode: row.has_inconvenience_code,
     inconvenienceDate: row.inconvenience_date,
     inconvenienceActivityCode: row.inconvenience_activity_code,
