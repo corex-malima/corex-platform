@@ -576,3 +576,50 @@ Si el DW agrega nuevos valores, se deben añadir al bloque de seeds de `agr_foll
 ### Degradación graceful
 
 Si `db_human_talent` no está disponible o el SQL aún no se aplicó, `loadFollowupCatalogs()` captura la excepción y devuelve un mapa vacío. El módulo carga correctamente pero los selectores del formulario aparecen vacíos. Registrar una respuesta falla con error de validación hasta que la BD esté lista.
+
+---
+
+## Base de datos satelite: db_admin
+
+El módulo Administración Maestros (Catálogos / Dominios / Unidades / Métricas / Metas y Objetivos) vive en una base independiente: **`db_admin`** (variable `ADMIN_DATABASE_NAME=db_admin`, override completo `ADMIN_DATABASE_URL`).
+
+**Esta base está en un cluster PostgreSQL separado del DW operacional** (`datalakehouse`). El esquema legacy `datalakehouse.adm.*` quedó obsoleto y fue eliminado (`DROP SCHEMA adm CASCADE`). No usar — la fuente de verdad para masters administrativos es `db_admin.public.adm_*`.
+
+### Tablas (todas en `db_admin.public`)
+
+- `adm_dim_catalog_domain_cur` — macro-dominios (sin SCD2, simple `cur`).
+- `adm_dim_catalog_group_scd2` — grupos / listas (SCD2, único activo por `catalog_code`).
+- `adm_dim_catalog_item_scd2` — items dentro de cada grupo (SCD2, único activo por `(catalog_code, item_code)`).
+- `adm_dim_unit_of_measure_scd2` — unidades de medida (SCD2 por `unit_code`).
+- `adm_dim_metric_scd2` — métricas (SCD2 por `metric_code`).
+- `adm_dim_goal_target_scd2` — metas y objetivos jerárquicos N-niveles (SCD2 por `target_code`, `parent_target_code` self-ref por code, `valid_from` USER-DEFINED).
+- `adm_asgn_goal_target_domain_scd2` — bridge multiselect target ↔ dominio.
+- `adm_asgn_goal_target_type_scd2` — bridge multiselect target ↔ catalog_item del grupo `goal_types`.
+
+Vistas: `vw_adm_goal_target_active` (latest activo + joins a metric/unit/operator), `vw_adm_goal_target_history` (todas las versiones).
+
+### Convención SCD2
+
+Misma que `db_human_talent`:
+- `record_id uuid PK`, `<entity>_code` clave de negocio única activa via `UNIQUE INDEX (...) WHERE is_current AND is_valid`.
+- Update = INSERT nueva versión + UPDATE versión anterior (`is_current=false`, `valid_to=...`).
+- Trazabilidad: `loaded_at`, `run_id`, `actor_id`, `change_reason`.
+
+### Lógica especial valid_from / valid_to en `adm_dim_goal_target_scd2`
+
+A diferencia de los demás SCD2, el `valid_from` lo **define el usuario** (no es `now()` técnico). Al modificar:
+- Nuevo registro con `valid_from = fecha definida por el usuario`.
+- Versión anterior se cierra: `valid_to = nuevo_valid_from - 1 ms` (1 ms antes de la nueva versión, evita huecos y solapes).
+- API (`updateGoalTarget` en `src/lib/admin-masters-goals.ts`) valida que la nueva fecha sea estrictamente posterior a la versión vigente.
+
+### Aplicar el schema
+
+```bash
+node scripts/apply-admin-sql.mjs
+```
+
+Aplica `sql/db_admin.sql` (idempotente: `CREATE TABLE IF NOT EXISTS`, seeds con `WHERE NOT EXISTS`). Seeds iniciales:
+- 6 macro-dominios (`admin_masters`, `produccion`, `calidad`, `rrhh`, `financiero`, `comercial`)
+- 5 catálogos del sistema (`metric_data_types`, `metric_directions`, `comparison_operators`, `goal_types`, `unit_categories`)
+- 27 items de catálogo (tipos primitivos, direcciones, operadores, categorías)
+- 10 unidades base (UNIT, PCT, KG, GR, HR, DAY, USD, STEMS, BCH, MIN)
