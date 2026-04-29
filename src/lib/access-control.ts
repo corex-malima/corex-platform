@@ -221,7 +221,10 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
   {
     pathnamePrefix: "/api/admin/administracion-maestros",
     policy: "resource-bound",
-    requiredResources: ["/dashboard/admin/administracion-maestros"],
+    requiredResources: [
+      "/dashboard/admin/administracion-maestros/metricas",
+      "/dashboard/admin/administracion-maestros/metas-objetivos",
+    ],
   },
   {
     pathnamePrefix: "/api/talento-humano/seguimientos",
@@ -231,7 +234,10 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
   {
     pathnamePrefix: "/api/talento-humano/catalogos",
     policy: "resource-bound",
-    requiredResources: ["/dashboard/talento-humano/administrar-maestros/catalogos"],
+    requiredResources: [
+      "/dashboard/talento-humano/administrar-maestros/catalogos",
+      "/dashboard/talento-humano/administrar-maestros/dominios",
+    ],
   },
   {
     pathnamePrefix: "/api/talento-humano/activos",

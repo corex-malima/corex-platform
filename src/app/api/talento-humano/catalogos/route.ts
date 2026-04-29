@@ -6,6 +6,7 @@ import { getRequestId } from "@/lib/request-id";
 import {
   listTthhCatalogs,
   setTthhCatalogValidity,
+  upsertTthhCatalogDomain,
   upsertTthhCatalogGroup,
   upsertTthhCatalogItem,
 } from "@/lib/admin-masters";
@@ -37,13 +38,16 @@ export async function POST(request: NextRequest) {
     const kind = String(body.kind ?? "");
     const action = String(body.action ?? "upsert");
 
-    if (kind === "group" && action === "upsert") {
+    if (kind === "domain" && action === "upsert") {
+      if (!body.domainCode || !body.domainName) return apiJsonError("Codigo y nombre de dominio son obligatorios.", 400, requestId);
+      await upsertTthhCatalogDomain({ ...body, actorId: access.username });
+    } else if (kind === "group" && action === "upsert") {
       if (!body.catalogCode || !body.catalogName) return apiJsonError("Codigo y nombre de catalogo son obligatorios.", 400, requestId);
       await upsertTthhCatalogGroup({ ...body, actorId: access.username });
     } else if (kind === "item" && action === "upsert") {
       if (!body.catalogCode || !body.itemCode || !body.itemLabelEs) return apiJsonError("Catalogo, codigo y etiqueta son obligatorios.", 400, requestId);
       await upsertTthhCatalogItem({ ...body, actorId: access.username });
-    } else if ((kind === "group" || kind === "item") && action === "set-validity") {
+    } else if ((kind === "domain" || kind === "group" || kind === "item") && action === "set-validity") {
       await setTthhCatalogValidity(kind, { ...body, actorId: access.username, isValid: Boolean(body.isValid) });
     } else {
       return apiJsonError("Accion de catalogo no soportada.", 400, requestId);

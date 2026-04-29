@@ -111,7 +111,10 @@ export const createFollowupResponseSchema = z
           && Boolean(v.retentionIntentionCode)
           && Boolean(v.hrSupportNeedCode)
           && Boolean(v.familyPregnancyRelationCode)
-          && Boolean(v.hasInconvenienceCode);
+          && Boolean(v.hasInconvenienceCode)
+          && Boolean(v.inconvenienceDate)
+          && Boolean(v.inconvenienceActivityCode)
+          && Boolean(v.inconvenienceTypeCode);
       }
       return true;
     },

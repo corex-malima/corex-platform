@@ -40,6 +40,7 @@ const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   Registros: ClipboardList,
   Personal: UserCircle2,
   "Administrar Maestros": DatabaseZap,
+  "Administración Maestros": DatabaseZap,
   Solver: Settings,
   Seguridad: Lock,
 };

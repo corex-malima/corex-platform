@@ -63,8 +63,13 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
     setAdmState((prev) => ({ ...prev, [key]: value }));
   const catOpts = (key: string) => toOpts(catalogs[key]);
   const catDV = (key: string) => buildDV(catalogs[key]);
+  const isEditing = followup.status === "registered";
   const retentionOpts = catOpts("retention_intention");
   const retentionDV = catDV("retention_intention");
+  const changeReasonOptions = catOpts("employee_followup_change_reason")
+    .filter((code) => !["initial_load", "manual_insert", "backfill"].includes(code));
+  const editableChangeReasonOptions = changeReasonOptions.length ? changeReasonOptions : ["manual_update"];
+  const changeReasonDV = catDV("employee_followup_change_reason");
   const missingCatalogs = (route === "AGR" ? AGR_REQUIRED_CATALOGS : ADM_REQUIRED_CATALOGS)
     .filter((catalogCode) => !catalogs[catalogCode]?.length);
   const catalogsReady = missingCatalogs.length === 0;
@@ -95,11 +100,9 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
         || !decodeMultiSelectValue(agrState.workLikeMostEncoded).length
         || !decodeMultiSelectValue(agrState.improvOppEncoded).length
         || !agrState.retentionIntention || !agrState.hrSupportNeed
-        || !agrState.familyPregnancyRelation || !agrState.hasInconvenience;
+        || !agrState.familyPregnancyRelation || !agrState.hasInconvenience
+        || !agrState.inconvenienceDate || !agrState.inconvenienceActivity || !agrState.inconvenienceType;
       if (missingAgr) return "Complete las preguntas obligatorias marcadas con *.";
-      if (agrState.hasInconvenience === "yes" && (!agrState.inconvenienceDate || !agrState.inconvenienceActivity || !agrState.inconvenienceType)) {
-        return "Complete fecha, actividad e inconveniente presentado.";
-      }
     }
 
     if (route === "ADM") {
@@ -140,7 +143,7 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
       scheduledFollowUpType: followup.followUpType ?? null,
       jobClassificationCodeSnapshot: followup.jobClassificationCode ?? null,
       followUpDate: followup.followUpDate,
-      changeReason,
+      changeReason: isEditing ? changeReason : "initial_load",
       ...(route === "AGR" && buildAgrPayload(agrState, agrFrequencyCode)),
       ...(route === "ADM" && buildAdmPayload(admState, admFrequencyCode)),
       selections: buildSelections(),
@@ -153,7 +156,7 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      toast.success(followup.status === "registered" ? "Seguimiento actualizado correctamente." : "Seguimiento registrado correctamente.");
+      toast.success(isEditing ? "Seguimiento actualizado correctamente." : "Seguimiento registrado correctamente.");
       onSaved();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Error al guardar el seguimiento.");
@@ -173,7 +176,7 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">Clasificacion {route}</Badge>
-                <Badge variant={followup.status === "registered" ? "success" : "outline"}>{followup.status === "pending" ? "Pendiente" : "Realizado"}</Badge>
+                <Badge variant={isEditing ? "success" : "outline"}>{followup.status === "pending" ? "Pendiente" : "Realizado"}</Badge>
                 {scheduledFrequencyCode ? <Badge variant="secondary">Frecuencia {scheduledFrequencyCode}</Badge> : null}
               </div>
               <CardTitle className="text-lg">{followup.personName}</CardTitle>
@@ -211,17 +214,19 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
               workAspectOpts={catOpts("work_aspect_to_improve")} workAspectDV={catDV("work_aspect_to_improve")}
             />
           )}
-          <FormSection title="Auditoria">
-            <SingleSelectField id="change-reason" label="Razon del cambio" value={changeReason}
-              options={followup.status === "registered" ? ["manual_update", "form_resubmission"] : ["initial_load", "manual_insert", "form_resubmission"]}
-              displayValue={(v) => ({ initial_load: "Registro inicial", manual_insert: "Insercion manual", manual_update: "Correccion manual", form_resubmission: "Reenvio de formulario" }[v] ?? v)}
-              onChange={setChangeReason} omitEmpty
-            />
-          </FormSection>
+          {isEditing ? (
+            <FormSection title="Auditoría">
+              <SingleSelectField id="change-reason" label="Razón del cambio *" value={changeReason}
+                options={editableChangeReasonOptions}
+                displayValue={changeReasonDV}
+                onChange={setChangeReason} omitEmpty
+              />
+            </FormSection>
+          ) : null}
           {permissions.canWrite ? (
             <Button className="w-full rounded-full" onClick={handleSubmit} disabled={submitting || !catalogsReady}>
               <Save className={cn("size-4", submitting && "animate-pulse")} />
-              {submitting ? "Guardando..." : followup.status === "registered" ? "Guardar cambios" : "Registrar seguimiento"}
+              {submitting ? "Guardando..." : isEditing ? "Guardar cambios" : "Registrar seguimiento"}
             </Button>
           ) : <p className="text-center text-xs text-muted-foreground">Solo lectura. No tienes permiso para registrar.</p>}
         </div>

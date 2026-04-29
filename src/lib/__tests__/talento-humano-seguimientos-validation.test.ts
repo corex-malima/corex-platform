@@ -24,6 +24,9 @@ const BASE_AGR = {
   hrSupportNeedCode: "none",
   familyPregnancyRelationCode: "none",
   hasInconvenienceCode: "no",
+  inconvenienceDate: "2026-04-28",
+  inconvenienceActivityCode: "harvest",
+  inconvenienceTypeCode: "botrytis",
   selections: VALID_AGR_SELECTIONS,
 };
 
@@ -62,8 +65,13 @@ describe("createFollowupResponseSchema", () => {
     expect(createFollowupResponseSchema.safeParse({ ...BASE_ADM, admFollowupFrequencyCode: undefined }).success).toBe(true);
   });
 
-  it("rechaza has_inconvenience=yes sin fecha y actividad", () => {
-    expect(createFollowupResponseSchema.safeParse({ ...BASE_AGR, hasInconvenienceCode: "yes" }).success).toBe(false);
+  it("rechaza AGR sin fecha y actividad de inconveniente", () => {
+    expect(createFollowupResponseSchema.safeParse({
+      ...BASE_AGR,
+      inconvenienceDate: null,
+      inconvenienceActivityCode: null,
+      inconvenienceTypeCode: null,
+    }).success).toBe(false);
   });
 
   it("acepta has_inconvenience=yes con campos obligatorios", () => {

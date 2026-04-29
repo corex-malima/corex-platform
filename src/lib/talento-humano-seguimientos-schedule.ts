@@ -172,11 +172,10 @@ export async function loadScheduledFollowups(
   const statusMap = new Map<string, ResponseStatusRow>();
 
   try {
-    const pool = getHumanTalentPool();
-    if (pool) {
+    if (keyPlaceholders) {
       const statusResult = await queryHumanTalent<ResponseStatusRow>(
         `
-        SELECT DISTINCT ON (unique_follow_up_code, person_id)
+        SELECT DISTINCT ON (unique_follow_up_code)
           unique_follow_up_code,
           event_id,
           is_valid
@@ -184,7 +183,7 @@ export async function loadScheduledFollowups(
         WHERE is_latest_valid_version = true
           AND is_valid = true
           AND unique_follow_up_code IN (${keyPlaceholders})
-        ORDER BY unique_follow_up_code, person_id, response_version DESC
+        ORDER BY unique_follow_up_code, response_version DESC, loaded_at DESC
         `,
         statusParams,
       );
@@ -192,8 +191,8 @@ export async function loadScheduledFollowups(
         statusMap.set(row.unique_follow_up_code, row);
       }
     }
-  } catch {
-    // db_human_talent puede no estar disponible; status queda pending
+  } catch (error) {
+    console.warn("[TTHH] No se pudo cruzar estado de seguimientos contra db_human_talent.", error);
   }
 
   // ── 3. Merge y derivación de ruta/estado ─────────────────────────────────
@@ -233,17 +232,4 @@ export async function loadScheduledFollowups(
       } satisfies EmployeeScheduledFollowupRow;
     })
     .filter((row): row is EmployeeScheduledFollowupRow => row !== null);
-}
-
-// Pool helper (importado dinámicamente para evitar circular)
-function getHumanTalentPool() {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getHumanTalentPool: get } = require("@/lib/human-talent-db") as {
-      getHumanTalentPool: () => import("pg").Pool | null;
-    };
-    return get();
-  } catch {
-    return null;
-  }
 }

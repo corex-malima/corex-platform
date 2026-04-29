@@ -104,7 +104,6 @@ export async function getFollowupResponseDetail(
 
 export async function getLatestFollowupResponseDetailByUnique(
   uniqueFollowUpCode: string,
-  personId: string,
   includeSensitive: boolean,
 ): Promise<EmployeeFollowupResponseDetail | null> {
   const result = await queryHumanTalent<{ event_id: string }>(
@@ -112,13 +111,12 @@ export async function getLatestFollowupResponseDetailByUnique(
     SELECT event_id
     FROM public.tthh_fact_employee_followup_response_cur
     WHERE unique_follow_up_code = $1
-      AND person_id = $2
       AND is_latest_valid_version = true
       AND is_valid = true
     ORDER BY response_version DESC
     LIMIT 1
     `,
-    [uniqueFollowUpCode, personId],
+    [uniqueFollowUpCode],
   );
 
   const eventId = result.rows[0]?.event_id;
@@ -250,7 +248,7 @@ export async function createOrUpdateFollowupResponse(
   actorId: string,
   runId: string,
 ): Promise<{ eventId: string; correctionGroupId?: string; newEventId?: string; newVersion?: number; mode: "created" | "updated" }> {
-  const existing = await getLatestFollowupResponseDetailByUnique(input.uniqueFollowUpCode, input.personId, true);
+  const existing = await getLatestFollowupResponseDetailByUnique(input.uniqueFollowUpCode, true);
 
   if (!existing) {
     const created = await createFollowupResponse(input, actorId, runId);

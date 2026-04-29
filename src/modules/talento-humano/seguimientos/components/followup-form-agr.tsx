@@ -2,7 +2,6 @@
 
 import { decodeMultiSelectValue } from "@/lib/multi-select";
 import { FormSection } from "@/shared/forms/form-section";
-import { SingleChoiceListField } from "@/shared/forms/single-choice-list-field";
 import { TextInputField } from "@/shared/forms/text-input-field";
 import { TextareaField } from "@/shared/forms/textarea-field";
 import { DateField } from "@/shared/filters/date-field";
@@ -119,17 +118,13 @@ export function FollowupFormAgr({ state, setField, asOfDate, ...opts }: Props) {
       </FormSection>
 
       <FormSection title="Actividades desarrolladas">
-        <TextareaField id="developed-activities-description" label="Descripcion de actividades desarrolladas" value={s.developedActivitiesDescription} onChange={sf("developedActivitiesDescription")} rows={2} placeholder="Describa brevemente las actividades desarrolladas" />
+        <TextareaField id="developed-activities-description" label="Descripción (opcional)" value={s.developedActivitiesDescription} onChange={sf("developedActivitiesDescription")} rows={2} placeholder="Describa brevemente las actividades desarrolladas" />
         <SingleSelectField id="has-inconvenience" label="Inconvenientes *" value={s.hasInconvenience} options={opts.yesNoOpts} displayValue={opts.yesNoDV} onChange={sf("hasInconvenience")} />
-        {s.hasInconvenience === "yes" ? (
-          <>
-            <DateField label="Ingrese la fecha del inconveniente *" value={s.inconvenienceDate} onChange={sf("inconvenienceDate")} />
-            <SingleChoiceListField id="inconvenience-activity" label="En que actividad tuvo inconvenientes *" value={s.inconvenienceActivity} options={opts.activityOpts} displayValue={opts.activityDV} onChange={sf("inconvenienceActivity")} />
-            {s.inconvenienceActivity === "other" ? <TextInputField id="inconvenience-activity-other" label="Otro *" value={s.inconvenienceActivityOther} onChange={sf("inconvenienceActivityOther")} /> : null}
-            <SingleChoiceListField id="inconvenience-type" label="Senale el inconveniente presentado *" value={s.inconvenienceType} options={opts.inconvTypeOpts} displayValue={opts.inconvTypeDV} onChange={sf("inconvenienceType")} />
-            {s.inconvenienceType === "other" ? <TextInputField id="inconvenience-type-other" label="Otros *" value={s.inconvenienceTypeOther} onChange={sf("inconvenienceTypeOther")} /> : null}
-          </>
-        ) : null}
+        <DateField label="Ingrese la fecha del inconveniente *" helperText="Día, mes, año" value={s.inconvenienceDate} onChange={sf("inconvenienceDate")} />
+        <SingleSelectField id="inconvenience-activity" label="En qué actividad tuvo inconvenientes *" value={s.inconvenienceActivity} options={opts.activityOpts} displayValue={opts.activityDV} onChange={sf("inconvenienceActivity")} />
+        {s.inconvenienceActivity === "other" ? <TextInputField id="inconvenience-activity-other" label="Otro *" value={s.inconvenienceActivityOther} onChange={sf("inconvenienceActivityOther")} /> : null}
+        <SingleSelectField id="inconvenience-type" label="Señale el inconveniente presentado *" value={s.inconvenienceType} options={opts.inconvTypeOpts} displayValue={opts.inconvTypeDV} onChange={sf("inconvenienceType")} />
+        {s.inconvenienceType === "other" ? <TextInputField id="inconvenience-type-other" label="Otros *" value={s.inconvenienceTypeOther} onChange={sf("inconvenienceTypeOther")} /> : null}
       </FormSection>
     </div>
   );
