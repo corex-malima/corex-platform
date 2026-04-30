@@ -856,7 +856,7 @@ function applyLocalDetailFilters(
 
 // ─── Node definitions (19 nodos, prefijo vw_ confirmado en DB) ───────────────
 
-const VIEW_PREFIX = "gld.vw_camp_ind_bal_";
+const VIEW_PREFIX = "gld.mv_camp_ind_bal_";
 
 const BALANZAS_NODES: BalanzasNodeDef[] = [
   // ── PRECLASIFICACIÓN ──────────────────────────────────────────────────────
@@ -1394,9 +1394,6 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
 
 const FARM_NAMES: Record<string, string> = { xl: "XLENCE", cl: "CLOUD", zn: "ZINZI" };
 
-// CL y ZN usan materialized views (mv_) — más rápidas que las vw_ de XL
-const MV_VIEW_PREFIX = "gld.mv_camp_ind_bal_";
-
 function getNodesForFarm(farm: string): BalanzasNodeDef[] {
   if (farm === "cl" || farm === "zn") {
     const farmName = FARM_NAMES[farm] ?? farm.toUpperCase();
@@ -1404,9 +1401,7 @@ function getNodesForFarm(farm: string): BalanzasNodeDef[] {
       .filter((n) => n.branch === "apertura")
       .map((n) => ({
         ...n,
-        viewName: n.viewName
-          .replace(VIEW_PREFIX, MV_VIEW_PREFIX)
-          .replace("_xl_", `_${farm}_`),
+        viewName: n.viewName.replace("_xl_", `_${farm}_`),
         dialogTitle: n.dialogTitle.replace("XLENCE", farmName),
       }));
   }
