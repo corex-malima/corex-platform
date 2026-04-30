@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { FileDown } from "lucide-react";
-import { formatDate } from "@/shared/lib/format";
+import { formatDate, localDateString } from "@/shared/lib/format";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -57,7 +57,7 @@ export function ScheduledFollowupTable({ rows, selectedFollowup, onSelect, isLoa
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `agenda_seguimientos_${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.download = `agenda_seguimientos_${localDateString()}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {

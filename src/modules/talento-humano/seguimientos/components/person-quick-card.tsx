@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { BriefcaseBusiness, IdCard, MapPin, UserRound } from "lucide-react";
 
 import { fetchJson } from "@/lib/fetch-json";
-import { formatDate } from "@/shared/lib/format";
+import { formatDate, localDateString } from "@/shared/lib/format";
 import { Badge } from "@/shared/ui/badge";
 import type { EmployeeFollowupPersonDetail } from "@/modules/talento-humano/seguimientos/server/types";
 
@@ -15,7 +15,7 @@ const fetcher = (url: string) =>
   fetchJson<EmployeeFollowupPersonDetail>(url, "No se pudo cargar el perfil.");
 
 export function PersonQuickCard({ personId, asOfDate }: Props) {
-  const date = asOfDate ?? new Date().toISOString().slice(0, 10);
+  const date = asOfDate ?? localDateString();
   const { data, isLoading } = useSWR(
     `/api/talento-humano/seguimientos/person/${personId}?asOfDate=${date}`,
     fetcher,

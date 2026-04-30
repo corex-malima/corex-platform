@@ -54,7 +54,7 @@ export async function searchPersons(
       p.job_title,
       p.job_classification_code,
       p.associated_worker_name,
-      p.last_entry_date::date AS last_entry_date,
+      to_char(p.last_entry_date, 'YYYY-MM-DD') AS last_entry_date,
       a.area_name,
       a.area_general
     FROM slv.tthh_dim_person_profile_scd2 p
@@ -118,7 +118,7 @@ export async function getPersonDetail(
       p.employer_name,
       p.job_classification_code,
       p.associated_worker_name,
-      p.last_entry_date::date AS last_entry_date,
+      to_char(p.last_entry_date, 'YYYY-MM-DD') AS last_entry_date,
       a.area_id,
       a.area_name,
       a.area_general

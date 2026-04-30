@@ -16,6 +16,7 @@ import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { localDateString } from "@/shared/lib/format";
 
 import {
   AdminGoalTargetEditor,
@@ -39,7 +40,7 @@ type GoalsPayload = { targets: AdminGoalTarget[]; metrics: AdminMetric[]; domain
 
 const ENDPOINT = "/api/admin/administracion-maestros/metas-objetivos";
 const fetcher = (url: string) => fetchJson<GoalsPayload>(url, "No se pudo cargar metas y objetivos.");
-const today = new Date().toISOString().slice(0, 10);
+const today = localDateString();
 const EMPTY_FORM: GoalTargetFormValues = {
   targetCode: "", targetName: "", targetDescription: "", parentTargetCode: "",
   levelIndex: "1", levelLabel: "", metricCode: "", domainCodesEncoded: "all",
@@ -152,7 +153,7 @@ export function AdminGoalTargetsPage() {
       toast.error("Código, nombre y fecha de inicio son obligatorios.");
       return;
     }
-    if (isEdit && selected && new Date(formValues.validFromDate) <= new Date(selected.validFrom.slice(0, 10))) {
+    if (isEdit && selected && formValues.validFromDate <= selected.validFrom.slice(0, 10)) {
       toast.error("La nueva fecha de inicio debe ser posterior a la versión vigente.");
       return;
     }

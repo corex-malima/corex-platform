@@ -1,4 +1,7 @@
-import { Pool, type PoolConfig, type QueryResultRow } from "pg";
+import { Pool, types, type PoolConfig, type QueryResultRow } from "pg";
+
+// DATE (OID 1082) → string "YYYY-MM-DD" — evita off-by-one en servidores UTC
+types.setTypeParser(1082, (val: string) => val);
 
 declare global {
   var __dashboardStarterPool: Pool | undefined;

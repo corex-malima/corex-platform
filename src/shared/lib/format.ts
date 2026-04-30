@@ -22,6 +22,11 @@ function buildLocalDate(year: number, month: number, day: number) {
   return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
 
+export function localDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function formatLocalDateParts(value: Date) {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, "0");

@@ -15,7 +15,7 @@ import { MultiSelectField } from "@/shared/filters/multi-select-field";
 import { SearchInput } from "@/shared/forms/search-input";
 import { Label } from "@/shared/ui/label";
 import { Button } from "@/shared/ui/button";
-import { formatMonthNumeric } from "@/shared/lib/format";
+import { formatMonthNumeric, localDateString } from "@/shared/lib/format";
 
 import type {
   EmployeeFollowupBootPayload,
@@ -53,7 +53,7 @@ function buildFollowupQuery(filters: EmployeeFollowupFilters) {
   return params.toString();
 }
 
-const today = new Date().toISOString().slice(0, 10);
+const today = localDateString();
 const currentYear = String(new Date().getFullYear());
 const currentMonth = String(new Date().getMonth() + 1);
 
