@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 
 import { query } from "@/lib/db";
 import { decodeMultiSelectValue, encodeMultiSelectValue } from "@/lib/multi-select";
@@ -50,6 +50,9 @@ type ComparisonSnapshotQueryRow = {
   availability_vs_initial_pct: string | number | null;
   mortality_pct: string | number | null;
   total_stems: string | number | null;
+  green_weight_kg: string | number | null;
+  post_weight_kg: string | number | null;
+  effective_hours: string | number | null;
 };
 
 export type ComparisonSearchFilters = {
@@ -88,6 +91,12 @@ export type ComparisonCycleSnapshot = ComparisonCycleOption & {
   availabilityVsScheduledPct: number | null;
   availabilityVsInitialPct: number | null;
   mortalityPct: number | null;
+  cajasVerde: number | null;
+  cajasBlanco: number | null;
+  pesoTalloG: number | null;
+  horasCaja: number | null;
+  cajasCama: number | null;
+  horasCama: number | null;
 };
 
 export type ComparisonMetric = {
@@ -143,11 +152,24 @@ const AREA_SQL = `
   end
 `;
 
-const FENOGRAMA_SOURCE = "gld.mv_prod_fenograma_cur";
+const FENOGRAMA_SOURCE    = "gld.mv_prod_fenograma_cur";
 const CYCLE_PLANTS_SOURCE = "gld.mv_camp_kardex_cycle_plants_cur";
+const PROD_GREEN_SOURCE   = "gld.mv_prod_productivity_green_cur";
+const PROD_POST_SOURCE    = "gld.mv_prod_productivity_post_cur";
+const PROD_HOURS_SOURCE   = "gld.mv_prod_hours_cycle_person_cur";
+
 const COMPARISON_OPTIONS_TTL_MS = 5 * 60 * 1000;
-const COMPARISON_SEARCH_TTL_MS = 30 * 1000;
-const COMPARISON_PAIR_TTL_MS = 60 * 1000;
+const COMPARISON_SEARCH_TTL_MS  = 30 * 1000;
+const COMPARISON_PAIR_TTL_MS    = 60 * 1000;
+
+const RADAR_METRIC_KEYS = new Set([
+  "totalStems",
+  "cajasVerde",
+  "pesoTalloG",
+  "cajasCama",
+  "mortalityPct",
+  "availabilityVsScheduledPct",
+]);
 
 export const defaultComparisonFilters: ComparisonSearchFilters = {
   q: "",
@@ -157,22 +179,28 @@ export const defaultComparisonFilters: ComparisonSearchFilters = {
   limit: 24,
 };
 
-function cleanText(value: string | null) {
+function cleanText(value: string | null | undefined) {
   return value?.trim() ?? "";
 }
 
 function toPercentRatio(value: string | number | null) {
   const numericValue = toNumber(value);
-
-  if (numericValue === null) {
-    return null;
-  }
-
+  if (numericValue === null) return null;
   return Math.abs(numericValue) > 1.5 ? numericValue / 100 : numericValue;
+}
+
+function divOrNull(a: number | null, b: number | null): number | null {
+  if (a === null || b === null || b === 0) return null;
+  return roundValue(a / b);
 }
 
 function formatNumber(value: number | null) {
   return formatFlexibleNumber(value, { empty: "-" });
+}
+
+function formatGrams(value: number | null) {
+  if (value === null) return "-";
+  return `${formatFlexibleNumber(value, { empty: "-" })} g`;
 }
 
 function formatPercent(value: number | null) {
@@ -191,10 +219,7 @@ function serializeFilters(filters: ComparisonSearchFilters) {
 
 function buildOption(row: ComparisonOptionQueryRow): ComparisonCycleOption | null {
   const cycleKey = cleanText(row.cycle_key);
-
-  if (!cycleKey) {
-    return null;
-  }
+  if (!cycleKey) return null;
 
   return {
     cycleKey,
@@ -373,7 +398,6 @@ function normalizeMetricValue(
   const span = range.max - range.min || 1;
   const rawShare = (boundedValue - range.min) / span;
   const adjustedShare = preference === "lower" ? 1 - rawShare : rawShare;
-
   return roundValue(adjustedShare * 100);
 }
 
@@ -422,9 +446,23 @@ function buildMetric(
 }
 
 function mapSnapshot(row: ComparisonSnapshotQueryRow | undefined, fallback?: ComparisonCycleOption | null) {
-  if (!row && !fallback) {
-    return null;
-  }
+  if (!row && !fallback) return null;
+
+  const totalStems = roundValue(toNumber(row?.total_stems ?? fallback?.totalStems ?? null) ?? 0);
+  const greenWeightKg = toNumber(row?.green_weight_kg ?? null);
+  const postWeightKg  = toNumber(row?.post_weight_kg ?? null);
+  const effectiveHours = toNumber(row?.effective_hours ?? null);
+  const bedArea = toNumber(row?.bed_area ?? null);
+
+  const cajasVerde  = greenWeightKg !== null ? roundValue(greenWeightKg / 10) : null;
+  const cajasBlanco = postWeightKg  !== null ? roundValue(postWeightKg  / 10) : null;
+  const pesoTalloG  = greenWeightKg !== null && totalStems > 0
+    ? roundValue(greenWeightKg * 1000 / totalStems)
+    : null;
+  const camas30   = bedArea !== null && bedArea > 0 ? bedArea / 30 : null;
+  const horasCaja = divOrNull(effectiveHours, cajasVerde);
+  const cajasCama = divOrNull(cajasVerde, camas30);
+  const horasCama = divOrNull(effectiveHours, camas30);
 
   return {
     cycleKey: cleanText(row?.cycle_key ?? fallback?.cycleKey ?? null),
@@ -436,13 +474,13 @@ function mapSnapshot(row: ComparisonSnapshotQueryRow | undefined, fallback?: Com
     spDate: row?.sp_date ?? fallback?.spDate ?? null,
     harvestStartDate: row?.harvest_start_date ?? fallback?.harvestStartDate ?? null,
     harvestEndDate: row?.harvest_end_date ?? fallback?.harvestEndDate ?? null,
-    totalStems: roundValue(toNumber(row?.total_stems ?? fallback?.totalStems ?? null) ?? 0),
+    totalStems,
     validFrom: row?.valid_from ?? null,
     validTo: row?.valid_to ?? null,
     isCurrent: Boolean(row?.is_current),
     bedCount: toNumber(row?.bed_count ?? null),
     pambilesCount: toNumber(row?.pambiles_count ?? null),
-    bedArea: toNumber(row?.bed_area ?? null),
+    bedArea,
     programmedPlants: toNumber(row?.programmed_plants ?? null),
     cycleStartPlants: toNumber(row?.cycle_start_plants ?? null),
     currentPlants: toNumber(row?.current_plants ?? null),
@@ -451,6 +489,12 @@ function mapSnapshot(row: ComparisonSnapshotQueryRow | undefined, fallback?: Com
     availabilityVsScheduledPct: toPercentRatio(row?.availability_vs_scheduled_pct ?? null),
     availabilityVsInitialPct: toPercentRatio(row?.availability_vs_initial_pct ?? null),
     mortalityPct: toPercentRatio(row?.mortality_pct ?? null),
+    cajasVerde,
+    cajasBlanco,
+    pesoTalloG,
+    horasCaja,
+    cajasCama,
+    horasCama,
   } satisfies ComparisonCycleSnapshot;
 }
 
@@ -458,18 +502,12 @@ export async function getComparisonPair(
   leftCycleKey: string,
   rightCycleKey: string,
 ): Promise<ComparisonPairPayload> {
-  const normalizedLeft = cleanText(leftCycleKey);
+  const normalizedLeft  = cleanText(leftCycleKey);
   const normalizedRight = cleanText(rightCycleKey);
   const cycleKeys = Array.from(new Set([normalizedLeft, normalizedRight].filter(Boolean)));
 
   if (cycleKeys.length < 2) {
-    return {
-      generatedAt: new Date().toISOString(),
-      left: null,
-      right: null,
-      metrics: [],
-      radar: [],
-    };
+    return { generatedAt: new Date().toISOString(), left: null, right: null, metrics: [], radar: [] };
   }
 
   return cachedAsync(
@@ -503,7 +541,10 @@ export async function getComparisonPair(
               plants.availability_vs_scheduled_pct,
               plants.availability_vs_initial_pct,
               plants.mortality_pct,
-              meta.total_stems
+              meta.total_stems,
+              green_prod.green_weight_kg,
+              post_prod.post_weight_kg,
+              labor.effective_hours
             from slv.camp_dim_cycle_profile_scd2 cp
             left join lateral (
               select
@@ -534,6 +575,21 @@ export async function getComparisonPair(
               order by harvest_start_date desc nulls last, sp_date desc nulls last
               limit 1
             ) meta on true
+            left join lateral (
+              select coalesce(sum(green_weight_kg), 0) as green_weight_kg
+              from ${PROD_GREEN_SOURCE}
+              where cycle_key = cp.cycle_key
+            ) green_prod on true
+            left join lateral (
+              select coalesce(sum(post_weight_kg), 0) as post_weight_kg
+              from ${PROD_POST_SOURCE}
+              where cycle_key = cp.cycle_key
+            ) post_prod on true
+            left join lateral (
+              select coalesce(sum(effective_hours), 0) as effective_hours
+              from ${PROD_HOURS_SOURCE}
+              where cycle_key = cp.cycle_key
+            ) labor on true
             where cp.cycle_key = any($1::text[])
             order by
               cp.cycle_key,
@@ -545,75 +601,52 @@ export async function getComparisonPair(
         searchComparisonCycles({ limit: 40 }),
       ]);
 
-      const rowsByCycleKey = new Map(result.rows.map((row) => [row.cycle_key, row] as const));
+      const rowsByCycleKey    = new Map(result.rows.map((row) => [row.cycle_key, row] as const));
       const optionsByCycleKey = new Map(options.map((option) => [option.cycleKey, option] as const));
-      const left = mapSnapshot(rowsByCycleKey.get(normalizedLeft), optionsByCycleKey.get(normalizedLeft));
+      const left  = mapSnapshot(rowsByCycleKey.get(normalizedLeft),  optionsByCycleKey.get(normalizedLeft));
       const right = mapSnapshot(rowsByCycleKey.get(normalizedRight), optionsByCycleKey.get(normalizedRight));
 
-      const metrics = [
-        buildMetric(
-          "totalStems",
-          "Tallos",
-          left?.totalStems ?? null,
-          right?.totalStems ?? null,
-          (value) => formatNumber(value),
-          { range: { min: 0, max: 289160 }, preference: "higher" },
-        ),
-        buildMetric(
-          "availabilityVsScheduledPct",
-          "Disp. vs programadas",
-          left?.availabilityVsScheduledPct ?? null,
-          right?.availabilityVsScheduledPct ?? null,
-          formatPercent,
-          { range: { min: 0, max: 1.2 }, preference: "higher" },
-        ),
-        buildMetric(
-          "availabilityVsInitialPct",
-          "Disp. vs iniciales",
-          left?.availabilityVsInitialPct ?? null,
-          right?.availabilityVsInitialPct ?? null,
-          formatPercent,
-          { range: { min: 0, max: 1.2 }, preference: "higher" },
-        ),
-        buildMetric(
-          "mortalityPct",
-          "Mortandad",
-          left?.mortalityPct ?? null,
-          right?.mortalityPct ?? null,
-          formatPercent,
-          { range: { min: -0.53, max: 0.35 }, preference: "lower" },
-        ),
-        buildMetric(
-          "deadPlants",
-          "Plantas muertas",
-          left?.deadPlants ?? null,
-          right?.deadPlants ?? null,
-          (value) => formatNumber(value),
-          { range: { min: 0, max: 21466 }, preference: "lower" },
-        ),
-        buildMetric(
-          "reseededPlants",
-          "Plantas resembradas",
-          left?.reseededPlants ?? null,
-          right?.reseededPlants ?? null,
-          (value) => formatNumber(value),
-          { range: { min: 0, max: 38475 }, preference: "neutral" },
-        ),
+      const metrics: ComparisonMetric[] = [
+        buildMetric("totalStems", "Tallos",
+          left?.totalStems ?? null, right?.totalStems ?? null,
+          formatNumber, { range: { min: 0, max: 289160 }, preference: "higher" }),
+        buildMetric("cajasVerde", "Cajas Verde",
+          left?.cajasVerde ?? null, right?.cajasVerde ?? null,
+          formatNumber, { range: { min: 0, max: 50000 }, preference: "higher" }),
+        buildMetric("cajasBlanco", "Cajas Blanco",
+          left?.cajasBlanco ?? null, right?.cajasBlanco ?? null,
+          formatNumber, { range: { min: 0, max: 50000 }, preference: "higher" }),
+        buildMetric("pesoTalloG", "Peso Tallo",
+          left?.pesoTalloG ?? null, right?.pesoTalloG ?? null,
+          formatGrams, { range: { min: 0, max: 250 }, preference: "higher" }),
+        buildMetric("horasCaja", "Horas / Caja",
+          left?.horasCaja ?? null, right?.horasCaja ?? null,
+          formatNumber, { range: { min: 0, max: 5 }, preference: "lower" }),
+        buildMetric("cajasCama", "Cajas / Cama",
+          left?.cajasCama ?? null, right?.cajasCama ?? null,
+          formatNumber, { range: { min: 0, max: 500 }, preference: "higher" }),
+        buildMetric("horasCama", "Horas / Cama",
+          left?.horasCama ?? null, right?.horasCama ?? null,
+          formatNumber, { range: { min: 0, max: 100 }, preference: "lower" }),
+        buildMetric("mortalityPct", "Mortandad",
+          left?.mortalityPct ?? null, right?.mortalityPct ?? null,
+          formatPercent, { range: { min: -0.53, max: 0.35 }, preference: "lower" }),
+        buildMetric("availabilityVsScheduledPct", "Disp. vs Programadas",
+          left?.availabilityVsScheduledPct ?? null, right?.availabilityVsScheduledPct ?? null,
+          formatPercent, { range: { min: 0, max: 1.2 }, preference: "higher" }),
       ];
 
-      return {
-        generatedAt: new Date().toISOString(),
-        left,
-        right,
-        metrics,
-        radar: metrics.map((metric) => ({
-          label: metric.label,
-          left: metric.leftShare,
-          right: metric.rightShare,
-          leftDisplay: metric.leftDisplay,
-          rightDisplay: metric.rightDisplay,
-        })),
-      };
+      const radar: ComparisonRadarPoint[] = metrics
+        .filter((m) => RADAR_METRIC_KEYS.has(m.key))
+        .map((m) => ({
+          label: m.label,
+          left: m.leftShare,
+          right: m.rightShare,
+          leftDisplay: m.leftDisplay,
+          rightDisplay: m.rightDisplay,
+        }));
+
+      return { generatedAt: new Date().toISOString(), left, right, metrics, radar };
     },
   );
 }
@@ -624,7 +657,7 @@ export async function getComparisonDashboardData(): Promise<ComparisonDashboardD
     searchComparisonCycles(defaultComparisonFilters),
   ]);
 
-  const leftCycleKey = options[0]?.cycleKey ?? null;
+  const leftCycleKey  = options[0]?.cycleKey ?? null;
   const rightCycleKey = options[1]?.cycleKey ?? null;
   const comparison = leftCycleKey && rightCycleKey
     ? await getComparisonPair(leftCycleKey, rightCycleKey)

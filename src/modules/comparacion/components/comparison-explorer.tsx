@@ -1,22 +1,15 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
-import { ArrowLeftRight, ShieldAlert, Swords, Trophy } from "lucide-react";
+import { ArrowLeftRight, LoaderCircle, ShieldAlert, Swords, Trophy } from "lucide-react";
 import useSWR from "swr";
 import { toast } from "sonner";
 
 import { ComparisonRadarPanel } from "@/modules/comparacion/components/comparison-radar-panel";
 import { formatDate, formatInteger } from "@/shared/lib/format";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
-import { FilterPanel } from "@/shared/layout/filter-panel";
 import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/shared/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { MultiSelectField } from "@/shared/filters/multi-select-field";
@@ -27,34 +20,43 @@ import { cn } from "@/lib/utils";
 import type {
   ComparisonCycleOption,
   ComparisonDashboardData,
+  ComparisonFilterOptions,
   ComparisonPairPayload,
-  ComparisonSearchFilters,
 } from "@/lib/comparacion";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-function buildOptionsQuery(filters: ComparisonSearchFilters) {
-  const params = new URLSearchParams();
-  if (filters.q) {
-    params.set("q", filters.q);
-  }
-  if (filters.area !== "all") {
-    params.set("area", filters.area);
-  }
-  if (filters.block) {
-    params.set("block", filters.block);
-  }
-  if (filters.variety !== "all") {
-    params.set("variety", filters.variety);
-  }
-  params.set("limit", String(filters.limit));
-  return params.toString();
+type PanelFilters = { q: string; area: string; block: string };
+const EMPTY_PANEL_FILTERS: PanelFilters = { q: "", area: "all", block: "" };
+
+// ─── Query builders ───────────────────────────────────────────────────────────
+
+function buildPanelQuery(f: PanelFilters): string {
+  const p = new URLSearchParams();
+  if (f.q) p.set("q", f.q);
+  if (f.area !== "all") p.set("area", f.area);
+  if (f.block) p.set("block", f.block);
+  p.set("limit", "30");
+  return p.toString();
 }
 
-const comparisonOptionsFetcher = (url: string) =>
-  fetchJson<ComparisonCycleOption[]>(url, "No se pudo cargar la busqueda de ciclos.");
+function buildPairQuery(left: string | null, right: string | null): string | null {
+  if (!left || !right) return null;
+  const p = new URLSearchParams();
+  p.set("left", left);
+  p.set("right", right);
+  return p.toString();
+}
 
-const comparisonPairFetcher = (url: string) =>
-  fetchJson<ComparisonPairPayload>(url, "No se pudo cargar la comparacion.");
+// ─── Fetchers ─────────────────────────────────────────────────────────────────
+
+const optionsFetcher = (url: string) =>
+  fetchJson<ComparisonCycleOption[]>(url, "No se pudo cargar la búsqueda de ciclos.");
+
+const pairFetcher = (url: string) =>
+  fetchJson<ComparisonPairPayload>(url, "No se pudo cargar la comparación.");
+
+// ─── ComparisonSlotCard ───────────────────────────────────────────────────────
 
 function ComparisonSlotCard({
   label,
@@ -86,7 +88,7 @@ function ComparisonSlotCard({
             ) : null}
           </div>
           <div>
-            <p className="text-xl font-semibold">{cycle.area || "Sin area"}</p>
+            <p className="text-xl font-semibold">{cycle.area || "Sin área"}</p>
             <p className="text-sm text-muted-foreground">
               {cycle.variety || "Sin variedad"} / {cycle.spType || "Sin SP"}
             </p>
@@ -97,13 +99,13 @@ function ComparisonSlotCard({
           </div>
         </div>
       ) : (
-        <p className="mt-4 text-sm text-muted-foreground">
-          Selecciona un ciclo para comparar.
-        </p>
+        <p className="mt-4 text-sm text-muted-foreground">Selecciona un ciclo para comparar.</p>
       )}
     </div>
   );
 }
+
+// ─── MetricBattleRow ──────────────────────────────────────────────────────────
 
 function MetricBattleRow({
   label,
@@ -122,12 +124,12 @@ function MetricBattleRow({
           <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">{label}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             {winner === "neutral"
-              ? "Sin criterio operativo de ganador"
+              ? "Sin criterio operativo"
               : leftValue === rightValue
                 ? "Empate operativo"
                 : winner === "left"
-                  ? "Ventaja izquierda"
-                  : "Ventaja derecha"}
+                  ? "Ventaja A"
+                  : "Ventaja B"}
           </p>
         </div>
         <Badge
@@ -167,240 +169,285 @@ function MetricBattleRow({
   );
 }
 
-export function ComparisonExplorer({ initialData }: { initialData: ComparisonDashboardData }) {
-  const [filters, setFilters] = useState(initialData.filters);
-  const deferredFilters = useDeferredValue(filters);
-  const [leftCycleKey, setLeftCycleKey] = useState(initialData.leftCycleKey);
-  const [rightCycleKey, setRightCycleKey] = useState(initialData.rightCycleKey);
-  const optionsQuery = useMemo(() => buildOptionsQuery(deferredFilters), [deferredFilters]);
-  const initialOptionsQuery = useMemo(() => buildOptionsQuery(initialData.filters), [initialData.filters]);
-  const pairQuery = useMemo(() => {
-    if (!leftCycleKey || !rightCycleKey) {
-      return null;
-    }
+// ─── CycleSelectorPanel ───────────────────────────────────────────────────────
 
-    const params = new URLSearchParams();
-    params.set("left", leftCycleKey);
-    params.set("right", rightCycleKey);
-    return params.toString();
-  }, [leftCycleKey, rightCycleKey]);
-  const initialPairQuery = useMemo(() => {
-    if (!initialData.leftCycleKey || !initialData.rightCycleKey) {
-      return null;
-    }
+function CycleSelectorPanel({
+  label,
+  tone,
+  selectedKey,
+  onSelect,
+  filterOptions,
+  initialOptions,
+}: {
+  label: string;
+  tone: "left" | "right";
+  selectedKey: string | null;
+  onSelect: (option: ComparisonCycleOption) => void;
+  filterOptions: ComparisonFilterOptions;
+  initialOptions: ComparisonCycleOption[];
+}) {
+  const [panelFilters, setPanelFilters] = useState<PanelFilters>(EMPTY_PANEL_FILTERS);
+  const deferred = useDeferredValue(panelFilters);
+  const query = useMemo(() => buildPanelQuery(deferred), [deferred]);
 
-    const params = new URLSearchParams();
-    params.set("left", initialData.leftCycleKey);
-    params.set("right", initialData.rightCycleKey);
-    return params.toString();
-  }, [initialData.leftCycleKey, initialData.rightCycleKey]);
-  const {
-    data: optionsData,
-    error: optionsError,
-    isValidating: optionsLoading,
-    mutate: mutateOptions,
-  } = useSWR(
-    `/api/comparacion/options?${optionsQuery}`,
-    comparisonOptionsFetcher,
+  const { data, isValidating } = useSWR(
+    `/api/comparacion/options?${query}`,
+    optionsFetcher,
     {
-      fallbackData: optionsQuery === initialOptionsQuery ? initialData.options : undefined,
+      fallbackData: initialOptions,
       keepPreviousData: true,
       revalidateOnFocus: false,
       dedupingInterval: 15000,
-      onError: (err) => toast.error(err?.message || "Error al cargar datos"),
-    },
-  );
-  const {
-    data: comparisonData,
-    error: comparisonError,
-    isLoading: comparisonLoading,
-  } = useSWR(
-    pairQuery ? `/api/comparacion/pair?${pairQuery}` : null,
-    comparisonPairFetcher,
-    {
-      fallbackData: pairQuery && pairQuery === initialPairQuery ? initialData.comparison ?? undefined : undefined,
-      revalidateOnFocus: false,
-      onError: (err) => toast.error(err?.message || "Error al cargar datos"),
+      onError: (err) => toast.error(err?.message || "Error al cargar ciclos"),
     },
   );
 
-  const options = optionsData ?? initialData.options;
+  const options = data ?? initialOptions;
+
+  function update<K extends keyof PanelFilters>(key: K, value: PanelFilters[K]) {
+    setPanelFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  return (
+    <div className="flex min-h-0 flex-col gap-3">
+      <p
+        className={cn(
+          "text-xs font-bold uppercase tracking-[0.28em]",
+          tone === "left" ? "text-slate-700 dark:text-white" : "text-accent-foreground",
+        )}
+      >
+        {label}
+      </p>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Buscar</Label>
+          <SearchInput
+            id={`panel-q-${tone}`}
+            value={panelFilters.q}
+            onChange={(v) => update("q", v)}
+            placeholder="Ciclo, bloque, variedad..."
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Bloque</Label>
+          <Input
+            id={`panel-block-${tone}`}
+            value={panelFilters.block}
+            onChange={(e) => update("block", e.target.value)}
+            placeholder="Ej. 329"
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <MultiSelectField
+            id={`panel-area-${tone}`}
+            label="Área"
+            value={panelFilters.area}
+            options={filterOptions.areas}
+            onChange={(v) => update("area", v)}
+            emptyLabel="Todas las áreas"
+          />
+        </div>
+      </div>
+
+      {isValidating ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+          Buscando...
+        </div>
+      ) : null}
+
+      <div className="h-[420px] overflow-y-auto rounded-[20px] border border-border/70 bg-background/50 p-2">
+        {options.length === 0 ? (
+          <EmptyState label="Sin resultados." />
+        ) : (
+          <div className="space-y-2">
+            {options.map((opt) => {
+              const isSelected = opt.cycleKey === selectedKey;
+              return (
+                <button
+                  key={`${opt.cycleKey}-${opt.block}-${opt.spDate ?? ""}`}
+                  type="button"
+                  onClick={() => onSelect(opt)}
+                  className={cn(
+                    "w-full rounded-[18px] border border-border/70 bg-background/72 px-3 py-2.5 text-left transition-colors hover:bg-background/95",
+                    isSelected && tone === "left" && "border-slate-700/40 bg-slate-900/8 dark:bg-slate-900/14",
+                    isSelected && tone === "right" && "border-accent/40 bg-accent/8",
+                  )}
+                >
+                  <div className="mb-1 flex flex-wrap items-center gap-1">
+                    <Badge className="rounded-full px-2 py-0.5 text-[10px]">{opt.cycleKey}</Badge>
+                    {opt.block ? (
+                      <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[10px]">
+                        Bl. {opt.block}
+                      </Badge>
+                    ) : null}
+                    {isSelected ? (
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[10px]",
+                          tone === "left" ? "bg-slate-700/15 text-slate-700 dark:text-white" : "bg-accent/20 text-accent-foreground",
+                        )}
+                      >
+                        ✓ Seleccionado
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="truncate text-sm font-semibold">{opt.area || "Sin área"}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {opt.variety || "Sin variedad"} / {opt.spType || "—"}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-[10px] text-muted-foreground">
+                    <span>SP: {formatDate(opt.spDate)}</span>
+                    <span>Cos: {formatDate(opt.harvestStartDate)}</span>
+                    <span>Tallos: {formatInteger(opt.totalStems)}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ComparisonExplorer ───────────────────────────────────────────────────────
+
+export function ComparisonExplorer({ initialData }: { initialData: ComparisonDashboardData }) {
+  const [leftCycleKey,  setLeftCycleKey]  = useState(initialData.leftCycleKey);
+  const [rightCycleKey, setRightCycleKey] = useState(initialData.rightCycleKey);
+  const [leftCycleInfo,  setLeftCycleInfo]  = useState<ComparisonCycleOption | null>(
+    () => initialData.options.find((o) => o.cycleKey === initialData.leftCycleKey)  ?? null,
+  );
+  const [rightCycleInfo, setRightCycleInfo] = useState<ComparisonCycleOption | null>(
+    () => initialData.options.find((o) => o.cycleKey === initialData.rightCycleKey) ?? null,
+  );
+
+  const initialPairQuery = useMemo(
+    () => buildPairQuery(initialData.leftCycleKey, initialData.rightCycleKey),
+    [initialData.leftCycleKey, initialData.rightCycleKey],
+  );
+  const pairQuery = useMemo(
+    () => buildPairQuery(leftCycleKey, rightCycleKey),
+    [leftCycleKey, rightCycleKey],
+  );
+
+  const {
+    data: comparisonData,
+    isLoading: comparisonLoading,
+    error: comparisonError,
+  } = useSWR(
+    pairQuery ? `/api/comparacion/pair?${pairQuery}` : null,
+    pairFetcher,
+    {
+      fallbackData: pairQuery && pairQuery === initialPairQuery
+        ? (initialData.comparison ?? undefined)
+        : undefined,
+      revalidateOnFocus: false,
+      onError: (err) => toast.error(err?.message || "Error al cargar comparación"),
+    },
+  );
+
   const comparison = pairQuery
     ? comparisonData ?? (pairQuery === initialPairQuery ? initialData.comparison : null)
     : null;
 
-  const leftCycle = options.find((option) => option.cycleKey === leftCycleKey)
-    ?? comparison?.left
-    ?? null;
-  const rightCycle = options.find((option) => option.cycleKey === rightCycleKey)
-    ?? comparison?.right
-    ?? null;
-
-  function updateFilter<Key extends keyof ComparisonSearchFilters>(
-    key: Key,
-    value: ComparisonSearchFilters[Key],
-  ) {
-    setFilters((current) => ({ ...current, [key]: value }));
+  function handleSelectLeft(option: ComparisonCycleOption) {
+    setLeftCycleKey(option.cycleKey);
+    setLeftCycleInfo(option);
   }
 
-  function chooseCycle(side: "left" | "right", cycleKey: string) {
-    if (side === "left") {
-      setLeftCycleKey(cycleKey);
-      return;
-    }
-
-    setRightCycleKey(cycleKey);
+  function handleSelectRight(option: ComparisonCycleOption) {
+    setRightCycleKey(option.cycleKey);
+    setRightCycleInfo(option);
   }
+
+  const leftDisplay  = (comparison?.left  ?? leftCycleInfo)  as ComparisonCycleOption | null;
+  const rightDisplay = (comparison?.right ?? rightCycleInfo) as ComparisonCycleOption | null;
+
+  const leftWins  = comparison?.metrics.filter((m) => m.winner === "left").length  ?? 0;
+  const rightWins = comparison?.metrics.filter((m) => m.winner === "right").length ?? 0;
+  const ties      = comparison?.metrics.filter((m) => m.winner === "tie" || m.winner === "neutral").length ?? 0;
 
   return (
     <div className="space-y-4">
       <SectionPageShell
         eyebrow="Indicadores / Producción / Campo"
         title="Comparación"
-        subtitle="Selecciona dos ciclos reales para enfrentarlos metrica a metrica y visualizar sus diferencias operativas."
+        subtitle="Selecciona un ciclo por cada lado para enfrentarlos métrica a métrica y visualizar sus diferencias operativas."
         icon={<Swords className="size-6" aria-hidden="true" />}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="rounded-full px-3 py-1">
-              {options.length} opciones visibles
-            </Badge>
-            <Badge variant="outline" className="rounded-full px-3 py-1">
-              {comparison?.metrics.length ?? 0} metricas
-            </Badge>
-          </div>
-        }
       >
-        <FilterPanel>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-2">
-              <Label htmlFor="comparison-q">Buscar</Label>
-              <SearchInput
-                id="comparison-q"
-                value={filters.q}
-                onChange={(value) => updateFilter("q", value)}
-                placeholder="Area, bloque, ciclo, variedad..."
-              />
-            </div>
-
-            <MultiSelectField
-              id="comparison-area"
-              label="Áreas"
-              value={filters.area}
-              options={initialData.filterOptions.areas}
-              onChange={(value) => updateFilter("area", value)}
-            />
-
-            <div className="space-y-2">
-              <Label htmlFor="comparison-block">Bloque</Label>
-              <Input
-                id="comparison-block"
-                value={filters.block}
-                onChange={(event) => updateFilter("block", event.target.value)}
-                placeholder="Ej. 329"
-              />
-            </div>
-
-            <MultiSelectField
-              id="comparison-variety"
-              label="Variedades"
-              value={filters.variety}
-              options={initialData.filterOptions.varieties}
-              onChange={(value) => updateFilter("variety", value)}
-            />
-          </div>
-        </FilterPanel>
+        <></>
       </SectionPageShell>
 
+      {/* Selector dual ─────────────────────────────────────────────────────── */}
       <Card className="starter-panel overflow-hidden border-border/70 bg-card/82">
-        <CardContent className="grid gap-4 p-6 xl:grid-cols-[1.2fr_auto_1.2fr]">
-          <ComparisonSlotCard label="Ciclo A" cycle={leftCycle} tone="left" />
-          <div className="flex items-center justify-center">
-            <div className="rounded-full border border-border/70 bg-background/90 px-4 py-4 text-center">
-              <Swords className="mx-auto size-6 text-slate-700 dark:text-white" aria-hidden="true" />
-              <p className="mt-2 text-xs uppercase tracking-[0.28em] text-muted-foreground">VS</p>
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-3">
+            <div className="rounded-full bg-slate-900/10 dark:bg-slate-900/20 p-2.5 text-slate-700 dark:text-white">
+              <Swords className="size-4" aria-hidden="true" />
             </div>
-          </div>
-          <ComparisonSlotCard label="Ciclo B" cycle={rightCycle} tone="right" />
-        </CardContent>
-      </Card>
-
-      <Card className="starter-panel border-border/70 bg-card/82">
-        <CardHeader className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-2">
-              <Badge variant="outline" className="rounded-full px-3 py-1">
-                Comparacion de ciclos reales
-              </Badge>
-              <CardTitle className="text-2xl">Seleccion de duelo</CardTitle>
+            <div>
+              <CardTitle>Selección de ciclos</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Usa los buscadores para filtrar y haz clic en un ciclo para asignarlo al duelo.
+              </p>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {optionsLoading ? (
-            <div className="text-sm text-muted-foreground">Buscando ciclos...</div>
-          ) : null}
-          {optionsError ? <div className="flex items-center gap-3 text-sm text-destructive">{optionsError.message}<button type="button" className="underline underline-offset-2 hover:text-destructive/80" onClick={() => mutateOptions()}>Reintentar</button></div> : null}
+        <CardContent className="pt-2">
+          <div className="grid gap-6 xl:grid-cols-[1fr_auto_1fr]">
+            <CycleSelectorPanel
+              label="Ciclo A"
+              tone="left"
+              selectedKey={leftCycleKey}
+              onSelect={handleSelectLeft}
+              filterOptions={initialData.filterOptions}
+              initialOptions={initialData.options}
+            />
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {options.map((option) => {
-              const selectedLeft = leftCycleKey === option.cycleKey;
-              const selectedRight = rightCycleKey === option.cycleKey;
+            <div className="flex items-center justify-center py-2 xl:py-0">
+              <div className="rounded-full border border-border/70 bg-background/90 px-4 py-4 text-center">
+                <Swords className="mx-auto size-5 text-slate-700 dark:text-white" aria-hidden="true" />
+                <p className="mt-1.5 text-xs uppercase tracking-[0.28em] text-muted-foreground">VS</p>
+              </div>
+            </div>
 
-              return (
-                <div
-                  key={`${option.cycleKey}-${option.block}-${option.spDate ?? ""}-${option.harvestStartDate ?? ""}`}
-                  className={cn(
-                    "rounded-[24px] border border-border/70 bg-background/72 p-4",
-                    selectedLeft && "border-slate-700/30",
-                    selectedRight && "border-accent/30",
-                  )}
-                >
-                  <div className="flex flex-wrap gap-2">
-                    <Badge className="rounded-full px-3 py-1">{option.cycleKey}</Badge>
-                    {option.block ? (
-                      <Badge variant="outline" className="rounded-full px-3 py-1">
-                        Bloque {option.block}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="mt-3">
-                    <p className="text-lg font-semibold">{option.area || "Sin area"}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {option.variety || "Sin variedad"} / {option.spType || "Sin SP"}
-                    </p>
-                  </div>
-                  <div className="mt-4 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                    <p>SP: {formatDate(option.spDate)}</p>
-                    <p>Inicio cos: {formatDate(option.harvestStartDate)}</p>
-                    <p>Fin cos: {formatDate(option.harvestEndDate)}</p>
-                    <p>Tallos: {formatInteger(option.totalStems)}</p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      variant={selectedLeft ? "secondary" : "outline"}
-                      className="rounded-xl"
-                      onClick={() => chooseCycle("left", option.cycleKey)}
-                    >
-                      Competir A
-                    </Button>
-                    <Button
-                      variant={selectedRight ? "secondary" : "outline"}
-                      className="rounded-xl"
-                      onClick={() => chooseCycle("right", option.cycleKey)}
-                    >
-                      Competir B
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+            <CycleSelectorPanel
+              label="Ciclo B"
+              tone="right"
+              selectedKey={rightCycleKey}
+              onSelect={handleSelectRight}
+              filterOptions={initialData.filterOptions}
+              initialOptions={initialData.options}
+            />
           </div>
         </CardContent>
       </Card>
 
+      {/* Tarjetas del duelo activo ──────────────────────────────────────────── */}
+      {(leftDisplay || rightDisplay) ? (
+        <Card className="starter-panel overflow-hidden border-border/70 bg-card/82">
+          <CardContent className="grid gap-4 p-6 xl:grid-cols-[1.2fr_auto_1.2fr]">
+            <ComparisonSlotCard label="Ciclo A" cycle={leftDisplay} tone="left" />
+            <div className="flex items-center justify-center">
+              <div className="rounded-full border border-border/70 bg-background/90 px-4 py-4 text-center">
+                <Swords className="mx-auto size-6 text-slate-700 dark:text-white" aria-hidden="true" />
+                <p className="mt-2 text-xs uppercase tracking-[0.28em] text-muted-foreground">VS</p>
+              </div>
+            </div>
+            <ComparisonSlotCard label="Ciclo B" cycle={rightDisplay} tone="right" />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Estado de carga / error ────────────────────────────────────────────── */}
       {comparisonLoading ? (
-        <div className="rounded-[24px] border border-border/70 bg-card/82 px-5 py-4 text-sm text-muted-foreground">
-          Actualizando comparacion...
+        <div className="flex items-center gap-3 rounded-[24px] border border-border/70 bg-card/82 px-5 py-4 text-sm text-muted-foreground">
+          <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+          Calculando comparación…
         </div>
       ) : null}
 
@@ -410,108 +457,129 @@ export function ComparisonExplorer({ initialData }: { initialData: ComparisonDas
         </div>
       ) : null}
 
+      {/* Resultados ─────────────────────────────────────────────────────────── */}
       {comparison?.left && comparison?.right ? (
-        <>
-          {comparison.metrics.length === 0 ? <EmptyState label="No hay métricas disponibles para la comparación." /> :
-          (<>
-          <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+        comparison.metrics.length === 0 ? (
+          <EmptyState label="No hay métricas disponibles para la comparación." />
+        ) : (
+          <>
+            <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+              {/* Radar */}
+              <Card className="starter-panel border-border/70 bg-card/82">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-slate-900/10 dark:bg-slate-900/20 p-3 text-slate-700 dark:text-white">
+                      <Trophy className="size-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <CardTitle>Radar comparativo</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Magnitud relativa entre ambos ciclos para las métricas clave.
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ComparisonRadarPanel
+                    data={comparison.radar}
+                    leftLabel={comparison.left.cycleKey}
+                    rightLabel={comparison.right.cycleKey}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Marcador */}
+              <Card className="starter-panel border-border/70 bg-card/82">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-slate-900/10 dark:bg-slate-900/20 p-3 text-slate-700 dark:text-white">
+                      <ArrowLeftRight className="size-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <CardTitle>Marcador del duelo</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        Resumen de victorias por métrica.
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Score banner */}
+                  <div className="grid grid-cols-3 divide-x divide-border/70 rounded-[20px] border border-border/70 bg-background/72 text-center">
+                    <div className="px-4 py-5">
+                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Ciclo A gana</p>
+                      <p className="mt-2 text-4xl font-bold text-slate-700 dark:text-white">{leftWins}</p>
+                    </div>
+                    <div className="px-4 py-5">
+                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Empates</p>
+                      <p className="mt-2 text-4xl font-bold text-muted-foreground">{ties}</p>
+                    </div>
+                    <div className="px-4 py-5">
+                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Ciclo B gana</p>
+                      <p className="mt-2 text-4xl font-bold text-accent-foreground">{rightWins}</p>
+                    </div>
+                  </div>
+
+                  {/* Cycle summaries */}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[20px] border border-slate-700/20 bg-slate-900/7 dark:bg-slate-900/10 p-4">
+                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Ciclo A</p>
+                      <p className="mt-2 text-lg font-semibold">{comparison.left.cycleKey}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {comparison.left.area || "Sin área"} · Bloque {comparison.left.block || "—"}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {comparison.left.variety || "Sin variedad"} / {comparison.left.spType || "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-[20px] border border-accent/20 bg-accent/8 p-4">
+                      <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Ciclo B</p>
+                      <p className="mt-2 text-lg font-semibold">{comparison.right.cycleKey}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {comparison.right.area || "Sin área"} · Bloque {comparison.right.block || "—"}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {comparison.right.variety || "Sin variedad"} / {comparison.right.spType || "—"}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Duelos por métrica */}
             <Card className="starter-panel border-border/70 bg-card/82">
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div className="rounded-full bg-slate-900/10 dark:bg-slate-900/20 p-3 text-slate-700 dark:text-white">
-                    <Trophy className="size-5" aria-hidden="true" />
+                    <ShieldAlert className="size-5" aria-hidden="true" />
                   </div>
                   <div>
-                    <CardTitle>Radar comparativo</CardTitle>
+                    <CardTitle>Duelos por métrica</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Magnitud relativa entre ambos ciclos para las metricas seleccionadas.
+                      La barra crece del lado que sale mejor según el criterio operativo de cada métrica.
                     </p>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <ComparisonRadarPanel
-                  data={comparison.radar}
-                  leftLabel={comparison.left.cycleKey}
-                  rightLabel={comparison.right.cycleKey}
-                />
+              <CardContent className="space-y-4">
+                {comparison.metrics.map((metric) => {
+                  const { key, ...metricProps } = metric;
+                  return <MetricBattleRow key={key} {...metricProps} />;
+                })}
               </CardContent>
             </Card>
-
-            <Card className="starter-panel border-border/70 bg-card/82">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="rounded-full bg-slate-900/10 dark:bg-slate-900/20 p-3 text-slate-700 dark:text-white">
-                    <ArrowLeftRight className="size-5" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <CardTitle>Lectura rapida</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Perfil del duelo con las cifras clave para decidir cual ciclo va mejor.
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[24px] border border-slate-700/20 bg-slate-900/7 dark:bg-slate-900/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Ciclo A</p>
-                  <p className="mt-2 text-lg font-semibold">{comparison.left.cycleKey}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {comparison.left.area || "Sin area"} / Bloque {comparison.left.block || "-"}
-                  </p>
-                </div>
-                <div className="rounded-[24px] border border-accent/20 bg-accent/8 p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Ciclo B</p>
-                  <p className="mt-2 text-lg font-semibold">{comparison.right.cycleKey}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {comparison.right.area || "Sin area"} / Bloque {comparison.right.block || "-"}
-                  </p>
-                </div>
-                <div className="rounded-[24px] border border-border/70 bg-background/72 p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Tallos</p>
-                  <p className="mt-2 text-lg font-semibold">{formatInteger(comparison.left.totalStems)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Ciclo A</p>
-                </div>
-                <div className="rounded-[24px] border border-border/70 bg-background/72 p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">Tallos</p>
-                  <p className="mt-2 text-lg font-semibold">{formatInteger(comparison.right.totalStems)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Ciclo B</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="starter-panel border-border/70 bg-card/82">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="rounded-full bg-slate-900/10 dark:bg-slate-900/20 p-3 text-slate-700 dark:text-white">
-                  <ShieldAlert className="size-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <CardTitle>Duelos por metrica</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    La barra central crece del lado que sale mejor segun el criterio operativo de cada metrica.
-                  </p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {comparison.metrics.map((metric) => {
-                const { key, ...metricProps } = metric;
-                return <MetricBattleRow key={key} {...metricProps} />;
-              })}
-            </CardContent>
-          </Card>
           </>
-          )}
-        </>
-      ) : (
+        )
+      ) : !comparisonLoading ? (
         <Card className="starter-panel border-border/70 bg-card/82">
           <CardContent className="px-6 py-8 text-sm text-muted-foreground">
-            Elige dos ciclos para activar la comparacion.
+            {leftCycleKey && rightCycleKey && leftCycleKey === rightCycleKey
+              ? "Elige dos ciclos distintos para activar la comparación."
+              : "Elige un ciclo en cada panel para activar la comparación."}
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }
