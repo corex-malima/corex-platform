@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FileDown } from "lucide-react";
+import { toast } from "sonner";
 import { formatDate, localDateString } from "@/shared/lib/format";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -61,7 +62,7 @@ export function ScheduledFollowupTable({ rows, selectedFollowup, onSelect, isLoa
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      // silently fail — server error already logged
+      toast.error("No se pudo generar el PDF. Intente nuevamente.");
     } finally {
       setExporting(false);
     }

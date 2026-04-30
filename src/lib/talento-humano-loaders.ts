@@ -353,7 +353,7 @@ export async function getRotacionData(filters: TalentoFilters): Promise<TalentoR
           p.employer_name, p.address, p.city, p.parish,
           p.birth_date, p.last_entry_date, p.farm_code, p.nationality, p.education_title,
           p.children_count, p.dependents_count, p.performance_pay_applicable, p.disabled_flag,
-          to_char(e.valid_from, 'YYYY-MM-DD') AS entry_date,
+          e.valid_from::date AS entry_date,
           c.iso_week_id::text AS entry_iso_week_id
         FROM slv.tthh_asgn_person_area_event_scd2 e
         CROSS JOIN period pr
@@ -379,7 +379,7 @@ export async function getRotacionData(filters: TalentoFilters): Promise<TalentoR
           p.employer_name, p.address, p.city, p.parish,
           p.birth_date, p.last_entry_date, p.farm_code, p.nationality, p.education_title,
           p.children_count, p.dependents_count, p.performance_pay_applicable, p.disabled_flag,
-          to_char(s.valid_to, 'YYYY-MM-DD') AS exit_date,
+          s.valid_to::date AS exit_date,
           c.iso_week_id::text AS exit_iso_week_id
         FROM slv.tthh_asgn_person_area_event_scd2 s
         CROSS JOIN period pr

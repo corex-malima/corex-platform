@@ -48,7 +48,7 @@ function KV({ label, value, wide }: { label: string; value: string | null | unde
 }
 
 function HistoryItemDetail({ eventId, catalogs }: { eventId: string; catalogs: EmployeeFollowupCatalogMap }) {
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, error } = useSWR(
     `/api/talento-humano/seguimientos/responses/${encodeURIComponent(eventId)}`,
     detailFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
@@ -56,6 +56,9 @@ function HistoryItemDetail({ eventId, catalogs }: { eventId: string; catalogs: E
 
   if (isLoading) {
     return <p className="mt-2 text-center text-xs text-muted-foreground">Cargando...</p>;
+  }
+  if (error) {
+    return <p className="mt-2 text-center text-xs text-destructive/70">No se pudo cargar el detalle.</p>;
   }
   if (!data) return null;
 

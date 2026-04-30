@@ -79,7 +79,7 @@ function CompositionTableRow({
   total?: boolean;
   onClick: () => void;
 }) {
-  const stickyBg = total ? "bg-muted/40" : rowIndex % 2 === 0 ? "bg-card" : "bg-muted/[0.06]";
+  const stickyBg = total ? "bg-muted/40" : "bg-card";
   const rowExtra = total ? "font-semibold border-t border-border/40" : "";
   const cell = "px-2.5 py-2 text-center text-[11px]";
 
