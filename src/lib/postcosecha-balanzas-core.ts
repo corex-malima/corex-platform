@@ -1460,17 +1460,29 @@ const OPTIONS_CACHE_TTL = 3 * 60 * 1000;
  * único anterior, asegurando que las opciones de Semana / Mes / Año reflejen
  * todas las vistas activas y no sólo `gv_b1_vs_b1c_weight_xl_np_cur`.
  */
-function buildActiveNodeDateUnionSql(farm: string) {
-  return getNodesForFarm(farm)
-    .filter((node) => node.active)
-    .map((node) => `SELECT ${node.dateCol}::date AS d FROM ${node.viewName}`)
+async function buildActiveNodeDateUnionSql(farm: string): Promise<string> {
+  const candidates = getNodesForFarm(farm).filter((n) => n.active);
+  if (candidates.length === 0) return "SELECT null::date AS d WHERE false";
+
+  const names = candidates.map((n) => n.viewName.replace(/^gld\./, ""));
+  const existsResult = await query<{ name: string }>(
+    `SELECT matviewname AS name FROM pg_catalog.pg_matviews WHERE schemaname = 'gld' AND matviewname = ANY($1)
+     UNION SELECT viewname AS name FROM pg_catalog.pg_views WHERE schemaname = 'gld' AND viewname = ANY($1)`,
+    [names],
+  );
+  const existing = new Set(existsResult.rows.map((r) => `gld.${r.name}`));
+  const active = candidates.filter((n) => existing.has(n.viewName));
+
+  if (active.length === 0) return "SELECT null::date AS d WHERE false";
+  return active
+    .map((n) => `SELECT ${n.dateCol}::date AS d FROM ${n.viewName}`)
     .join("\n      UNION\n      ");
 }
 
 async function loadFilterOptionsImpl(farm: string): Promise<BalanzasFilterOptions> {
   const sql = `
     WITH all_dates AS (
-      ${buildActiveNodeDateUnionSql(farm)}
+      ${await buildActiveNodeDateUnionSql(farm)}
     ),
     distinct_dates AS (
       SELECT DISTINCT d FROM all_dates WHERE d IS NOT NULL

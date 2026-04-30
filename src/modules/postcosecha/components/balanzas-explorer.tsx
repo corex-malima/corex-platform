@@ -201,6 +201,11 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
 
   function update<K extends keyof BalanzasFilters>(key: K, value: BalanzasFilters[K]) {
     setFilters((prev) => ({ ...prev, [key]: value }));
+    if (key === "farm") {
+      setSelectedNode(null);
+      setDetailOpen(false);
+      setSelectedDestination(null);
+    }
   }
 
   function resetFilters() {
