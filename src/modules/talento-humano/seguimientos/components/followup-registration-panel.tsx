@@ -15,6 +15,7 @@ import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
 import { FollowupFormAdm, type AdmFormState } from "@/modules/talento-humano/seguimientos/components/followup-form-adm";
 import { FollowupFormAgr, type AgrFormState } from "@/modules/talento-humano/seguimientos/components/followup-form-agr";
+import { FollowupHistorySection } from "@/modules/talento-humano/seguimientos/components/followup-history-section";
 import { PersonQuickCard } from "@/modules/talento-humano/seguimientos/components/person-quick-card";
 import {
   ADM_REQUIRED_CATALOGS,
@@ -74,12 +75,6 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
     .filter((catalogCode) => !catalogs[catalogCode]?.length);
   const catalogsReady = missingCatalogs.length === 0;
   const scheduledFrequencyCode = followup.followUpType ?? null;
-  const agrFrequencyCode = scheduledFrequencyCode && catOpts("agr_followup_frequency").includes(scheduledFrequencyCode)
-    ? scheduledFrequencyCode
-    : null;
-  const admFrequencyCode = scheduledFrequencyCode && catOpts("adm_followup_frequency").includes(scheduledFrequencyCode)
-    ? scheduledFrequencyCode
-    : null;
 
   useEffect(() => {
     setAgrState(EMPTY_AGR);
@@ -144,8 +139,8 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
       jobClassificationCodeSnapshot: followup.jobClassificationCode ?? null,
       followUpDate: followup.followUpDate,
       changeReason: isEditing ? changeReason : "initial_load",
-      ...(route === "AGR" && buildAgrPayload(agrState, agrFrequencyCode)),
-      ...(route === "ADM" && buildAdmPayload(admState, admFrequencyCode)),
+      ...(route === "AGR" && buildAgrPayload(agrState)),
+      ...(route === "ADM" && buildAdmPayload(admState)),
       selections: buildSelections(),
     };
 
@@ -191,6 +186,11 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
       <CardContent>
         <div className="max-h-[calc(100dvh-14rem)] space-y-6 overflow-y-auto pr-1">
           <PersonQuickCard personId={followup.personId} asOfDate={asOfDate} />
+          <FollowupHistorySection
+            personId={followup.personId}
+            currentUniqueFollowUpCode={followup.uniqueFollowUpCode}
+            catalogs={catalogs}
+          />
           {route === "AGR" && (
             <FollowupFormAgr state={agrState} setField={setAgrField} asOfDate={asOfDate}
               ratingOpts={catOpts("treatment_rating")} ratingDV={catDV("treatment_rating")}
@@ -235,9 +235,8 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
   );
 }
 
-function buildAgrPayload(state: AgrFormState, frequencyCode: string | null) {
+function buildAgrPayload(state: AgrFormState) {
   return {
-    agrFollowupFrequencyCode: frequencyCode,
     workDifficultyObservation: state.workDifficultyObs || null,
     coworkerTreatmentRatingCode: state.coworkerRating || null,
     supervisorTreatmentRatingCode: state.supervisorRating || null,
@@ -263,9 +262,8 @@ function buildAgrPayload(state: AgrFormState, frequencyCode: string | null) {
   };
 }
 
-function buildAdmPayload(state: AdmFormState, frequencyCode: string | null) {
+function buildAdmPayload(state: AdmFormState) {
   return {
-    admFollowupFrequencyCode: frequencyCode,
     inductionSufficientCode: state.inductionSufficient || null,
     transportProblemCode: state.transportProblem || null,
     teamWelcomeCode: state.teamWelcome || null,

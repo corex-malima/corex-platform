@@ -4,8 +4,6 @@
 -- Idempotente: ejecutable múltiples veces sin destruir datos.
 -- Solo crea/actualiza estructuras y asegura semillas básicas de catálogos.
 --
--- `agr_followup_frequency` se seedea con los valores reales T1..T5 observados en
--- `gld.mv_tthh_asgn_followup_scd2.follow_up_type`.
 --
 -- Aplicar con: node scripts/apply-human-talent-sql.mjs
 -- ============================================================================
@@ -138,9 +136,6 @@ create table if not exists public.tthh_fact_employee_followup_response_cur (
   event_time_precision text not null default 'date',
   event_at_imputed boolean not null default true,
 
-  -- AGR — frecuencia
-  agr_followup_frequency_code text,
-
   -- AGR — dificultades laborales (opciones en tabla puente)
   work_difficulty_observation text,
 
@@ -175,9 +170,6 @@ create table if not exists public.tthh_fact_employee_followup_response_cur (
   inconvenience_activity_other_detail text,
   inconvenience_type_code text,
   inconvenience_type_other_detail text,
-
-  -- ADM — frecuencia / etapa
-  adm_followup_frequency_code text,
 
   -- ADM — adaptación inicial
   induction_sufficient_code text,
@@ -262,6 +254,13 @@ create index if not exists ix_tthh_fact_followup_person
 
 alter table public.tthh_fact_employee_followup_response_cur
   add column if not exists developed_activities_description text;
+
+-- Eliminar columnas de frecuencia nunca usadas en formularios
+alter table public.tthh_fact_employee_followup_response_cur
+  drop column if exists agr_followup_frequency_code;
+
+alter table public.tthh_fact_employee_followup_response_cur
+  drop column if exists adm_followup_frequency_code;
 
 create index if not exists ix_tthh_fact_followup_route
   on public.tthh_fact_employee_followup_response_cur (followup_route_code);
@@ -354,8 +353,6 @@ select
   f.event_at,
   f.event_date,
   f.follow_up_date,
-  f.agr_followup_frequency_code,
-  f.adm_followup_frequency_code,
   f.has_inconvenience_code,
   f.inconvenience_date,
   f.inconvenience_activity_code,
@@ -411,10 +408,6 @@ select
   f.event_date,
   f.follow_up_date,
   f.is_valid,
-  f.agr_followup_frequency_code,
-  freq_agr.item_label_es as agr_followup_frequency_label,
-  f.adm_followup_frequency_code,
-  freq_adm.item_label_es as adm_followup_frequency_label,
   f.has_inconvenience_code,
   inc_yn.item_label_es as has_inconvenience_label,
   f.retention_intention_code,
@@ -424,14 +417,6 @@ select
   f.invalid_reason_code,
   inv.item_label_es as invalid_reason_label
 from public.vw_tthh_employee_followup_response_latest_cur f
-left join public.common_dim_catalog_item_scd2 freq_agr
-  on freq_agr.catalog_code = 'agr_followup_frequency'
- and freq_agr.item_code = f.agr_followup_frequency_code
- and freq_agr.is_current = true and freq_agr.is_valid = true
-left join public.common_dim_catalog_item_scd2 freq_adm
-  on freq_adm.catalog_code = 'adm_followup_frequency'
- and freq_adm.item_code = f.adm_followup_frequency_code
- and freq_adm.is_current = true and freq_adm.is_valid = true
 left join public.common_dim_catalog_item_scd2 inc_yn
   on inc_yn.catalog_code = 'yes_no'
  and inc_yn.item_code = f.has_inconvenience_code
@@ -455,12 +440,6 @@ comment on view public.vw_tthh_employee_followup_response_with_labels_cur is
 -- 4.4 Detección de inconsistencias (códigos usados que no existen como items activos)
 create view public.vw_tthh_employee_followup_catalog_mismatch_cur as
 with fact_codes as (
-  select event_id, 'agr_followup_frequency' as catalog_code, agr_followup_frequency_code as item_code
-  from public.tthh_fact_employee_followup_response_cur where agr_followup_frequency_code is not null
-  union all
-  select event_id, 'adm_followup_frequency', adm_followup_frequency_code
-  from public.tthh_fact_employee_followup_response_cur where adm_followup_frequency_code is not null
-  union all
   select event_id, 'treatment_rating', coworker_treatment_rating_code
   from public.tthh_fact_employee_followup_response_cur where coworker_treatment_rating_code is not null
   union all
@@ -554,8 +533,6 @@ from (values
   ('employee_followup_invalid_reason','Razones de invalidación',          'Motivo cuando is_valid = false en una respuesta.',                          true),
   ('followup_route',                  'Ruta del formulario',              'AGR / ADM.',                                                                true),
   ('followup_route_source',           'Origen de la ruta',                'De dónde se derivó la ruta (programación / clasificación / override).',    true),
-  ('agr_followup_frequency',          'Frecuencia AGR',                   'Frecuencia/etapa AGR. Items pendientes hasta validar follow_up_type real.', false),
-  ('adm_followup_frequency',          'Frecuencia ADM',                   'Etapas ADM: 1er día, 15 días, fin de prueba, bimensual.',                  false),
   ('work_difficulty',                 'Dificultades laborales',           'Multiselección. Incluye lack_of_training (corrección).',                    false),
   ('treatment_rating',                'Trato',                            'Excelente / Bueno / Regular / Malo.',                                       false),
   ('work_like_most',                  'Lo que más le gusta',              'Multiselección.',                                                           false),
@@ -576,6 +553,19 @@ where not exists (
   where g.catalog_code = v.catalog_code
     and g.is_current = true and g.is_valid = true
 );
+
+-- Invalidar catálogos de frecuencia eliminados
+update public.common_dim_catalog_group_scd2
+  set is_current = false, is_valid = false, valid_to = now(),
+      change_reason = 'catalog_retired', run_id = 'cleanup_remove_frequency_catalogs_v1'
+  where catalog_code in ('agr_followup_frequency', 'adm_followup_frequency')
+    and is_valid = true;
+
+update public.common_dim_catalog_item_scd2
+  set is_current = false, is_valid = false, valid_to = now(),
+      change_reason = 'catalog_retired', run_id = 'cleanup_remove_frequency_catalogs_v1'
+  where catalog_code in ('agr_followup_frequency', 'adm_followup_frequency')
+    and is_valid = true;
 
 -- ============================================================================
 -- 6. SEEDS DE ÍTEMS
@@ -611,18 +601,7 @@ from (values
   ('followup_route_source', 'job_classification_fallback',  'Derivado de clasificación laboral',   20),
   ('followup_route_source', 'manual_admin_override',        'Ajuste manual autorizado',            30),
 
-  -- 6.5 followup_frequency
-  ('agr_followup_frequency', 'T1',             'T1',                           10),
-  ('agr_followup_frequency', 'T2',             'T2',                           20),
-  ('agr_followup_frequency', 'T3',             'T3',                           30),
-  ('agr_followup_frequency', 'T4',             'T4',                           40),
-  ('agr_followup_frequency', 'T5',             'T5',                           50),
-  ('adm_followup_frequency', 'first_day',      '1er día de labores',           10),
-  ('adm_followup_frequency', 'fifteen_days',   '15 días de labores',           20),
-  ('adm_followup_frequency', 'probation_end',  'Final de periodo de prueba',   30),
-  ('adm_followup_frequency', 'bimonthly',      'Bimensual',                    40),
-
-  -- 6.6 work_difficulty (multiselect — incluye lack_of_training NUEVA)
+  -- 6.5 work_difficulty (multiselect — incluye lack_of_training NUEVA)
   ('work_difficulty', 'none',                  'Ninguna',                                                  10),
   ('work_difficulty', 'missing_tools',         'No cuenta con las herramientas necesarias',                20),
   ('work_difficulty', 'missing_implements',    'No le entregan los implementos necesarios',                30),

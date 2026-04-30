@@ -53,7 +53,6 @@ export const createFollowupResponseSchema = z
     changeReason: trimmed.min(1).max(200),
 
     // ── AGR ──────────────────────────────────────────────────────────────────
-    agrFollowupFrequencyCode: nullableCode,
     workDifficultyObservation: nullableText(2000),
     coworkerTreatmentRatingCode: nullableCode,
     supervisorTreatmentRatingCode: nullableCode,
@@ -78,7 +77,6 @@ export const createFollowupResponseSchema = z
     inconvenienceTypeOtherDetail: nullableText(500),
 
     // ── ADM ──────────────────────────────────────────────────────────────────
-    admFollowupFrequencyCode: nullableCode,
     inductionSufficientCode: nullableCode,
     transportProblemCode: nullableCode,
     teamWelcomeCode: nullableCode,
@@ -241,7 +239,6 @@ export const updateFollowupResponseSchema = z
   .object({
     action: z.literal("update"),
     changeReason: trimmed.min(1).max(200),
-    agrFollowupFrequencyCode: nullableCode,
     workDifficultyObservation: nullableText(2000),
     coworkerTreatmentRatingCode: nullableCode,
     supervisorTreatmentRatingCode: nullableCode,
@@ -264,7 +261,6 @@ export const updateFollowupResponseSchema = z
     inconvenienceActivityOtherDetail: nullableText(500),
     inconvenienceTypeCode: nullableCode,
     inconvenienceTypeOtherDetail: nullableText(500),
-    admFollowupFrequencyCode: nullableCode,
     inductionSufficientCode: nullableCode,
     transportProblemCode: nullableCode,
     teamWelcomeCode: nullableCode,

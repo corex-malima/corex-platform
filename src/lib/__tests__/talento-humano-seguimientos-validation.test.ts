@@ -60,9 +60,9 @@ describe("createFollowupResponseSchema", () => {
     expect(createFollowupResponseSchema.safeParse(BASE_ADM).success).toBe(true);
   });
 
-  it("acepta frecuencia manual vacia porque viene vinculada al seguimiento", () => {
-    expect(createFollowupResponseSchema.safeParse({ ...BASE_AGR, agrFollowupFrequencyCode: undefined }).success).toBe(true);
-    expect(createFollowupResponseSchema.safeParse({ ...BASE_ADM, admFollowupFrequencyCode: undefined }).success).toBe(true);
+  it("acepta campos opcionales sin valor", () => {
+    expect(createFollowupResponseSchema.safeParse({ ...BASE_AGR, workDifficultyObservation: undefined }).success).toBe(true);
+    expect(createFollowupResponseSchema.safeParse({ ...BASE_ADM, adaptationSuggestion: undefined }).success).toBe(true);
   });
 
   it("rechaza AGR sin fecha y actividad de inconveniente", () => {

@@ -117,7 +117,6 @@ export type EmployeeFollowupResponseDetail = EmployeeFollowupResponseSummary & {
   scheduledFollowUpType: string | null;
   jobClassificationCodeSnapshot: string | null;
   // AGR fields
-  agrFollowupFrequencyCode: string | null;
   workDifficultyObservation: string | null;
   coworkerTreatmentRatingCode: string | null;
   supervisorTreatmentRatingCode: string | null;
@@ -141,7 +140,6 @@ export type EmployeeFollowupResponseDetail = EmployeeFollowupResponseSummary & {
   inconvenienceTypeCode: string | null;
   inconvenienceTypeOtherDetail: string | null;
   // ADM fields
-  admFollowupFrequencyCode: string | null;
   inductionSufficientCode: string | null;
   transportProblemCode: string | null;
   teamWelcomeCode: string | null;
@@ -174,7 +172,6 @@ export type EmployeeFollowupResponseInput = {
   followUpDate: string;
   changeReason: string;
   // AGR
-  agrFollowupFrequencyCode?: string | null;
   workDifficultyObservation?: string | null;
   coworkerTreatmentRatingCode?: string | null;
   supervisorTreatmentRatingCode?: string | null;
@@ -198,7 +195,6 @@ export type EmployeeFollowupResponseInput = {
   inconvenienceTypeCode?: string | null;
   inconvenienceTypeOtherDetail?: string | null;
   // ADM
-  admFollowupFrequencyCode?: string | null;
   inductionSufficientCode?: string | null;
   transportProblemCode?: string | null;
   teamWelcomeCode?: string | null;
@@ -265,7 +261,6 @@ export type FollowupResponseQueryRow = {
   event_at: string;
   event_date: string;
   follow_up_date: string;
-  agr_followup_frequency_code: string | null;
   work_difficulty_observation: string | null;
   coworker_treatment_rating_code: string | null;
   supervisor_treatment_rating_code: string | null;
@@ -288,7 +283,6 @@ export type FollowupResponseQueryRow = {
   inconvenience_activity_other_detail: string | null;
   inconvenience_type_code: string | null;
   inconvenience_type_other_detail: string | null;
-  adm_followup_frequency_code: string | null;
   induction_sufficient_code: string | null;
   transport_problem_code: string | null;
   team_welcome_code: string | null;

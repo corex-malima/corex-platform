@@ -53,7 +53,6 @@ export function mapResponseRowToDetail(
     scheduledFollowUpType: row.scheduled_follow_up_type,
     jobClassificationCodeSnapshot: row.job_classification_code_snapshot,
     // AGR
-    agrFollowupFrequencyCode: row.agr_followup_frequency_code,
     workDifficultyObservation: sensitive(row.work_difficulty_observation),
     coworkerTreatmentRatingCode: row.coworker_treatment_rating_code,
     supervisorTreatmentRatingCode: row.supervisor_treatment_rating_code,
@@ -77,7 +76,6 @@ export function mapResponseRowToDetail(
     inconvenienceTypeCode: row.inconvenience_type_code,
     inconvenienceTypeOtherDetail: row.inconvenience_type_other_detail,
     // ADM
-    admFollowupFrequencyCode: row.adm_followup_frequency_code,
     inductionSufficientCode: row.induction_sufficient_code,
     transportProblemCode: row.transport_problem_code,
     teamWelcomeCode: row.team_welcome_code,
