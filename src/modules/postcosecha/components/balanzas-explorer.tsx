@@ -233,19 +233,25 @@ export function BalanzasExplorer({ initialData, initialError }: BalanzasExplorer
         title="Indicadores Balanzas"
         subtitle="Monitoreo de puntos de control en el flujo de producción. Haz clic en cualquier nodo para ver el detalle completo."
         icon={<Scale className="size-5" aria-hidden="true" />}
-        actions={<BalanzasMetricSelector value={metricMode} onChange={setMetricMode} />}
-      >
-        <FilterPanel>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+        actions={
+          <div className="flex flex-col items-end gap-1.5">
+            <BalanzasMetricSelector value={metricMode} onChange={setMetricMode} />
             <SingleSelectField
               id="balanzas-farm"
               label="Finca"
+              hideLabel
+              omitEmpty
               value={filters.farm}
               options={FARM_OPTIONS}
               displayValue={(v) => FARM_LABELS[v] ?? v.toUpperCase()}
-              omitEmpty
               onChange={(v) => update("farm", v)}
+              className="min-w-[140px]"
             />
+          </div>
+        }
+      >
+        <FilterPanel>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <MultiSelectField
               id="balanzas-week"
               label="Semana"
