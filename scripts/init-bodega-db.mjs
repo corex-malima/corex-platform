@@ -27,7 +27,7 @@ const env = loadEnvFile(envPath);
 const pool = new Pool({
   host: env.DATABASE_HOST,
   port: Number(env.DATABASE_PORT),
-  database: env.CAMP_DATABASE_NAME || "db_camp",
+  database: env.BODEGA_DATABASE_NAME || "db_storageroom",
   user: env.DATABASE_USER,
   password: env.DATABASE_PASSWORD,
   ssl: env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : undefined,
@@ -37,7 +37,7 @@ const pool = new Pool({
 
 const staticStatements = [
   `
-    create table if not exists public.bodega_ref_unit_id_core_scd2 (
+create table if not exists public.sr_ref_unit_id_core_scd2 (
       record_id text primary key,
       unit_id text not null,
       valid_from timestamp without time zone not null,
@@ -51,7 +51,7 @@ const staticStatements = [
     )
   `,
   `
-    create table if not exists public.bodega_dim_unit_profile_scd2 (
+create table if not exists public.sr_dim_unit_profile_scd2 (
       record_id text primary key,
       unit_id text not null,
       valid_from timestamp without time zone not null,
@@ -71,23 +71,23 @@ const staticStatements = [
     )
   `,
   `
-    create unique index if not exists bodega_ref_unit_id_core_scd2_current_idx
-      on public.bodega_ref_unit_id_core_scd2 (unit_id)
+create unique index if not exists sr_ref_unit_id_core_scd2_current_idx
+on public.sr_ref_unit_id_core_scd2 (unit_id)
       where is_current
   `,
   `
-    create unique index if not exists bodega_dim_unit_profile_scd2_current_idx
-      on public.bodega_dim_unit_profile_scd2 (unit_id)
+create unique index if not exists sr_dim_unit_profile_scd2_current_idx
+on public.sr_dim_unit_profile_scd2 (unit_id)
       where is_current
   `,
   `
-    create unique index if not exists bodega_dim_unit_profile_scd2_current_code_unique_idx
-      on public.bodega_dim_unit_profile_scd2 (lower(regexp_replace(trim(unit_code), '\\s+', ' ', 'g')))
+create unique index if not exists sr_dim_unit_profile_scd2_current_code_unique_idx
+on public.sr_dim_unit_profile_scd2 (lower(regexp_replace(trim(unit_code), '\\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `,
   `
-    create table if not exists public.bodega_ref_category_id_core_scd2 (
+create table if not exists public.sr_ref_category_id_core_scd2 (
       record_id text primary key,
       category_id text not null,
       valid_from timestamp without time zone not null,
@@ -101,7 +101,7 @@ const staticStatements = [
     )
   `,
   `
-    create table if not exists public.bodega_dim_category_profile_scd2 (
+create table if not exists public.sr_dim_category_profile_scd2 (
       record_id text primary key,
       category_id text not null,
       valid_from timestamp without time zone not null,
@@ -122,24 +122,24 @@ const staticStatements = [
     )
   `,
   `
-    create unique index if not exists bodega_ref_category_id_core_scd2_current_idx
-      on public.bodega_ref_category_id_core_scd2 (category_id)
+create unique index if not exists sr_ref_category_id_core_scd2_current_idx
+on public.sr_ref_category_id_core_scd2 (category_id)
       where is_current
   `,
   `
-    create unique index if not exists bodega_dim_category_profile_scd2_current_idx
-      on public.bodega_dim_category_profile_scd2 (category_id)
+create unique index if not exists sr_dim_category_profile_scd2_current_idx
+on public.sr_dim_category_profile_scd2 (category_id)
       where is_current
   `,
   `
-    create unique index if not exists bodega_dim_category_profile_scd2_current_code_unique_idx
-      on public.bodega_dim_category_profile_scd2 (lower(regexp_replace(trim(category_code), '\\s+', ' ', 'g')))
+create unique index if not exists sr_dim_category_profile_scd2_current_code_unique_idx
+on public.sr_dim_category_profile_scd2 (lower(regexp_replace(trim(category_code), '\\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `,
   `
-    create unique index if not exists bodega_dim_category_profile_scd2_name_parent_unique_idx
-      on public.bodega_dim_category_profile_scd2 (
+create unique index if not exists sr_dim_category_profile_scd2_name_parent_unique_idx
+on public.sr_dim_category_profile_scd2 (
         lower(regexp_replace(trim(category_name), '\\s+', ' ', 'g')),
         category_level,
         coalesce(parent_category_id, '')
@@ -148,7 +148,7 @@ const staticStatements = [
         and is_valid = true
   `,
   `
-    create table if not exists public.bodega_ref_product_id_core_scd2 (
+create table if not exists public.sr_ref_product_id_core_scd2 (
       record_id text primary key,
       product_id text not null,
       valid_from timestamp without time zone not null,
@@ -162,7 +162,7 @@ const staticStatements = [
     )
   `,
   `
-    create table if not exists public.bodega_dim_product_profile_scd2 (
+create table if not exists public.sr_dim_product_profile_scd2 (
       record_id text primary key,
       product_id text not null,
       valid_from timestamp without time zone not null,
@@ -184,24 +184,24 @@ const staticStatements = [
     )
   `,
   `
-    create unique index if not exists bodega_ref_product_id_core_scd2_current_idx
-      on public.bodega_ref_product_id_core_scd2 (product_id)
+create unique index if not exists sr_ref_product_id_core_scd2_current_idx
+on public.sr_ref_product_id_core_scd2 (product_id)
       where is_current
   `,
   `
-    create unique index if not exists bodega_dim_product_profile_scd2_current_idx
-      on public.bodega_dim_product_profile_scd2 (product_id)
+create unique index if not exists sr_dim_product_profile_scd2_current_idx
+on public.sr_dim_product_profile_scd2 (product_id)
       where is_current
   `,
   `
-    create unique index if not exists bodega_dim_product_profile_scd2_current_code_unique_idx
-      on public.bodega_dim_product_profile_scd2 (lower(regexp_replace(trim(product_code), '\\s+', ' ', 'g')))
+create unique index if not exists sr_dim_product_profile_scd2_current_code_unique_idx
+on public.sr_dim_product_profile_scd2 (lower(regexp_replace(trim(product_code), '\\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `,
   `
-    create unique index if not exists bodega_dim_product_profile_scd2_current_name_unique_idx
-      on public.bodega_dim_product_profile_scd2 (lower(regexp_replace(trim(product_name), '\\s+', ' ', 'g')))
+create unique index if not exists sr_dim_product_profile_scd2_current_name_unique_idx
+on public.sr_dim_product_profile_scd2 (lower(regexp_replace(trim(product_name), '\\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `,
@@ -213,7 +213,7 @@ async function ensureUsageBridge(client) {
       select column_name
       from information_schema.columns
       where table_schema = 'public'
-        and table_name = 'bodega_bridge_product_usage_scd2'
+and table_name = 'sr_bridge_product_usage_scd2'
     `,
   );
 
@@ -221,11 +221,11 @@ async function ensureUsageBridge(client) {
   const needsMigration = columns.size > 0 && !columns.has("activity_id");
 
   if (needsMigration) {
-    await client.query("drop table if exists public.bodega_bridge_product_usage_scd2");
+await client.query("drop table if exists public.sr_bridge_product_usage_scd2");
   }
 
   await client.query(`
-    create table if not exists public.bodega_bridge_product_usage_scd2 (
+create table if not exists public.sr_bridge_product_usage_scd2 (
       record_id text primary key,
       product_id text not null,
       valid_from timestamp without time zone not null,
@@ -242,32 +242,32 @@ async function ensureUsageBridge(client) {
   `);
 
   await client.query(`
-    create index if not exists bodega_bridge_product_usage_scd2_current_product_idx
-      on public.bodega_bridge_product_usage_scd2 (product_id, branch_order)
+create index if not exists sr_bridge_product_usage_scd2_current_product_idx
+on public.sr_bridge_product_usage_scd2 (product_id, branch_order)
       where is_current = true
   `);
 
   await client.query(`
-    create unique index if not exists bodega_bridge_product_usage_scd2_current_branch_unique_idx
-      on public.bodega_bridge_product_usage_scd2 (product_id, branch_order)
+create unique index if not exists sr_bridge_product_usage_scd2_current_branch_unique_idx
+on public.sr_bridge_product_usage_scd2 (product_id, branch_order)
       where is_current = true
   `);
 
   await client.query(`
-    create unique index if not exists bodega_bridge_product_usage_scd2_current_activity_unique_idx
-      on public.bodega_bridge_product_usage_scd2 (product_id, activity_id)
+create unique index if not exists sr_bridge_product_usage_scd2_current_activity_unique_idx
+on public.sr_bridge_product_usage_scd2 (product_id, activity_id)
       where is_current = true
   `);
 }
 
 async function ensureProductAndPresentationSchema(client) {
   await client.query(`
-    alter table public.bodega_dim_product_profile_scd2
+alter table public.sr_dim_product_profile_scd2
       drop column if exists commercial_name
   `);
 
   await client.query(`
-    create table if not exists public.bodega_ref_product_presentation_id_core_scd2 (
+create table if not exists public.sr_ref_product_presentation_id_core_scd2 (
       record_id text primary key,
       presentation_id text not null,
       valid_from timestamp without time zone not null,
@@ -282,7 +282,7 @@ async function ensureProductAndPresentationSchema(client) {
   `);
 
   await client.query(`
-    create table if not exists public.bodega_dim_product_presentation_profile_scd2 (
+create table if not exists public.sr_dim_product_presentation_profile_scd2 (
       record_id text primary key,
       presentation_id text not null,
       product_id text not null,
@@ -310,45 +310,45 @@ async function ensureProductAndPresentationSchema(client) {
   `);
 
   await client.query(`
-    alter table public.bodega_dim_product_presentation_profile_scd2
+alter table public.sr_dim_product_presentation_profile_scd2
       add column if not exists package_name text null
   `);
 
   await client.query(`
-    alter table public.bodega_dim_product_presentation_profile_scd2
+alter table public.sr_dim_product_presentation_profile_scd2
       add column if not exists presentation_quantity numeric(18, 6) null
   `);
 
   await client.query(`
-    alter table public.bodega_dim_product_presentation_profile_scd2
+alter table public.sr_dim_product_presentation_profile_scd2
       add column if not exists presentation_unit_id text null
   `);
 
   await client.query(`
-    alter table public.bodega_dim_product_presentation_profile_scd2
+alter table public.sr_dim_product_presentation_profile_scd2
       add column if not exists conversion_mode text null
   `);
 
   await client.query(`
-    alter table public.bodega_dim_product_presentation_profile_scd2
+alter table public.sr_dim_product_presentation_profile_scd2
       drop column if exists presentation_unit_name
   `);
 
   await client.query(`
-    create unique index if not exists bodega_ref_product_presentation_id_core_scd2_current_idx
-      on public.bodega_ref_product_presentation_id_core_scd2 (presentation_id)
+create unique index if not exists sr_ref_product_presentation_id_core_scd2_current_idx
+on public.sr_ref_product_presentation_id_core_scd2 (presentation_id)
       where is_current
   `);
 
   await client.query(`
-    create unique index if not exists bodega_dim_product_presentation_profile_scd2_current_idx
-      on public.bodega_dim_product_presentation_profile_scd2 (presentation_id)
+create unique index if not exists sr_dim_product_presentation_profile_scd2_current_idx
+on public.sr_dim_product_presentation_profile_scd2 (presentation_id)
       where is_current
   `);
 
   await client.query(`
-    create unique index if not exists bodega_dim_product_presentation_profile_scd2_current_code_unique_idx
-      on public.bodega_dim_product_presentation_profile_scd2 (lower(regexp_replace(trim(presentation_code), '\\s+', ' ', 'g')))
+create unique index if not exists sr_dim_product_presentation_profile_scd2_current_code_unique_idx
+on public.sr_dim_product_presentation_profile_scd2 (lower(regexp_replace(trim(presentation_code), '\\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `);
@@ -365,7 +365,7 @@ async function main() {
     await ensureProductAndPresentationSchema(client);
     await ensureUsageBridge(client);
     await client.query("commit");
-    console.log("Bodega DB schema initialized in db_camp.");
+console.log("Storageroom DB schema initialized in db_storageroom.");
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;
@@ -379,3 +379,4 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+

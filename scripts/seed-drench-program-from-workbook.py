@@ -11,15 +11,15 @@ import openpyxl
 import psycopg
 
 
-ROOT = Path(r"C:\Users\paul.loja\PYPROYECTOS\dashboard_v2")
+ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = ROOT / ".env.local"
 WORKBOOK_PATH = ROOT / "docs" / "drench_program_source.xlsx"
 
 RULE_REF_TABLE = "public.field_ref_drench_program_rule_id_core_scd2"
 RULE_DIM_TABLE = "public.field_dim_drench_program_rule_profile_scd2"
 RULE_LINE_TABLE = "public.field_bridge_drench_program_rule_line_scd2"
-PRODUCT_DIM_TABLE = "public.bodega_dim_product_profile_scd2"
-PRODUCT_USAGE_TABLE = "public.bodega_bridge_product_usage_scd2"
+PRODUCT_DIM_TABLE = "public.sr_dim_product_profile_scd2"
+PRODUCT_USAGE_TABLE = "public.sr_bridge_product_usage_scd2"
 DRENCH_ACTIVITY_ID = "FM11"
 
 RULE_KEY_PATTERN = re.compile(r"^\s*(\d+)\s+([SP])\s+([A-Z0-9/]+)\s*$", re.IGNORECASE)
@@ -84,6 +84,17 @@ def connect_camp():
         host=env["DATABASE_HOST"],
         port=int(env["DATABASE_PORT"]),
         dbname=env.get("CAMP_DATABASE_NAME", "db_camp"),
+        user=env["DATABASE_USER"],
+        password=env["DATABASE_PASSWORD"],
+    )
+
+
+def connect_bodega():
+    env = load_env(ENV_PATH)
+    return psycopg.connect(
+        host=env["DATABASE_HOST"],
+        port=int(env["DATABASE_PORT"]),
+        dbname=env.get("BODEGA_DATABASE_NAME", "db_storageroom"),
         user=env["DATABASE_USER"],
         password=env["DATABASE_PASSWORD"],
     )
@@ -525,20 +536,29 @@ def main() -> None:
     run_id = f"drench_seed_{int(datetime.now().timestamp())}"
     change_reason = "INITIAL_SEED_FROM_DRENCH_WORKBOOK"
 
-    with connect_camp() as connection:
-      with connection.cursor() as cursor:
-        initialize_tables(cursor)
-        products_by_code, products_by_name = load_current_products(cursor)
-        rules, stats = parse_rules(workbook, products_by_code, products_by_name)
-        matched_product_ids = {
-            line.product_id
-            for rule in rules
-            for line in rule.lines
-            if line.product_id
-        }
-        inserted_assignments = ensure_fm11_assignments(cursor, matched_product_ids, actor_id, run_id, change_reason)
-        reseed_rules(cursor, rules, actor_id, run_id, change_reason)
-      connection.commit()
+    with connect_bodega() as bodega_connection:
+        with bodega_connection.cursor() as bodega_cursor:
+            products_by_code, products_by_name = load_current_products(bodega_cursor)
+            with connect_camp() as camp_connection:
+                with camp_connection.cursor() as camp_cursor:
+                    initialize_tables(camp_cursor)
+                    rules, stats = parse_rules(workbook, products_by_code, products_by_name)
+                    matched_product_ids = {
+                        line.product_id
+                        for rule in rules
+                        for line in rule.lines
+                        if line.product_id
+                    }
+                    inserted_assignments = ensure_fm11_assignments(
+                        bodega_cursor,
+                        matched_product_ids,
+                        actor_id,
+                        run_id,
+                        change_reason,
+                    )
+                    reseed_rules(camp_cursor, rules, actor_id, run_id, change_reason)
+                camp_connection.commit()
+        bodega_connection.commit()
 
     print(
         {
@@ -554,3 +574,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -7,6 +7,7 @@ import { checkRateLimit } from "@/server/security/rate-limit";
 import type { DrenchProgramRuleInput, DrenchProgramRulePayload } from "@/lib/campo-drench-program-types";
 import {
   createDrenchProgramRule,
+  listCurrentDrenchAssignableLaboratoryProducts,
   deleteDrenchProgramGroup,
   listCurrentDrenchAssignableProducts,
   listCurrentDrenchProgramRules,
@@ -23,15 +24,17 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    const [rules, assignableProducts] = await Promise.all([
+    const [rules, assignableProducts, assignableLaboratoryProducts] = await Promise.all([
       listCurrentDrenchProgramRules(),
       listCurrentDrenchAssignableProducts(),
+      listCurrentDrenchAssignableLaboratoryProducts(),
     ]);
 
     return NextResponse.json(
       {
         rules,
         assignableProducts,
+        assignableLaboratoryProducts,
       },
       {
         headers: {

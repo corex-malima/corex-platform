@@ -1,14 +1,19 @@
 export type DrenchProgramCycleType = "S" | "P";
 export const DRENCH_PROGRAM_ACTIVITY_ID = "FM11";
+export type DrenchProductOrigin = "BODEGA" | "LABORATORIO";
 
 export type DrenchProgramLineRecord = {
   lineId: string;
   lineOrder: number;
   applicationMethod: string | null;
   litersPerBed: number | null;
+  productOrigin: DrenchProductOrigin;
   productId: string | null;
   productCode: string | null;
   productName: string | null;
+  laboratoryProductId: string | null;
+  laboratoryProductCode: string | null;
+  laboratoryProductName: string | null;
   sourceProductName: string | null;
   sourceProductCode: string | null;
   sourceUnitCode: string | null;
@@ -46,7 +51,9 @@ export type DrenchProgramLineInput = {
   lineOrder?: number;
   applicationMethod?: string | null;
   litersPerBed?: number | null;
+  productOrigin?: DrenchProductOrigin | null;
   productId?: string | null;
+  laboratoryProductId?: string | null;
   sourceProductName?: string | null;
   sourceProductCode?: string | null;
   sourceUnitCode?: string | null;

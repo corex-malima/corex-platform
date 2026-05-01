@@ -23,8 +23,10 @@ import type {
   DrenchProgramRuleInput,
   DrenchProgramRulePayload,
   DrenchProgramRuleRecord,
+  DrenchProductOrigin,
 } from "@/lib/campo-drench-program-types";
 import { fetchJson } from "@/lib/fetch-json";
+import type { LaboratoryProductRecord } from "@/lib/laboratory-master-types";
 import { cn } from "@/lib/utils";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
@@ -39,6 +41,7 @@ import { Label } from "@/shared/ui/label";
 type CampoDrenchProgramPageProps = {
   initialRules: DrenchProgramRuleRecord[];
   initialAssignableProducts: BodegaProductRecord[];
+  initialAssignableLaboratoryProducts: LaboratoryProductRecord[];
   initialSummary: { rules: number; lines: number };
   initialError?: string | null;
 };
@@ -46,6 +49,7 @@ type CampoDrenchProgramPageProps = {
 type DrenchProgramSnapshot = {
   rules: DrenchProgramRuleRecord[];
   assignableProducts: BodegaProductRecord[];
+  assignableLaboratoryProducts: LaboratoryProductRecord[];
 };
 
 type EditorMode = "create" | "edit";
@@ -78,7 +82,9 @@ type FormErrors = Partial<Record<Exclude<keyof DrenchProgramRuleInput, "lines">,
 const EMPTY_LINE: DrenchProgramLineInput = {
   applicationMethod: "",
   litersPerBed: 50,
+  productOrigin: "BODEGA",
   productId: null,
+  laboratoryProductId: null,
   sourceProductName: "",
   sourceProductCode: "",
   sourceUnitCode: "",
@@ -125,6 +131,10 @@ function formatProductOption(product: BodegaProductRecord) {
   return `${product.productCode} - ${product.productName}`;
 }
 
+function formatLaboratoryProductOption(product: LaboratoryProductRecord) {
+  return `${product.productCode} - ${product.productName}`;
+}
+
 function findProductFromSearch(value: string, products: BodegaProductRecord[]) {
   const normalized = value.trim().toLowerCase();
   if (!normalized) return null;
@@ -151,12 +161,62 @@ function findProductCandidates(value: string, products: BodegaProductRecord[]) {
   });
 }
 
+function findLaboratoryProductFromSearch(value: string, products: LaboratoryProductRecord[]) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+
+  return products.find((product) => {
+    return [
+      product.productCode,
+      product.productName,
+      formatLaboratoryProductOption(product),
+    ].some((candidate) => candidate.trim().toLowerCase() === normalized);
+  }) ?? null;
+}
+
+function findLaboratoryProductCandidates(value: string, products: LaboratoryProductRecord[]) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return [];
+
+  return products.filter((product) => {
+    return [
+      product.productCode,
+      product.productName,
+      formatLaboratoryProductOption(product),
+    ].some((candidate) => candidate.trim().toLowerCase().includes(normalized));
+  });
+}
+
 function resolveProductFromLine(
   line: Pick<DrenchProgramLineInput, "productId" | "sourceProductCode" | "sourceProductName">,
   products: BodegaProductRecord[],
 ) {
   if (line.productId) {
     const byId = products.find((product) => product.productId === line.productId);
+    if (byId) return byId;
+  }
+
+  const normalizedCode = String(line.sourceProductCode ?? "").trim().toLowerCase();
+  if (normalizedCode) {
+    const byCode = products.find((product) => product.productCode.trim().toLowerCase() === normalizedCode);
+    if (byCode) return byCode;
+  }
+
+  const normalizedName = String(line.sourceProductName ?? "").trim().toLowerCase();
+  if (normalizedName) {
+    const byName = products.find((product) => product.productName.trim().toLowerCase() === normalizedName);
+    if (byName) return byName;
+  }
+
+  return null;
+}
+
+function resolveLaboratoryProductFromLine(
+  line: Pick<DrenchProgramLineInput, "laboratoryProductId" | "sourceProductCode" | "sourceProductName">,
+  products: LaboratoryProductRecord[],
+) {
+  if (line.laboratoryProductId) {
+    const byId = products.find((product) => product.laboratoryProductId === line.laboratoryProductId);
     if (byId) return byId;
   }
 
@@ -187,7 +247,9 @@ function mapRecordToFormValues(record: DrenchProgramRuleRecord): DrenchProgramRu
       lineOrder: line.lineOrder,
       applicationMethod: line.applicationMethod ?? "",
       litersPerBed: line.litersPerBed,
+      productOrigin: line.productOrigin ?? "BODEGA",
       productId: line.productId,
+      laboratoryProductId: line.laboratoryProductId,
       sourceProductName: line.sourceProductName ?? line.productName ?? "",
       sourceProductCode: line.sourceProductCode ?? line.productCode ?? "",
       sourceUnitCode: line.sourceUnitCode ?? "",
@@ -212,7 +274,9 @@ function buildPayload(values: DrenchProgramRuleInput): DrenchProgramRuleInput {
       lineOrder: index + 1,
       applicationMethod: line.applicationMethod?.trim() || null,
       litersPerBed: line.litersPerBed === null || line.litersPerBed === undefined ? null : Number(line.litersPerBed),
-      productId: line.productId?.trim() || null,
+      productOrigin: (line.productOrigin ?? "BODEGA") as DrenchProductOrigin,
+      productId: (line.productOrigin ?? "BODEGA") === "BODEGA" ? line.productId?.trim() || null : null,
+      laboratoryProductId: (line.productOrigin ?? "BODEGA") === "LABORATORIO" ? line.laboratoryProductId?.trim() || null : null,
       sourceProductName: line.sourceProductName?.trim() || null,
       sourceProductCode: line.sourceProductCode?.trim().toUpperCase() || null,
       sourceUnitCode: line.sourceUnitCode?.trim().toUpperCase() || null,
@@ -239,8 +303,11 @@ function validateForm(values: DrenchProgramRuleInput): FormErrors {
 
   payload.lines.forEach((line, index) => {
     const itemErrors: NonNullable<FormErrors["lineErrors"]>[number] = {};
-    if (!line.productId && !line.sourceProductName) {
-      itemErrors.sourceProductName = "Debes vincular un producto o dejar un nombre fuente.";
+    if (line.productOrigin === "BODEGA" && !line.productId && !line.sourceProductName) {
+      itemErrors.sourceProductName = "Debes vincular un producto de Bodega o dejar un nombre fuente.";
+    }
+    if (line.productOrigin === "LABORATORIO" && !line.laboratoryProductId && !line.sourceProductName) {
+      itemErrors.sourceProductName = "Debes vincular un producto de Laboratorio o dejar un nombre fuente.";
     }
     if (line.productQuantityValue === null || Number.isNaN(line.productQuantityValue)) {
       itemErrors.productQuantityValue = "La cantidad de producto es obligatoria.";
@@ -262,7 +329,7 @@ function hasDuplicateWeek(group: GroupedRecipe | null, week: number, selectedRul
 }
 
 function countUnresolvedLines(rules: DrenchProgramRuleRecord[]) {
-  return rules.reduce((accumulator, rule) => accumulator + rule.lines.filter((line) => !line.productId).length, 0);
+  return rules.reduce((accumulator, rule) => accumulator + rule.lines.filter((line) => !line.productId && !line.laboratoryProductId).length, 0);
 }
 
 function groupRules(rules: DrenchProgramRuleRecord[]) {
@@ -326,6 +393,7 @@ function buildCreateValues(group: GroupedRecipe | null): DrenchProgramRuleInput 
 export function CampoDrenchProgramPage({
   initialRules,
   initialAssignableProducts,
+  initialAssignableLaboratoryProducts,
   initialSummary,
   initialError,
 }: CampoDrenchProgramPageProps) {
@@ -349,6 +417,7 @@ export function CampoDrenchProgramPage({
       fallbackData: {
         rules: initialRules,
         assignableProducts: initialAssignableProducts,
+        assignableLaboratoryProducts: initialAssignableLaboratoryProducts,
       },
       revalidateOnFocus: false,
       dedupingInterval: 15000,
@@ -358,6 +427,7 @@ export function CampoDrenchProgramPage({
 
   const rules = snapshot?.rules ?? initialRules;
   const assignableProducts = snapshot?.assignableProducts ?? initialAssignableProducts;
+  const assignableLaboratoryProducts = snapshot?.assignableLaboratoryProducts ?? initialAssignableLaboratoryProducts;
 
   const groupedRecipes = useMemo(() => groupRules(rules), [rules]);
 
@@ -404,11 +474,12 @@ export function CampoDrenchProgramPage({
       rules: rules.length || initialSummary.rules,
       groups: groupedRecipes.length,
       lines: rules.reduce((accumulator, rule) => accumulator + rule.lines.length, 0) || initialSummary.lines,
-      products: assignableProducts.length,
+      bodegaProducts: assignableProducts.length,
+      laboratoryProducts: assignableLaboratoryProducts.length,
       unresolvedLines: countUnresolvedLines(rules),
       latest,
     };
-  }, [assignableProducts.length, groupedRecipes.length, initialSummary.lines, initialSummary.rules, rules]);
+  }, [assignableLaboratoryProducts.length, assignableProducts.length, groupedRecipes.length, initialSummary.lines, initialSummary.rules, rules]);
 
   useEffect(() => {
     if (!groupedRecipes.length) {
@@ -437,6 +508,18 @@ export function CampoDrenchProgramPage({
     const nextForm = {
       ...rawForm,
       lines: rawForm.lines.map((line) => {
+        if ((line.productOrigin ?? "BODEGA") === "LABORATORIO") {
+          const matchedLaboratoryProduct = resolveLaboratoryProductFromLine(line, assignableLaboratoryProducts);
+          if (!matchedLaboratoryProduct) return line;
+          return {
+            ...line,
+            laboratoryProductId: matchedLaboratoryProduct.laboratoryProductId,
+            sourceProductName: matchedLaboratoryProduct.productName,
+            sourceProductCode: matchedLaboratoryProduct.productCode,
+            sourceUnitCode: matchedLaboratoryProduct.baseUnitCode,
+          };
+        }
+
         const matchedProduct = resolveProductFromLine(line, assignableProducts);
         if (!matchedProduct) return line;
         return {
@@ -452,13 +535,19 @@ export function CampoDrenchProgramPage({
     setFormValues(nextForm);
     setLineProductSearchValues(
       nextForm.lines.map((line) => {
+        if ((line.productOrigin ?? "BODEGA") === "LABORATORIO") {
+          const match = resolveLaboratoryProductFromLine(line, assignableLaboratoryProducts);
+          if (!match) return line.sourceProductName ?? "";
+          return formatLaboratoryProductOption(match);
+        }
+
         const match = resolveProductFromLine(line, assignableProducts);
         if (!match) return line.sourceProductName ?? "";
-        return match ? formatProductOption(match) : (line.sourceProductName ?? "");
+        return formatProductOption(match);
       }),
     );
     setFormErrors({});
-  }, [selectedGroup, selectedRule, assignableProducts]);
+  }, [selectedGroup, selectedRule, assignableProducts, assignableLaboratoryProducts]);
 
   function updateField<Key extends keyof DrenchProgramRuleInput>(field: Key, value: DrenchProgramRuleInput[Key]) {
     setFormValues((current) => ({ ...current, [field]: value }));
@@ -477,8 +566,30 @@ export function CampoDrenchProgramPage({
 
   function updateLineSearch(index: number, value: string) {
     setLineProductSearchValues((current) => current.map((item, itemIndex) => itemIndex === index ? value : item));
-    const match = findProductFromSearch(value, assignableProducts);
+    const lineOrigin = formValues.lines[index]?.productOrigin ?? "BODEGA";
 
+    if (lineOrigin === "LABORATORIO") {
+      const match = findLaboratoryProductFromSearch(value, assignableLaboratoryProducts);
+      if (match) {
+        updateLine(index, {
+          laboratoryProductId: match.laboratoryProductId,
+          sourceProductName: match.productName,
+          sourceProductCode: match.productCode,
+          sourceUnitCode: match.baseUnitCode,
+        });
+        return;
+      }
+
+      updateLine(index, {
+        laboratoryProductId: null,
+        sourceProductName: value,
+        sourceProductCode: formValues.lines[index]?.sourceProductCode ?? "",
+        sourceUnitCode: formValues.lines[index]?.sourceUnitCode ?? "",
+      });
+      return;
+    }
+
+    const match = findProductFromSearch(value, assignableProducts);
     if (match) {
       updateLine(index, {
         productId: match.productId,
@@ -499,8 +610,42 @@ export function CampoDrenchProgramPage({
 
   function resolveLineSearch(index: number) {
     const currentValue = lineProductSearchValues[index] ?? "";
-    const exactMatch = findProductFromSearch(currentValue, assignableProducts);
+    const lineOrigin = formValues.lines[index]?.productOrigin ?? "BODEGA";
 
+    if (lineOrigin === "LABORATORIO") {
+      const exactMatch = findLaboratoryProductFromSearch(currentValue, assignableLaboratoryProducts);
+      if (exactMatch) {
+        setLineProductSearchValues((current) => current.map((item, itemIndex) => itemIndex === index ? formatLaboratoryProductOption(exactMatch) : item));
+        updateLine(index, {
+          laboratoryProductId: exactMatch.laboratoryProductId,
+          sourceProductName: exactMatch.productName,
+          sourceProductCode: exactMatch.productCode,
+          sourceUnitCode: exactMatch.baseUnitCode,
+        });
+        return;
+      }
+
+      const candidates = findLaboratoryProductCandidates(currentValue, assignableLaboratoryProducts);
+      if (candidates.length === 1) {
+        const candidate = candidates[0];
+        setLineProductSearchValues((current) => current.map((item, itemIndex) => itemIndex === index ? formatLaboratoryProductOption(candidate) : item));
+        updateLine(index, {
+          laboratoryProductId: candidate.laboratoryProductId,
+          sourceProductName: candidate.productName,
+          sourceProductCode: candidate.productCode,
+          sourceUnitCode: candidate.baseUnitCode,
+        });
+        return;
+      }
+
+      updateLine(index, {
+        laboratoryProductId: null,
+        sourceProductName: currentValue,
+      });
+      return;
+    }
+
+    const exactMatch = findProductFromSearch(currentValue, assignableProducts);
     if (exactMatch) {
       setLineProductSearchValues((current) => current.map((item, itemIndex) => itemIndex === index ? formatProductOption(exactMatch) : item));
       updateLine(index, {
@@ -528,6 +673,18 @@ export function CampoDrenchProgramPage({
     updateLine(index, {
       productId: null,
       sourceProductName: currentValue,
+    });
+  }
+
+  function updateLineOrigin(index: number, origin: DrenchProductOrigin) {
+    setLineProductSearchValues((current) => current.map((item, itemIndex) => itemIndex === index ? "" : item));
+    updateLine(index, {
+      productOrigin: origin,
+      productId: null,
+      laboratoryProductId: null,
+      sourceProductName: "",
+      sourceProductCode: "",
+      sourceUnitCode: "",
     });
   }
 
@@ -749,7 +906,7 @@ export function CampoDrenchProgramPage({
   }
 
   const selectedWeekCount = selectedGroup?.rules.length ?? 0;
-  const selectedMatchedLines = currentPayload.lines.filter((line) => Boolean(line.productId)).length;
+  const selectedMatchedLines = currentPayload.lines.filter((line) => Boolean(line.productId || line.laboratoryProductId)).length;
   const duplicateWeekInGroup = hasDuplicateWeek(
     selectedGroup,
     Number(formValues.phenologicalWeek),
@@ -761,7 +918,7 @@ export function CampoDrenchProgramPage({
       <SectionPageShell
         eyebrow="Gestion / Campo / Administrar Maestros"
         title="Programacion Drench"
-        subtitle="Ahora la receta se administra por grupo base de ciclo y variedad, y dentro de cada grupo se editan semanas fenologicas con lineas abiertas de productos FM11."
+        subtitle="La receta se administra por grupo base de ciclo y variedad. Cada linea ahora puede consumir producto desde Bodega o desde Laboratorio, respetando la vinculacion por actividad FM11."
         icon={<Beaker className="size-5" aria-hidden="true" />}
         actions={(
           <div className="flex flex-wrap gap-2">
@@ -777,8 +934,9 @@ export function CampoDrenchProgramPage({
             <MetricTile label="Grupos base" value={String(summary.groups)} hint="Combinaciones activas de P/S + variedad." />
             <MetricTile label="Semanas vigentes" value={String(summary.rules)} hint="Semanas fenologicas registradas dentro de cada grupo." />
             <MetricTile label="Lineas vigentes" value={String(summary.lines)} hint="Total de lineas editables en todas las semanas." />
-            <MetricTile label="Productos FM11" value={String(summary.products)} hint="Productos de Bodega disponibles para Drench." />
-            <MetricTile label="Pendientes" value={String(summary.unresolvedLines)} hint="Lineas con nombre fuente aun no homologado a Bodega." />
+            <MetricTile label="Productos Bodega FM11" value={String(summary.bodegaProducts)} hint="Productos de Bodega disponibles para Drench." />
+            <MetricTile label="Productos Laboratorio FM11" value={String(summary.laboratoryProducts)} hint="Productos de Laboratorio disponibles para Drench." />
+            <MetricTile label="Pendientes" value={String(summary.unresolvedLines)} hint="Lineas con nombre fuente aun no homologado a Bodega o Laboratorio." />
             <MetricTile label="Ultima carga" value={summary.latest?.loadedAt ? formatDateTime(summary.latest.loadedAt) : "-"} hint="Ultima semana creada o actualizada." />
           </KpiGrid>
 
@@ -921,7 +1079,7 @@ export function CampoDrenchProgramPage({
             <div className="max-h-[calc(100dvh-16rem)] space-y-3 overflow-y-auto pr-1 pb-6">
               {selectedGroup ? selectedGroup.rules.map((rule) => {
                 const isSelected = editorMode === "edit" && selectedRuleId === rule.ruleId;
-                const unresolved = rule.lines.filter((line) => !line.productId).length;
+                const unresolved = rule.lines.filter((line) => !line.productId && !line.laboratoryProductId).length;
                 const resolved = rule.lines.length - unresolved;
                 const resolutionPct = rule.lines.length ? Math.round((resolved / rule.lines.length) * 100) : 0;
                 const barClass = resolutionPct === 100
@@ -1019,7 +1177,15 @@ export function CampoDrenchProgramPage({
           </CardHeader>
           <CardContent>
             <form className="space-y-6" onSubmit={onSubmit}>
-              <div className="grid gap-5 md:grid-cols-3">
+              <div className="space-y-4">
+                <div>
+                  <Label>1. Datos de la semana</Label>
+                  <p className="text-xs text-muted-foreground">
+                    El grupo base ya define la variedad y el tipo SP. Aqui completas la semana fenologica y su contexto operativo.
+                  </p>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label>Tipo SP</Label>
                   <div className="rounded-[18px] border border-border/70 bg-background/75 px-4 py-3 text-sm">
@@ -1092,14 +1258,15 @@ export function CampoDrenchProgramPage({
                     placeholder="Opcional"
                   />
                 </div>
+                </div>
               </div>
 
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <Label>Lineas de aplicacion</Label>
+                    <Label>2. Lineas de aplicacion</Label>
                     <p className="text-xs text-muted-foreground">
-                      Cada semana puede tener todas las lineas necesarias. La receta ya no esta limitada al esquema del Excel.
+                      Cada semana puede tener todas las lineas necesarias. Cada linea decide si consume producto desde Bodega o desde Laboratorio.
                     </p>
                   </div>
                   <Button type="button" variant="outline" className="rounded-full" onClick={addLine}>
@@ -1110,8 +1277,11 @@ export function CampoDrenchProgramPage({
 
                 <div className="space-y-4">
                   {formValues.lines.map((line, index) => {
-                    const selectedProduct = line.productId
+                    const selectedProduct = (line.productOrigin ?? "BODEGA") === "BODEGA" && line.productId
                       ? assignableProducts.find((product) => product.productId === line.productId) ?? null
+                      : null;
+                    const selectedLaboratoryProduct = (line.productOrigin ?? "BODEGA") === "LABORATORIO" && line.laboratoryProductId
+                      ? assignableLaboratoryProducts.find((product) => product.laboratoryProductId === line.laboratoryProductId) ?? null
                       : null;
 
                     return (
@@ -1127,6 +1297,10 @@ export function CampoDrenchProgramPage({
                             {selectedProduct ? (
                               <Badge variant="secondary" className="rounded-full px-3 py-1">
                                 {selectedProduct.productCode}
+                              </Badge>
+                            ) : selectedLaboratoryProduct ? (
+                              <Badge variant="secondary" className="rounded-full px-3 py-1">
+                                {selectedLaboratoryProduct.productCode}
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="rounded-full px-3 py-1">
@@ -1179,8 +1353,23 @@ export function CampoDrenchProgramPage({
                             ) : null}
                           </div>
 
+                          <div className="space-y-2">
+                            <Label htmlFor={`line-origin-${index}`}>Origen</Label>
+                            <select
+                              id={`line-origin-${index}`}
+                              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                              value={line.productOrigin ?? "BODEGA"}
+                              onChange={(event) => updateLineOrigin(index, event.target.value as DrenchProductOrigin)}
+                            >
+                              <option value="BODEGA">Bodega</option>
+                              <option value="LABORATORIO">Laboratorio</option>
+                            </select>
+                          </div>
+
                           <div className="space-y-2 md:col-span-2 xl:col-span-2">
-                            <Label htmlFor={`line-product-${index}`}>Producto Bodega o nombre fuente</Label>
+                            <Label htmlFor={`line-product-${index}`}>
+                              {line.productOrigin === "LABORATORIO" ? "Producto Laboratorio o nombre fuente" : "Producto Bodega o nombre fuente"}
+                            </Label>
                             <Input
                               id={`line-product-${index}`}
                               list={`drench-product-options-${index}`}
@@ -1188,37 +1377,43 @@ export function CampoDrenchProgramPage({
                               value={lineProductSearchValues[index] ?? ""}
                               onChange={(event) => updateLineSearch(index, event.target.value)}
                               onBlur={() => resolveLineSearch(index)}
-                              placeholder="Busca por codigo o nombre. Si no existe aun, deja el nombre fuente."
+                              placeholder={line.productOrigin === "LABORATORIO"
+                                ? "Busca por codigo o nombre del producto de laboratorio."
+                                : "Busca por codigo o nombre. Si no existe aun, deja el nombre fuente."}
                             />
                             <datalist id={`drench-product-options-${index}`}>
-                              {assignableProducts.map((product) => (
-                                <option key={`${product.productId}-fmt`} value={formatProductOption(product)} />
-                              ))}
+                              {line.productOrigin === "LABORATORIO"
+                                ? assignableLaboratoryProducts.map((product) => (
+                                  <option key={`${product.laboratoryProductId}-fmt`} value={formatLaboratoryProductOption(product)} />
+                                ))
+                                : assignableProducts.map((product) => (
+                                  <option key={`${product.productId}-fmt`} value={formatProductOption(product)} />
+                                ))}
                             </datalist>
                             {formErrors.lineErrors?.[index]?.sourceProductName ? (
                               <p className="text-xs text-destructive">{formErrors.lineErrors[index]?.sourceProductName}</p>
                             ) : null}
                           </div>
 
-                            <div className="space-y-2">
-                              <Label htmlFor={`line-unit-${index}`}>Unidad del producto</Label>
-                              {selectedProduct ? (
-                                <div
-                                  id={`line-unit-${index}`}
-                                  className="rounded-[18px] border border-border/70 bg-background/75 px-4 py-3 text-sm font-medium"
-                                >
-                                  {selectedProduct.baseUnitCode}
-                                </div>
-                              ) : (
-                                <Input
-                                  id={`line-unit-${index}`}
-                                  className="rounded-xl"
-                                  value={line.sourceUnitCode ?? ""}
-                                  onChange={(event) => updateLine(index, { sourceUnitCode: event.target.value.toUpperCase() })}
-                                  placeholder="Solo se edita si la linea aun no esta homologada."
-                                />
-                              )}
-                            </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`line-unit-${index}`}>Unidad del producto</Label>
+                            {selectedProduct || selectedLaboratoryProduct ? (
+                              <div
+                                id={`line-unit-${index}`}
+                                className="rounded-[18px] border border-border/70 bg-background/75 px-4 py-3 text-sm font-medium"
+                              >
+                                {selectedProduct?.baseUnitCode ?? selectedLaboratoryProduct?.baseUnitCode}
+                              </div>
+                            ) : (
+                              <Input
+                                id={`line-unit-${index}`}
+                                className="rounded-xl"
+                                value={line.sourceUnitCode ?? ""}
+                                onChange={(event) => updateLine(index, { sourceUnitCode: event.target.value.toUpperCase() })}
+                                placeholder="Solo se edita si la linea aun no esta homologada."
+                              />
+                            )}
+                          </div>
 
                           <div className="space-y-2 md:col-span-2">
                             <Label htmlFor={`line-reference-${index}`}>Referencia de dosis</Label>
@@ -1246,8 +1441,10 @@ export function CampoDrenchProgramPage({
                         <div className="mt-3 rounded-[18px] bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                           {selectedProduct ? (
                             <>Vinculado a Bodega: {selectedProduct.productCode} / {selectedProduct.productName} / {selectedProduct.categoryPathLabel} / Unidad {selectedProduct.baseUnitCode}</>
+                          ) : selectedLaboratoryProduct ? (
+                            <>Vinculado a Laboratorio: {selectedLaboratoryProduct.productCode} / {selectedLaboratoryProduct.productName} / Unidad {selectedLaboratoryProduct.baseUnitCode}</>
                           ) : (
-                            <>Linea aun no homologada a Bodega. Se mantiene como fuente pendiente para corregirla luego.</>
+                            <>Linea aun no homologada a {line.productOrigin === "LABORATORIO" ? "Laboratorio" : "Bodega"}. Se mantiene como fuente pendiente para corregirla luego.</>
                           )}
                         </div>
                       </div>
@@ -1259,7 +1456,7 @@ export function CampoDrenchProgramPage({
               </div>
 
               <div className="rounded-[22px] border border-border/70 bg-background/75 px-4 py-4 text-sm">
-                <p className="font-semibold">Resumen de la semana</p>
+                <p className="font-semibold">3. Resumen de la semana</p>
                 <div className="mt-3 grid gap-2 text-muted-foreground md:grid-cols-2">
                   <p>Grupo base: {formatGroupTitle(formValues.cycleType, formValues.varietyCode || "...")}</p>
                   <p>Semanas en el grupo: {selectedWeekCount}</p>

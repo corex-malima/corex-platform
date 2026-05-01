@@ -10,18 +10,19 @@ import psycopg
 from openpyxl import load_workbook
 
 
-ENV_PATH = Path(r"C:\Users\paul.loja\PYPROYECTOS\dashboard_v2\.env.local")
-WORKBOOK_PATH = Path(r"C:\Users\paul.loja\PYPROYECTOS\dashboard_v2\docs\bodega\propuesta-categorizacion-productos-base.xlsx")
+ROOT = Path(__file__).resolve().parent.parent
+ENV_PATH = ROOT / ".env.local"
+WORKBOOK_PATH = ROOT / "docs" / "bodega" / "propuesta-categorizacion-productos-base.xlsx"
 
-UNIT_REF_TABLE = "public.bodega_ref_unit_id_core_scd2"
-UNIT_DIM_TABLE = "public.bodega_dim_unit_profile_scd2"
-CATEGORY_REF_TABLE = "public.bodega_ref_category_id_core_scd2"
-CATEGORY_DIM_TABLE = "public.bodega_dim_category_profile_scd2"
-PRODUCT_REF_TABLE = "public.bodega_ref_product_id_core_scd2"
-PRODUCT_DIM_TABLE = "public.bodega_dim_product_profile_scd2"
-PRODUCT_USAGE_TABLE = "public.bodega_bridge_product_usage_scd2"
-PRESENTATION_REF_TABLE = "public.bodega_ref_product_presentation_id_core_scd2"
-PRESENTATION_DIM_TABLE = "public.bodega_dim_product_presentation_profile_scd2"
+UNIT_REF_TABLE = "public.sr_ref_unit_id_core_scd2"
+UNIT_DIM_TABLE = "public.sr_dim_unit_profile_scd2"
+CATEGORY_REF_TABLE = "public.sr_ref_category_id_core_scd2"
+CATEGORY_DIM_TABLE = "public.sr_dim_category_profile_scd2"
+PRODUCT_REF_TABLE = "public.sr_ref_product_id_core_scd2"
+PRODUCT_DIM_TABLE = "public.sr_dim_product_profile_scd2"
+PRODUCT_USAGE_TABLE = "public.sr_bridge_product_usage_scd2"
+PRESENTATION_REF_TABLE = "public.sr_ref_product_presentation_id_core_scd2"
+PRESENTATION_DIM_TABLE = "public.sr_dim_product_presentation_profile_scd2"
 
 
 @dataclass
@@ -199,7 +200,7 @@ def main() -> None:
     conn = psycopg.connect(
         host=env["DATABASE_HOST"],
         port=int(env["DATABASE_PORT"]),
-        dbname=env.get("CAMP_DATABASE_NAME", "db_camp"),
+        dbname=env.get("BODEGA_DATABASE_NAME", "db_storageroom"),
         user=env["DATABASE_USER"],
         password=env["DATABASE_PASSWORD"],
         sslmode="require" if env.get("DATABASE_SSL") == "true" else "prefer",
@@ -391,3 +392,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

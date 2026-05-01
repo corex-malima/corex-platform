@@ -4,11 +4,13 @@ import type { PoolClient, QueryResultRow } from "pg";
 
 import { queryCamp, withCampTransaction } from "@/lib/camp-db";
 import { listCurrentBodegaProducts } from "@/lib/bodega-masters";
+import { listCurrentLaboratoryAssignableProducts } from "@/lib/laboratory-masters";
 import { DRENCH_PROGRAM_ACTIVITY_ID } from "@/lib/campo-drench-program-types";
 import type {
   DrenchProgramCycleType,
   DrenchProgramLineInput,
   DrenchProgramLineRecord,
+  DrenchProductOrigin,
   DrenchProgramRuleInput,
   DrenchProgramRuleRecord,
 } from "@/lib/campo-drench-program-types";
@@ -40,7 +42,9 @@ type CurrentLineRow = {
   line_order: number | string | null;
   application_method: string | null;
   liters_per_bed: number | string | null;
+  product_origin: DrenchProductOrigin | null;
   product_id: string | null;
+  laboratory_product_id: string | null;
   source_product_name: string | null;
   source_product_code: string | null;
   source_unit_code: string | null;
@@ -118,29 +122,66 @@ function isCycleType(value: string): value is DrenchProgramCycleType {
   return value === "S" || value === "P";
 }
 
+function isProductOrigin(value: string): value is DrenchProductOrigin {
+  return value === "BODEGA" || value === "LABORATORIO";
+}
+
 function buildRuleCode(phenologicalWeek: number, cycleType: DrenchProgramCycleType, varietyCode: string) {
   return `${phenologicalWeek} ${cycleType} ${normalizeCode(varietyCode)}`;
 }
 
 async function sanitizeLines(lines: DrenchProgramLineInput[]) {
-  const bodegaProducts = await listCurrentBodegaProducts();
+  const [bodegaProducts, laboratoryProducts] = await Promise.all([
+    listCurrentBodegaProducts(),
+    listCurrentLaboratoryAssignableProducts(DRENCH_ACTIVITY_ID),
+  ]);
   const productMap = new Map(bodegaProducts.map((product) => [product.productId, product]));
+  const laboratoryProductMap = new Map(laboratoryProducts.map((product) => [product.laboratoryProductId, product]));
 
   const sanitized = lines.map((line, index) => {
+    const productOrigin = normalizeCode(line.productOrigin ?? "BODEGA");
     const normalizedProductId = normalizeOptionalText(line.productId);
+    const normalizedLaboratoryProductId = normalizeOptionalText(line.laboratoryProductId);
     const matchedProduct = normalizedProductId ? productMap.get(normalizedProductId) ?? null : null;
+    const matchedLaboratoryProduct = normalizedLaboratoryProductId
+      ? laboratoryProductMap.get(normalizedLaboratoryProductId) ?? null
+      : null;
     if (normalizedProductId && !matchedProduct) {
       throw new Error("Una de las lineas referencia un producto de Bodega que ya no esta vigente.");
     }
+    if (normalizedLaboratoryProductId && !matchedLaboratoryProduct) {
+      throw new Error("Una de las lineas referencia un producto de Laboratorio que ya no esta vigente.");
+    }
+
+    if (!isProductOrigin(productOrigin)) {
+      throw new Error("El origen del producto debe ser BODEGA o LABORATORIO.");
+    }
+
+    const effectiveBodegaProduct = productOrigin === "BODEGA" ? matchedProduct : null;
+    const effectiveLaboratoryProduct = productOrigin === "LABORATORIO" ? matchedLaboratoryProduct : null;
 
     return {
       lineOrder: index + 1,
       applicationMethod: normalizeOptionalText(line.applicationMethod),
       litersPerBed: toNumber(line.litersPerBed),
-      productId: normalizedProductId,
-      sourceProductName: matchedProduct ? matchedProduct.productName : normalizeOptionalText(line.sourceProductName),
-      sourceProductCode: matchedProduct ? matchedProduct.productCode : normalizeOptionalText(line.sourceProductCode),
-      sourceUnitCode: matchedProduct ? matchedProduct.baseUnitCode : normalizeOptionalText(line.sourceUnitCode),
+      productOrigin,
+      productId: effectiveBodegaProduct ? normalizedProductId : null,
+      laboratoryProductId: effectiveLaboratoryProduct ? normalizedLaboratoryProductId : null,
+      sourceProductName: effectiveBodegaProduct
+        ? effectiveBodegaProduct.productName
+        : effectiveLaboratoryProduct
+          ? effectiveLaboratoryProduct.productName
+          : normalizeOptionalText(line.sourceProductName),
+      sourceProductCode: effectiveBodegaProduct
+        ? effectiveBodegaProduct.productCode
+        : effectiveLaboratoryProduct
+          ? effectiveLaboratoryProduct.productCode
+          : normalizeOptionalText(line.sourceProductCode),
+      sourceUnitCode: effectiveBodegaProduct
+        ? effectiveBodegaProduct.baseUnitCode
+        : effectiveLaboratoryProduct
+          ? effectiveLaboratoryProduct.baseUnitCode
+          : normalizeOptionalText(line.sourceUnitCode),
       productQuantityValue: toNumber(line.productQuantityValue),
       productQuantityReference: normalizeOptionalText(line.productQuantityReference),
       notes: normalizeOptionalText(line.notes),
@@ -149,8 +190,11 @@ async function sanitizeLines(lines: DrenchProgramLineInput[]) {
   });
 
   for (const line of sanitized) {
-    if (!line.productId && !line.sourceProductName) {
+    if (line.productOrigin === "BODEGA" && !line.productId && !line.sourceProductName) {
       throw new Error("Cada linea debe tener un producto vinculado o al menos un nombre fuente pendiente.");
+    }
+    if (line.productOrigin === "LABORATORIO" && !line.laboratoryProductId && !line.sourceProductName) {
+      throw new Error("Cada linea de Laboratorio debe vincularse a un producto o dejar nombre fuente pendiente.");
     }
   }
 
@@ -196,6 +240,22 @@ async function initializeDrenchProgramMasterInternal(client?: PoolClient) {
       return client.query<T>(text, values);
     }
     return queryCamp<T>(text, values);
+  };
+  const columnExists = async (tableName: string, columnName: string) => {
+    const [schemaName, bareTableName] = tableName.split(".");
+    const result = await runTypedQuery<{ exists: boolean }>(
+      `
+        select exists (
+          select 1
+          from information_schema.columns
+          where table_schema = $1
+            and table_name = $2
+            and column_name = $3
+        ) as exists
+      `,
+      [schemaName ?? "public", bareTableName, columnName],
+    );
+    return Boolean(result.rows[0]?.exists);
   };
 
   await runTypedQuery(`
@@ -246,7 +306,9 @@ async function initializeDrenchProgramMasterInternal(client?: PoolClient) {
       line_order integer not null,
       application_method text null,
       liters_per_bed numeric(18, 6) null,
+      product_origin text not null default 'BODEGA',
       product_id text null,
+      laboratory_product_id text null,
       source_product_name text null,
       source_product_code text null,
       source_unit_code text null,
@@ -292,15 +354,67 @@ async function initializeDrenchProgramMasterInternal(client?: PoolClient) {
       where is_current = true
   `);
 
-  await runTypedQuery(`
-    alter table ${RULE_LINE_TABLE}
-    rename column quantity_value to product_quantity_value
-  `).catch(() => undefined);
+  if (
+    await columnExists(RULE_LINE_TABLE, "quantity_value")
+    && !(await columnExists(RULE_LINE_TABLE, "product_quantity_value"))
+  ) {
+    await runTypedQuery(`
+      alter table ${RULE_LINE_TABLE}
+      rename column quantity_value to product_quantity_value
+    `);
+  }
+
+  if (
+    await columnExists(RULE_LINE_TABLE, "quantity_reference")
+    && !(await columnExists(RULE_LINE_TABLE, "product_quantity_reference"))
+  ) {
+    await runTypedQuery(`
+      alter table ${RULE_LINE_TABLE}
+      rename column quantity_reference to product_quantity_reference
+    `);
+  }
 
   await runTypedQuery(`
     alter table ${RULE_LINE_TABLE}
-    rename column quantity_reference to product_quantity_reference
-  `).catch(() => undefined);
+    add column if not exists product_origin text not null default 'BODEGA'
+  `);
+
+  await runTypedQuery(`
+    alter table ${RULE_LINE_TABLE}
+    add column if not exists laboratory_product_id text null
+  `);
+
+  await runTypedQuery(`
+    update ${RULE_LINE_TABLE}
+       set product_origin = 'BODEGA'
+     where product_id is not null
+       and (product_origin is null or product_origin <> 'BODEGA')
+  `);
+
+  const laboratoryProducts = await listCurrentLaboratoryAssignableProducts(DRENCH_ACTIVITY_ID);
+  for (const product of laboratoryProducts) {
+    await runTypedQuery(
+      `
+        update ${RULE_LINE_TABLE}
+           set product_origin = 'LABORATORIO',
+               laboratory_product_id = $1,
+               source_product_name = coalesce(source_product_name, $2),
+               source_product_code = coalesce(source_product_code, $3),
+               source_unit_code = coalesce(source_unit_code, $4)
+         where product_id is null
+           and (
+             upper(trim(coalesce(source_product_code, ''))) = $3
+             or upper(trim(coalesce(source_product_name, ''))) = $2
+           )
+      `,
+      [
+        product.laboratoryProductId,
+        normalizeCode(product.productName),
+        normalizeCode(product.productCode),
+        normalizeCode(product.baseUnitCode),
+      ],
+    );
+  }
 }
 
 export async function initializeDrenchProgramMaster() {
@@ -349,7 +463,9 @@ async function getCurrentLineRows() {
         line.line_order,
         line.application_method,
         line.liters_per_bed,
+        line.product_origin,
         line.product_id,
+        line.laboratory_product_id,
         line.source_product_name,
         line.source_product_code,
         line.source_unit_code,
@@ -374,22 +490,30 @@ async function getCurrentLineRows() {
 function mapLineRows(
   rows: CurrentLineRow[],
   bodegaProducts: Map<string, Awaited<ReturnType<typeof listCurrentBodegaProducts>>[number]>,
+  laboratoryProducts: Map<string, Awaited<ReturnType<typeof listCurrentLaboratoryAssignableProducts>>[number]>,
 ) {
   const grouped = new Map<string, DrenchProgramLineRecord[]>();
 
   for (const row of rows) {
     const product = row.product_id ? bodegaProducts.get(row.product_id) : null;
+    const laboratoryProduct = row.laboratory_product_id ? laboratoryProducts.get(row.laboratory_product_id) : null;
     const item: DrenchProgramLineRecord = {
       lineId: row.line_id,
       lineOrder: Number(row.line_order ?? 0),
       applicationMethod: row.application_method,
       litersPerBed: toNumber(row.liters_per_bed),
+      productOrigin: isProductOrigin(normalizeCode(row.product_origin ?? "BODEGA"))
+        ? normalizeCode(row.product_origin ?? "BODEGA") as DrenchProductOrigin
+        : "BODEGA",
       productId: row.product_id,
       productCode: product?.productCode ?? null,
       productName: product?.productName ?? null,
+      laboratoryProductId: row.laboratory_product_id,
+      laboratoryProductCode: laboratoryProduct?.productCode ?? null,
+      laboratoryProductName: laboratoryProduct?.productName ?? null,
       sourceProductName: row.source_product_name,
       sourceProductCode: row.source_product_code,
-      sourceUnitCode: product?.baseUnitCode ?? row.source_unit_code,
+      sourceUnitCode: product?.baseUnitCode ?? laboratoryProduct?.baseUnitCode ?? row.source_unit_code,
       productQuantityValue: toNumber(row.product_quantity_value),
       productQuantityReference: row.product_quantity_reference,
       notes: row.notes,
@@ -412,14 +536,16 @@ function mapLineRows(
 
 export async function listCurrentDrenchProgramRules() {
   await initializeDrenchProgramMaster();
-  const [ruleRows, lineRows, bodegaProducts] = await Promise.all([
+  const [ruleRows, lineRows, bodegaProducts, laboratoryProducts] = await Promise.all([
     getCurrentRuleRows(),
     getCurrentLineRows(),
     listCurrentBodegaProducts(),
+    listCurrentLaboratoryAssignableProducts(DRENCH_ACTIVITY_ID),
   ]);
 
   const productMap = new Map(bodegaProducts.map((product) => [product.productId, product]));
-  const lineMap = mapLineRows(lineRows, productMap);
+  const laboratoryProductMap = new Map(laboratoryProducts.map((product) => [product.laboratoryProductId, product]));
+  const lineMap = mapLineRows(lineRows, productMap, laboratoryProductMap);
 
   return ruleRows.map<DrenchProgramRuleRecord>((row) => ({
     ruleId: row.rule_id,
@@ -445,6 +571,10 @@ export async function listCurrentDrenchAssignableProducts() {
   return products
     .filter((product) => product.isActive && product.assignments.some((assignment) => assignment.activityId === DRENCH_ACTIVITY_ID))
     .sort((left, right) => left.productCode.localeCompare(right.productCode));
+}
+
+export async function listCurrentDrenchAssignableLaboratoryProducts() {
+  return listCurrentLaboratoryAssignableProducts(DRENCH_ACTIVITY_ID);
 }
 
 async function getCurrentRuleById(ruleId: string) {
@@ -499,8 +629,6 @@ export async function createDrenchProgramRule(input: DrenchProgramRuleInput, act
   const ruleCode = buildRuleCode(sanitized.phenologicalWeek, sanitized.cycleType, sanitized.varietyCode);
 
   await withCampTransaction(async (client) => {
-    await initializeDrenchProgramMasterInternal(client);
-
     await client.query(
       `
         insert into ${RULE_REF_TABLE} (
@@ -539,9 +667,10 @@ export async function createDrenchProgramRule(input: DrenchProgramRuleInput, act
         `
           insert into ${RULE_LINE_TABLE} (
             record_id, line_id, rule_id, valid_from, valid_to, is_current, line_order,
-            application_method, liters_per_bed, product_id, source_product_name, source_product_code, source_unit_code,
-            product_quantity_value, product_quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
-          ) values ($1, $2, $3, $4, null, true, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $4, $16, $17, $18)
+            application_method, liters_per_bed, product_origin, product_id, laboratory_product_id,
+            source_product_name, source_product_code, source_unit_code, product_quantity_value,
+            product_quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
+          ) values ($1, $2, $3, $4, null, true, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true, $4, $17, $18, $19)
         `,
         [
           makeRecordId(),
@@ -551,7 +680,9 @@ export async function createDrenchProgramRule(input: DrenchProgramRuleInput, act
           line.lineOrder,
           line.applicationMethod,
           line.litersPerBed,
+          line.productOrigin,
           line.productId,
+          line.laboratoryProductId,
           line.sourceProductName,
           line.sourceProductCode,
           line.sourceUnitCode,
@@ -592,8 +723,6 @@ export async function updateDrenchProgramRule(ruleId: string, input: DrenchProgr
   const ruleCode = buildRuleCode(sanitized.phenologicalWeek, sanitized.cycleType, sanitized.varietyCode);
 
   await withCampTransaction(async (client) => {
-    await initializeDrenchProgramMasterInternal(client);
-
     await client.query(
       `update ${RULE_REF_TABLE} set is_current = false, valid_to = $2 where rule_id = $1 and is_current = true`,
       [ruleId, now],
@@ -645,9 +774,10 @@ export async function updateDrenchProgramRule(ruleId: string, input: DrenchProgr
         `
           insert into ${RULE_LINE_TABLE} (
             record_id, line_id, rule_id, valid_from, valid_to, is_current, line_order,
-            application_method, liters_per_bed, product_id, source_product_name, source_product_code, source_unit_code,
-            product_quantity_value, product_quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
-          ) values ($1, $2, $3, $4, null, true, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true, $4, $16, $17, $18)
+            application_method, liters_per_bed, product_origin, product_id, laboratory_product_id,
+            source_product_name, source_product_code, source_unit_code, product_quantity_value,
+            product_quantity_reference, notes, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
+          ) values ($1, $2, $3, $4, null, true, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true, $4, $17, $18, $19)
         `,
         [
           makeRecordId(),
@@ -657,7 +787,9 @@ export async function updateDrenchProgramRule(ruleId: string, input: DrenchProgr
           line.lineOrder,
           line.applicationMethod,
           line.litersPerBed,
+          line.productOrigin,
           line.productId,
+          line.laboratoryProductId,
           line.sourceProductName,
           line.sourceProductCode,
           line.sourceUnitCode,
@@ -687,8 +819,6 @@ export async function deleteDrenchProgramRule(ruleId: string, actorId: string) {
   const runId = makeRunId("drench_rule_delete");
 
   await withCampTransaction(async (client) => {
-    await initializeDrenchProgramMasterInternal(client);
-
     await client.query(
       `update ${RULE_REF_TABLE} set is_current = false, is_valid = false, valid_to = $2 where rule_id = $1 and is_current = true`,
       [ruleId, now],
@@ -734,8 +864,6 @@ export async function deleteDrenchProgramGroup(
   const now = new Date();
 
   await withCampTransaction(async (client) => {
-    await initializeDrenchProgramMasterInternal(client);
-
     await client.query(
       `update ${RULE_REF_TABLE} set is_current = false, is_valid = false, valid_to = $2 where rule_id = any($1::text[]) and is_current = true`,
       [ruleIds, now],

@@ -1,4 +1,5 @@
 import {
+  listCurrentDrenchAssignableLaboratoryProducts,
   getCurrentDrenchProgramSummary,
   listCurrentDrenchAssignableProducts,
   listCurrentDrenchProgramRules,
@@ -10,15 +11,17 @@ export default async function CampoDrenchProgramMasterPage() {
   const { data, error } = await loadProtectedPageData({
     resourceKey: "/dashboard/campo/administrar-maestros/programacion-drench",
     loader: async () => {
-      const [initialRules, initialAssignableProducts, initialSummary] = await Promise.all([
+      const [initialRules, initialAssignableProducts, initialAssignableLaboratoryProducts, initialSummary] = await Promise.all([
         listCurrentDrenchProgramRules(),
         listCurrentDrenchAssignableProducts(),
+        listCurrentDrenchAssignableLaboratoryProducts(),
         getCurrentDrenchProgramSummary(),
       ]);
 
       return {
         initialRules,
         initialAssignableProducts,
+        initialAssignableLaboratoryProducts,
         initialSummary,
       };
     },
@@ -26,6 +29,7 @@ export default async function CampoDrenchProgramMasterPage() {
     fallbackData: {
       initialRules: [],
       initialAssignableProducts: [],
+      initialAssignableLaboratoryProducts: [],
       initialSummary: { rules: 0, lines: 0 },
     },
   });
@@ -34,6 +38,7 @@ export default async function CampoDrenchProgramMasterPage() {
     <CampoDrenchProgramPage
       initialRules={data?.initialRules ?? []}
       initialAssignableProducts={data?.initialAssignableProducts ?? []}
+      initialAssignableLaboratoryProducts={data?.initialAssignableLaboratoryProducts ?? []}
       initialSummary={data?.initialSummary ?? { rules: 0, lines: 0 }}
       initialError={error}
     />
