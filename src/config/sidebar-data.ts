@@ -39,10 +39,12 @@ const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   "Talento Humano": Users,
   Calidad: BadgeCheck,
   Planificacion: CalendarDays,
+  "Planificación": CalendarDays,
   Registros: ClipboardList,
   Personal: UserCircle2,
   "Administrar Maestros": DatabaseZap,
   "Administración Maestros": DatabaseZap,
+  "Administracion Maestros": DatabaseZap,
   Solver: Settings,
   Seguridad: Lock,
 };

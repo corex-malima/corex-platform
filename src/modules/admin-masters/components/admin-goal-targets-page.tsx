@@ -11,6 +11,7 @@ import { decodeMultiSelectValue, encodeMultiSelectValue } from "@/lib/multi-sele
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
+import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -48,11 +49,13 @@ const EMPTY_FORM: GoalTargetFormValues = {
   valueText: "", validFromDate: today, notesText: "", changeReason: "",
 };
 
-type TreeNode = AdminGoalTarget & { children: TreeNode[] };
+const PAGE_SIZE = 50; // visible roots per page; expand-all guarded against runaway DOM
+
+type TreeNode = AdminGoalTarget & { children: TreeNode[]; descendantCount: number };
 
 function buildTree(targets: AdminGoalTarget[]): TreeNode[] {
   const map = new Map<string, TreeNode>();
-  targets.forEach((t) => map.set(t.targetCode, { ...t, children: [] }));
+  targets.forEach((t) => map.set(t.targetCode, { ...t, children: [], descendantCount: 0 }));
   const roots: TreeNode[] = [];
   map.forEach((node) => {
     if (node.parentTargetCode && map.has(node.parentTargetCode)) {
@@ -61,11 +64,15 @@ function buildTree(targets: AdminGoalTarget[]): TreeNode[] {
       roots.push(node);
     }
   });
-  const sortNodes = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => a.targetCode.localeCompare(b.targetCode));
-    nodes.forEach((n) => sortNodes(n.children));
+  const computeAndSort = (n: TreeNode): number => {
+    n.children.sort((a, b) => a.targetCode.localeCompare(b.targetCode));
+    let total = n.children.length;
+    for (const c of n.children) total += computeAndSort(c);
+    n.descendantCount = total;
+    return total;
   };
-  sortNodes(roots);
+  roots.sort((a, b) => a.targetCode.localeCompare(b.targetCode));
+  for (const r of roots) computeAndSort(r);
   return roots;
 }
 
@@ -73,7 +80,11 @@ export function AdminGoalTargetsPage() {
   const { data, mutate, isValidating } = useSWR(ENDPOINT, fetcher, { revalidateOnFocus: false });
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [levelFilter, setLevelFilter] = useState<string>("all");
+  const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [metricFilter, setMetricFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [pageOffset, setPageOffset] = useState(0);
   const [formValues, setFormValues] = useState<GoalTargetFormValues>(EMPTY_FORM);
   const deferredSearch = useDeferredValue(search);
 
@@ -83,16 +94,49 @@ export function AdminGoalTargetsPage() {
   const operators = useMemo(() => data?.operators ?? [], [data?.operators]);
   const goalTypes = useMemo(() => data?.goalTypes ?? [], [data?.goalTypes]);
 
+  const levelDistribution = useMemo(() => {
+    const dist = new Map<number, number>();
+    for (const t of targets) dist.set(t.levelIndex, (dist.get(t.levelIndex) ?? 0) + 1);
+    return [...dist.entries()].sort((a, b) => a[0] - b[0]);
+  }, [targets]);
+
+  const maxLevel = useMemo(() => targets.reduce((m, t) => Math.max(m, t.levelIndex), 0), [targets]);
+  const levelOptions = useMemo(() => {
+    return Array.from({ length: maxLevel }, (_, i) => `L${i + 1}`);
+  }, [maxLevel]);
+
+  const filteredFlat = useMemo(() => {
+    const normalized = deferredSearch.trim().toLowerCase();
+    return targets.filter((t) => {
+      if (levelFilter !== "all" && `L${t.levelIndex}` !== levelFilter) return false;
+      if (domainFilter !== "all" && !t.domainCodes.includes(domainFilter)) return false;
+      if (metricFilter !== "all" && t.metricCode !== metricFilter) return false;
+      if (normalized) {
+        const hay = `${t.targetCode} ${t.targetName} ${t.levelLabel ?? ""}`.toLowerCase();
+        if (!hay.includes(normalized)) return false;
+      }
+      return true;
+    });
+  }, [targets, deferredSearch, levelFilter, domainFilter, metricFilter]);
+
   const tree = useMemo(() => buildTree(targets), [targets]);
   const filteredTree = useMemo(() => {
-    const normalized = deferredSearch.trim().toLowerCase();
-    if (!normalized) return tree;
-    const matchesNode = (n: TreeNode): boolean =>
-      [n.targetCode, n.targetName, n.levelLabel].some((v) => String(v ?? "").toLowerCase().includes(normalized))
-      || n.children.some(matchesNode);
-    const filter = (nodes: TreeNode[]): TreeNode[] => nodes.filter(matchesNode).map((n) => ({ ...n, children: filter(n.children) }));
-    return filter(tree);
-  }, [tree, deferredSearch]);
+    const noFilters = !deferredSearch.trim() && levelFilter === "all" && domainFilter === "all" && metricFilter === "all";
+    if (noFilters) return tree;
+    const matchSet = new Set(filteredFlat.map((t) => t.targetCode));
+    const matchesOrHasMatchingChild = (n: TreeNode): boolean =>
+      matchSet.has(n.targetCode) || n.children.some(matchesOrHasMatchingChild);
+    const filterDeep = (nodes: TreeNode[]): TreeNode[] =>
+      nodes.filter(matchesOrHasMatchingChild).map((n) => ({ ...n, children: filterDeep(n.children) }));
+    return filterDeep(tree);
+  }, [tree, filteredFlat, deferredSearch, levelFilter, domainFilter, metricFilter]);
+
+  const totalRoots = filteredTree.length;
+  const pagedRoots = useMemo(
+    () => filteredTree.slice(pageOffset, pageOffset + PAGE_SIZE),
+    [filteredTree, pageOffset],
+  );
+  const hasMore = pageOffset + PAGE_SIZE < totalRoots;
 
   const selected = selectedCode ? targets.find((t) => t.targetCode === selectedCode) ?? null : null;
   const isEdit = selected !== null;
@@ -116,6 +160,14 @@ export function AdminGoalTargetsPage() {
     });
   }
 
+  function resetFilters() {
+    setSearch("");
+    setLevelFilter("all");
+    setDomainFilter("all");
+    setMetricFilter("all");
+    setPageOffset(0);
+  }
+
   function openCreate(parent: AdminGoalTarget | null) {
     startTransition(() => {
       setSelectedCode(null);
@@ -123,6 +175,7 @@ export function AdminGoalTargetsPage() {
         ...EMPTY_FORM,
         parentTargetCode: parent?.targetCode ?? "",
         levelIndex: String((parent?.levelIndex ?? 0) + 1),
+        domainCodesEncoded: parent && parent.domainCodes.length > 0 ? encodeMultiSelectValue(parent.domainCodes) : "all",
       });
     });
   }
@@ -216,26 +269,71 @@ export function AdminGoalTargetsPage() {
     const isOpen = expanded.has(node.targetCode);
     const isSelected = selectedCode === node.targetCode;
     const hasChildren = node.children.length > 0;
+    const domain = node.domainCodes[0] ?? null;
     return (
       <div key={node.targetCode}>
-        <div className={cn("flex items-center gap-2 rounded-[18px] border px-3 py-2 transition-colors", isSelected ? "border-slate-900 bg-slate-900 text-white" : "border-border/70 bg-background/80 hover:border-slate-300")} style={{ marginLeft: depth * 18 }}>
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-[18px] border px-3 py-2 transition-colors",
+            isSelected ? "border-slate-900 bg-slate-900 text-white" : "border-border/70 bg-background/80 hover:border-slate-300",
+          )}
+          style={{ marginLeft: depth * 18 }}
+        >
           <button type="button" className="shrink-0 p-1" onClick={() => toggleExpanded(node.targetCode)} aria-label={isOpen ? "Contraer" : "Expandir"}>
             {hasChildren ? (isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />) : <span className="block size-4" />}
           </button>
           <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openEdit(node)}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-semibold">{node.targetName}</span>
-              <Badge variant={isSelected ? "secondary" : "outline"} className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}>L{node.levelIndex}</Badge>
-              {node.levelLabel ? <Badge variant="outline" className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}>{node.levelLabel}</Badge> : null}
-              {node.metricName ? <Badge variant="outline" className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}>{node.metricName}{node.unitSymbol ? ` (${node.unitSymbol})` : ""}</Badge> : null}
+              <Badge
+                variant={isSelected ? "secondary" : "outline"}
+                className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}
+              >
+                L{node.levelIndex}
+              </Badge>
+              {node.levelLabel ? (
+                <Badge
+                  variant="outline"
+                  className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}
+                >
+                  {node.levelLabel}
+                </Badge>
+              ) : null}
+              {node.metricName ? (
+                <Badge
+                  variant="outline"
+                  className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}
+                >
+                  {node.metricName}
+                  {node.unitSymbol ? ` (${node.unitSymbol})` : ""}
+                </Badge>
+              ) : null}
+              {domain ? (
+                <Badge
+                  variant="outline"
+                  className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}
+                >
+                  {domain}
+                </Badge>
+              ) : null}
+              {hasChildren ? (
+                <Badge
+                  variant="outline"
+                  className={cn("rounded-full px-2 py-0.5 text-[10px]", isSelected && "border-white/20 bg-white/12 text-white")}
+                >
+                  {node.descendantCount} {node.descendantCount === 1 ? "hijo" : "descendientes"}
+                </Badge>
+              ) : null}
             </div>
             <p className={cn("mt-1 text-[11px]", isSelected ? "text-white/80" : "text-muted-foreground")}>{node.targetCode}</p>
           </button>
-          <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => openCreate(node)} title="Agregar hijo">
+          <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => openCreate(node)} title="Agregar hijo (siguiente nivel)">
             <Plus className="size-3" />
           </Button>
         </div>
-        {isOpen && hasChildren ? <div className="mt-1 space-y-1">{node.children.map((c) => renderNode(c, depth + 1))}</div> : null}
+        {isOpen && hasChildren ? (
+          <div className="mt-1 space-y-1">{node.children.map((c) => renderNode(c, depth + 1))}</div>
+        ) : null}
       </div>
     );
   }
@@ -245,7 +343,7 @@ export function AdminGoalTargetsPage() {
       <SectionPageShell
         eyebrow="Administración / Administración Maestros / Metas & Objetivos"
         title="Metas & Objetivos"
-        subtitle="Administración de metas con jerarquía multinivel, dominios y tipos."
+        subtitle="Administración jerárquica multinivel. Filtra por nivel, dominio o métrica; cada meta puede crear hijos en niveles inferiores."
         icon={<Target className="size-5" aria-hidden="true" />}
         actions={(
           <div className="flex flex-wrap gap-2">
@@ -261,11 +359,40 @@ export function AdminGoalTargetsPage() {
         )}
       >
         <FilterPanel>
+          <div className="grid gap-3 md:grid-cols-3">
+            <SingleSelectField
+              id="goal-level-filter"
+              label="Nivel"
+              value={levelFilter}
+              options={levelOptions}
+              displayValue={(v) => v}
+              emptyLabel="Todos los niveles"
+              onChange={(v) => { setLevelFilter(v); setPageOffset(0); }}
+            />
+            <SingleSelectField
+              id="goal-domain-filter"
+              label="Dominio"
+              value={domainFilter}
+              options={domains.map((d) => d.domainCode)}
+              displayValue={(v) => domains.find((d) => d.domainCode === v)?.domainName ?? v}
+              emptyLabel="Todos los dominios"
+              onChange={(v) => { setDomainFilter(v); setPageOffset(0); }}
+            />
+            <SingleSelectField
+              id="goal-metric-filter"
+              label="Métrica"
+              value={metricFilter}
+              options={metrics.map((m) => m.metricCode)}
+              displayValue={(v) => metrics.find((m) => m.metricCode === v)?.metricName ?? v}
+              emptyLabel="Todas las métricas"
+              onChange={(v) => { setMetricFilter(v); setPageOffset(0); }}
+            />
+          </div>
           <KpiGrid columns={4}>
-            <MetricTile label="Metas activas" value={String(targets.length)} hint="Versiones vigentes." />
-            <MetricTile label="Niveles" value={String(targets.reduce((m, t) => Math.max(m, t.levelIndex), 0))} hint="Profundidad máxima." />
-            <MetricTile label="Métricas disponibles" value={String(metrics.length)} hint="Asignables a cada meta." />
-            <MetricTile label="Dominios" value={String(domains.length)} hint="Macro-dominios." />
+            <MetricTile label="Metas activas (filtro)" value={String(filteredFlat.length)} hint={`Total catálogo: ${targets.length}`} />
+            <MetricTile label="Niveles" value={String(maxLevel)} hint="Profundidad máxima del árbol." />
+            <MetricTile label="Distribución por nivel" value={levelDistribution.map(([l, n]) => `L${l}:${n}`).join(" ")} hint="Conteo por nivel." />
+            <MetricTile label="Dominios" value={String(domains.length)} hint="Macro-dominios disponibles." />
           </KpiGrid>
         </FilterPanel>
       </SectionPageShell>
@@ -277,24 +404,70 @@ export function AdminGoalTargetsPage() {
               <div className="rounded-full bg-slate-900/10 p-3 text-slate-700 dark:bg-slate-900/20 dark:text-white">
                 <Target className="size-5" aria-hidden="true" />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <CardTitle className="text-lg">Árbol de metas</CardTitle>
-                <CardDescription>Selecciona una meta para editar o agrega un nodo hijo con el botón +.</CardDescription>
+                <CardDescription>
+                  {filteredTree.length === totalRoots
+                    ? `${totalRoots} raíces`
+                    : `${totalRoots} raíces filtradas`}
+                  {totalRoots > PAGE_SIZE ? ` · mostrando ${Math.min(PAGE_SIZE, totalRoots - pageOffset)} desde ${pageOffset + 1}` : ""}
+                  · clic en + para crear hijo
+                </CardDescription>
               </div>
+              {(search || levelFilter !== "all" || domainFilter !== "all" || metricFilter !== "all") ? (
+                <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={resetFilters}>
+                  Limpiar filtros
+                </Button>
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="goal-search">Buscar meta</Label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="goal-search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por código, nombre o etiqueta..." className="pl-10" />
+                <Input
+                  id="goal-search"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPageOffset(0); }}
+                  placeholder="Buscar por código, nombre o etiqueta..."
+                  className="pl-10"
+                />
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-1">
-            <div className="max-h-[calc(100dvh-16rem)] space-y-1 overflow-y-auto pr-1">
-              {filteredTree.length ? filteredTree.map((n) => renderNode(n, 0)) : (
-                <div className="rounded-[18px] border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">No hay metas que coincidan con el filtro.</div>
+            <div className="max-h-[calc(100dvh-22rem)] space-y-1 overflow-y-auto pr-1">
+              {pagedRoots.length ? (
+                pagedRoots.map((n) => renderNode(n, 0))
+              ) : (
+                <div className="rounded-[18px] border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
+                  No hay metas que coincidan con los filtros.
+                </div>
               )}
+              {hasMore ? (
+                <div className="flex justify-center pt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={() => setPageOffset((p) => p + PAGE_SIZE)}
+                  >
+                    Mostrar siguientes {Math.min(PAGE_SIZE, totalRoots - pageOffset - PAGE_SIZE)}
+                  </Button>
+                </div>
+              ) : null}
+              {pageOffset > 0 ? (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => setPageOffset(0)}
+                  >
+                    Volver al inicio
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </CardContent>
         </Card>
