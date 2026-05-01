@@ -1,7 +1,7 @@
 -- Dominios gobernados para catálogos TTHH.
 -- Permite saber a qué formulario/proceso pertenece cada catálogo.
 
-create table if not exists public.common_dim_catalog_domain_cur (
+create table if not exists public.common_dim_catalog_domain_profile_cur (
   domain_code text primary key,
   domain_name text not null,
   domain_description text,
@@ -14,14 +14,7 @@ create table if not exists public.common_dim_catalog_domain_cur (
   change_reason text not null default 'manual_update'
 );
 
-alter table public.common_dim_catalog_group_scd2
-  add column if not exists domain_code text not null default 'general';
-
-create index if not exists ix_catalog_group_domain_current
-  on public.common_dim_catalog_group_scd2 (domain_code, catalog_code)
-  where is_current = true;
-
-insert into public.common_dim_catalog_domain_cur (
+insert into public.common_dim_catalog_domain_profile_cur (
   domain_code, domain_name, domain_description, module_code, display_order, run_id, change_reason
 ) values
   ('seguimiento_trabajo_social', 'Seguimiento Trabajo Social', 'Catálogos usados por el formulario de seguimientos de Trabajo Social AGR/ADM.', 'tthh', 10, 'seed_tthh_catalog_domains_v1', 'initial_load'),
@@ -36,7 +29,7 @@ on conflict (domain_code) do update set
   run_id = excluded.run_id,
   change_reason = excluded.change_reason;
 
-update public.common_dim_catalog_group_scd2
+update public.common_dim_catalog_group_profile_scd2
 set domain_code = 'seguimiento_trabajo_social',
     loaded_at = now(),
     run_id = 'seed_tthh_catalog_domains_v1',

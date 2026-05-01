@@ -11,6 +11,7 @@ import { PersonProfileDialog } from "@/shared/overlays/person-profile-dialog";
  */
 export function PersonInfoOverlay({
   personId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   personName: _personName,
   onClose,
 }: {

@@ -4,6 +4,9 @@
 -- Idempotente: ejecutable múltiples veces sin destruir datos.
 -- Solo crea/actualiza estructuras y asegura semillas básicas de catálogos.
 --
+-- Patrón: architecture.md core/profile
+--   ref_*_core_scd2  → identidad mínima + lifecycle SCD2
+--   dim_*_profile_scd2 → atributos descriptivos + lifecycle SCD2
 --
 -- Aplicar con: node scripts/apply-human-talent-sql.mjs
 -- ============================================================================
@@ -11,16 +14,42 @@
 create extension if not exists pgcrypto;
 
 -- ============================================================================
--- 1. CATÁLOGOS GOBERNADOS (SCD2)
+-- 1. CATÁLOGOS GOBERNADOS (SCD2) — CORE + PROFILE
 -- ============================================================================
 
--- 1.1 Grupos de catálogo
-create table if not exists public.common_dim_catalog_group_scd2 (
+-- 1.1a Core — Grupos de catálogo (identidad mínima)
+create table if not exists public.common_ref_catalog_group_id_core_scd2 (
+  record_id uuid primary key default gen_random_uuid(),
+  catalog_code text not null,
+  valid_from timestamptz not null default now(),
+  valid_to timestamptz,
+  is_current boolean not null default true,
+  is_valid boolean not null default true,
+  loaded_at timestamptz not null default now(),
+  run_id text not null,
+  actor_id text,
+  change_reason text not null,
+  constraint uq_common_catalog_group_core_code_from
+    unique (catalog_code, valid_from),
+  constraint chk_common_catalog_group_core_validity_window
+    check (valid_to is null or valid_to >= valid_from)
+);
+
+create unique index if not exists uq_common_catalog_group_core_active
+  on public.common_ref_catalog_group_id_core_scd2 (catalog_code)
+  where is_current = true and is_valid = true;
+
+comment on table public.common_ref_catalog_group_id_core_scd2 is
+  'Core identity for catalog groups. Minimal SCD2 lifecycle per architecture.md.';
+
+-- 1.1b Profile — Grupos de catálogo (atributos descriptivos)
+create table if not exists public.common_dim_catalog_group_profile_scd2 (
   record_id uuid primary key default gen_random_uuid(),
   catalog_code text not null,
   catalog_name text not null,
   catalog_description text,
   module_code text not null default 'tthh_followups',
+  domain_code text not null default 'general',
   is_system_catalog boolean not null default false,
   valid_from timestamptz not null default now(),
   valid_to timestamptz,
@@ -30,24 +59,54 @@ create table if not exists public.common_dim_catalog_group_scd2 (
   run_id text not null,
   actor_id text,
   change_reason text not null,
-  constraint uq_common_catalog_group_code_from
+  constraint uq_common_catalog_group_profile_code_from
     unique (catalog_code, valid_from),
-  constraint chk_common_catalog_group_validity_window
+  constraint chk_common_catalog_group_profile_validity_window
     check (valid_to is null or valid_to >= valid_from)
 );
 
-create unique index if not exists uq_common_catalog_group_active
-  on public.common_dim_catalog_group_scd2 (catalog_code)
+create unique index if not exists uq_common_catalog_group_profile_active
+  on public.common_dim_catalog_group_profile_scd2 (catalog_code)
   where is_current = true and is_valid = true;
 
-create index if not exists ix_common_catalog_group_module
-  on public.common_dim_catalog_group_scd2 (module_code);
+create index if not exists ix_common_catalog_group_profile_module
+  on public.common_dim_catalog_group_profile_scd2 (module_code);
 
-comment on table public.common_dim_catalog_group_scd2 is
-  'Grupos de catálogo gobernados con SCD2. Cada catalog_code (ej. work_difficulty) tiene a lo sumo una versión activa simultánea.';
+create index if not exists ix_common_catalog_group_profile_domain
+  on public.common_dim_catalog_group_profile_scd2 (domain_code, catalog_code)
+  where is_current = true;
 
--- 1.2 Items de catálogo
-create table if not exists public.common_dim_catalog_item_scd2 (
+comment on table public.common_dim_catalog_group_profile_scd2 is
+  'Profile attributes for catalog groups. SCD2 per architecture.md. Each catalog_code has at most one active version.';
+
+-- 1.2a Core — Items de catálogo (identidad mínima)
+create table if not exists public.common_ref_catalog_item_id_core_scd2 (
+  record_id uuid primary key default gen_random_uuid(),
+  catalog_code text not null,
+  item_code text not null,
+  valid_from timestamptz not null default now(),
+  valid_to timestamptz,
+  is_current boolean not null default true,
+  is_valid boolean not null default true,
+  loaded_at timestamptz not null default now(),
+  run_id text not null,
+  actor_id text,
+  change_reason text not null,
+  constraint uq_common_catalog_item_core_code_from
+    unique (catalog_code, item_code, valid_from),
+  constraint chk_common_catalog_item_core_validity_window
+    check (valid_to is null or valid_to >= valid_from)
+);
+
+create unique index if not exists uq_common_catalog_item_core_active
+  on public.common_ref_catalog_item_id_core_scd2 (catalog_code, item_code)
+  where is_current = true and is_valid = true;
+
+comment on table public.common_ref_catalog_item_id_core_scd2 is
+  'Core identity for catalog items. Minimal SCD2 lifecycle per architecture.md.';
+
+-- 1.2b Profile — Items de catálogo (atributos descriptivos)
+create table if not exists public.common_dim_catalog_item_profile_scd2 (
   record_id uuid primary key default gen_random_uuid(),
   catalog_code text not null,
   item_code text not null,
@@ -64,22 +123,22 @@ create table if not exists public.common_dim_catalog_item_scd2 (
   run_id text not null,
   actor_id text,
   change_reason text not null,
-  constraint uq_common_catalog_item_code_from
+  constraint uq_common_catalog_item_profile_code_from
     unique (catalog_code, item_code, valid_from),
-  constraint chk_common_catalog_item_validity_window
+  constraint chk_common_catalog_item_profile_validity_window
     check (valid_to is null or valid_to >= valid_from)
 );
 
-create unique index if not exists uq_common_catalog_item_active
-  on public.common_dim_catalog_item_scd2 (catalog_code, item_code)
+create unique index if not exists uq_common_catalog_item_profile_active
+  on public.common_dim_catalog_item_profile_scd2 (catalog_code, item_code)
   where is_current = true and is_valid = true;
 
-create index if not exists ix_common_catalog_item_catalog
-  on public.common_dim_catalog_item_scd2 (catalog_code)
+create index if not exists ix_common_catalog_item_profile_catalog
+  on public.common_dim_catalog_item_profile_scd2 (catalog_code)
   where is_current = true and is_valid = true;
 
-comment on table public.common_dim_catalog_item_scd2 is
-  'Ítems pertenecientes a un catalog_code. Único activo por (catalog_code, item_code) cuando is_current y is_valid.';
+comment on table public.common_dim_catalog_item_profile_scd2 is
+  'Profile attributes for catalog items. SCD2 per architecture.md. Unique active per (catalog_code, item_code).';
 
 -- 1.3 Asignación de catálogo a columna/tabla (auditable)
 create table if not exists public.common_asgn_catalog_usage_cur (
@@ -147,7 +206,6 @@ create table if not exists public.tthh_fact_employee_followup_response_cur (
   conflict_situation_detail text,
 
   -- AGR — satisfacción y oportunidades (multiselección en tabla puente; aquí solo observaciones)
-  -- NOTA: NO crear `work_like_most_code` ni `improvement_opportunity_code` (multiselección)
   work_like_most_observation text,
   improvement_opportunity_observation text,
   agr_satisfaction_observation text,
@@ -234,8 +292,6 @@ create table if not exists public.tthh_fact_employee_followup_response_cur (
     check (inconvenience_type_code is distinct from 'other' or inconvenience_type_other_detail is not null),
   constraint chk_work_aspect_other_requires_detail
     check (work_aspect_to_improve_code is distinct from 'other' or work_aspect_to_improve_other_detail is not null)
-  -- NOTA event_date: omitimos check físico (event_date = event_at::date)
-  --                  por riesgo de drift de timezone. Validar en API.
 );
 
 -- Índices
@@ -251,16 +307,6 @@ create index if not exists ix_tthh_fact_followup_code
 
 create index if not exists ix_tthh_fact_followup_person
   on public.tthh_fact_employee_followup_response_cur (person_id);
-
-alter table public.tthh_fact_employee_followup_response_cur
-  add column if not exists developed_activities_description text;
-
--- Eliminar columnas de frecuencia nunca usadas en formularios
-alter table public.tthh_fact_employee_followup_response_cur
-  drop column if exists agr_followup_frequency_code;
-
-alter table public.tthh_fact_employee_followup_response_cur
-  drop column if exists adm_followup_frequency_code;
 
 create index if not exists ix_tthh_fact_followup_route
   on public.tthh_fact_employee_followup_response_cur (followup_route_code);
@@ -417,19 +463,19 @@ select
   f.invalid_reason_code,
   inv.item_label_es as invalid_reason_label
 from public.vw_tthh_employee_followup_response_latest_cur f
-left join public.common_dim_catalog_item_scd2 inc_yn
+left join public.common_dim_catalog_item_profile_scd2 inc_yn
   on inc_yn.catalog_code = 'yes_no'
  and inc_yn.item_code = f.has_inconvenience_code
  and inc_yn.is_current = true and inc_yn.is_valid = true
-left join public.common_dim_catalog_item_scd2 ret
+left join public.common_dim_catalog_item_profile_scd2 ret
   on ret.catalog_code = 'retention_intention'
  and ret.item_code = f.retention_intention_code
  and ret.is_current = true and ret.is_valid = true
-left join public.common_dim_catalog_item_scd2 ret_fin
+left join public.common_dim_catalog_item_profile_scd2 ret_fin
   on ret_fin.catalog_code = 'retention_intention'
  and ret_fin.item_code = f.final_retention_intention_code
  and ret_fin.is_current = true and ret_fin.is_valid = true
-left join public.common_dim_catalog_item_scd2 inv
+left join public.common_dim_catalog_item_profile_scd2 inv
   on inv.catalog_code = 'employee_followup_invalid_reason'
  and inv.item_code = f.invalid_reason_code
  and inv.is_current = true and inv.is_valid = true;
@@ -513,270 +559,318 @@ select
   c.catalog_code,
   c.item_code
 from all_codes c
-left join public.common_dim_catalog_item_scd2 i
+left join public.common_dim_catalog_item_profile_scd2 i
   on i.catalog_code = c.catalog_code
  and i.item_code = c.item_code
  and i.is_current = true and i.is_valid = true
 where i.record_id is null;
 
 comment on view public.vw_tthh_employee_followup_catalog_mismatch_cur is
-  'Códigos referenciados en fact o tabla puente que no existen como items vigentes en common_dim_catalog_item_scd2.';
+  'Códigos referenciados en fact o tabla puente que no existen como items vigentes en common_dim_catalog_item_profile_scd2.';
 
 -- ============================================================================
--- 5. SEEDS DE GRUPOS DE CATÁLOGO
+-- 5. SEEDS DE GRUPOS DE CATÁLOGO (dual core + profile)
 -- ============================================================================
 
-insert into public.common_dim_catalog_group_scd2 (catalog_code, catalog_name, catalog_description, is_system_catalog, run_id, change_reason)
-select v.catalog_code, v.catalog_name, v.descr, v.system_flag, 'seed_tthh_followups_catalogs_v1', 'initial_load'
-from (values
-  ('employee_followup_change_reason', 'Razones de cambio',                'Por qué se generó/actualizó/anuló una respuesta de seguimiento.',           true),
-  ('employee_followup_invalid_reason','Razones de invalidación',          'Motivo cuando is_valid = false en una respuesta.',                          true),
-  ('followup_route',                  'Ruta del formulario',              'AGR / ADM.',                                                                true),
-  ('followup_route_source',           'Origen de la ruta',                'De dónde se derivó la ruta (programación / clasificación / override).',    true),
-  ('work_difficulty',                 'Dificultades laborales',           'Multiselección. Incluye lack_of_training (corrección).',                    false),
-  ('treatment_rating',                'Trato',                            'Excelente / Bueno / Regular / Malo.',                                       false),
-  ('work_like_most',                  'Lo que más le gusta',              'Multiselección.',                                                           false),
-  ('improvement_opportunity',         'Oportunidades de mejora',          'Multiselección.',                                                           false),
-  ('retention_intention',             'Intención de permanencia',         'Tiempo deseado para seguir trabajando. Label canónico: "Más de 1 año".',   false),
-  ('short_retention_reason',          'Razón de permanencia corta',       'Multiselección. Solo aplica si permanencia < 1 año.',                       false),
-  ('hr_support_need',                 'Necesidad de apoyo de RRHH',       'Tipo de ayuda solicitada al área de Talento Humano.',                       false),
-  ('family_pregnancy_relation',       'Relación con embarazo familiar',   'Pareja / Colaboradora / Ninguna.',                                          false),
-  ('yes_no',                          'Sí/No',                            'Catálogo binario común.',                                                   true),
-  ('inconvenience_activity',          'Actividad del inconveniente',      'Actividad operativa donde ocurrió el inconveniente.',                       false),
-  ('inconvenience_type',              'Tipo de inconveniente',            'Causa o naturaleza del inconveniente.',                                     false),
-  ('adaptation_response',             'Respuesta de adaptación',          'Sí / Parcialmente / No.',                                                   false),
-  ('satisfaction_level',              'Nivel de satisfacción',            'Satisfecha / Normal / Insatisfecha.',                                       false),
-  ('work_aspect_to_improve',          'Aspecto laboral a mejorar',        'Selección única para seguimiento ADM bimensual / final.',                   false)
-) as v(catalog_code, catalog_name, descr, system_flag)
-where not exists (
-  select 1 from public.common_dim_catalog_group_scd2 g
-  where g.catalog_code = v.catalog_code
-    and g.is_current = true and g.is_valid = true
-);
+DO $seed_groups$
+DECLARE
+  v_rec record;
+BEGIN
+  FOR v_rec IN
+    SELECT v.catalog_code, v.catalog_name, v.descr, v.system_flag
+    FROM (VALUES
+      ('employee_followup_change_reason', 'Razones de cambio',                'Por qué se generó/actualizó/anuló una respuesta de seguimiento.',           true),
+      ('employee_followup_invalid_reason','Razones de invalidación',          'Motivo cuando is_valid = false en una respuesta.',                          true),
+      ('followup_route',                  'Ruta del formulario',              'AGR / ADM.',                                                                true),
+      ('followup_route_source',           'Origen de la ruta',                'De dónde se derivó la ruta (programación / clasificación / override).',    true),
+      ('work_difficulty',                 'Dificultades laborales',           'Multiselección. Incluye lack_of_training (corrección).',                    false),
+      ('treatment_rating',                'Trato',                            'Excelente / Bueno / Regular / Malo.',                                       false),
+      ('work_like_most',                  'Lo que más le gusta',              'Multiselección.',                                                           false),
+      ('improvement_opportunity',         'Oportunidades de mejora',          'Multiselección.',                                                           false),
+      ('retention_intention',             'Intención de permanencia',         'Tiempo deseado para seguir trabajando. Label canónico: "Más de 1 año".',   false),
+      ('short_retention_reason',          'Razón de permanencia corta',       'Multiselección. Solo aplica si permanencia < 1 año.',                       false),
+      ('hr_support_need',                 'Necesidad de apoyo de RRHH',       'Tipo de ayuda solicitada al área de Talento Humano.',                       false),
+      ('family_pregnancy_relation',       'Relación con embarazo familiar',   'Pareja / Colaboradora / Ninguna.',                                          false),
+      ('yes_no',                          'Sí/No',                            'Catálogo binario común.',                                                   true),
+      ('inconvenience_activity',          'Actividad del inconveniente',      'Actividad operativa donde ocurrió el inconveniente.',                       false),
+      ('inconvenience_type',              'Tipo de inconveniente',            'Causa o naturaleza del inconveniente.',                                     false),
+      ('adaptation_response',             'Respuesta de adaptación',          'Sí / Parcialmente / No.',                                                   false),
+      ('satisfaction_level',              'Nivel de satisfacción',            'Satisfecha / Normal / Insatisfecha.',                                       false),
+      ('work_aspect_to_improve',          'Aspecto laboral a mejorar',        'Selección única para seguimiento ADM bimensual / final.',                   false)
+    ) AS v(catalog_code, catalog_name, descr, system_flag)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.common_ref_catalog_group_id_core_scd2 c
+      WHERE c.catalog_code = v.catalog_code AND c.is_current = true AND c.is_valid = true
+    )
+  LOOP
+    INSERT INTO public.common_ref_catalog_group_id_core_scd2
+      (record_id, catalog_code, valid_from, is_current, is_valid, run_id, change_reason)
+    VALUES (gen_random_uuid(), v_rec.catalog_code, now(), true, true, 'seed_tthh_followups_catalogs_v1', 'initial_load');
 
--- Invalidar catálogos de frecuencia eliminados
-update public.common_dim_catalog_group_scd2
-  set is_current = false, is_valid = false, valid_to = now(),
+    INSERT INTO public.common_dim_catalog_group_profile_scd2
+      (record_id, catalog_code, catalog_name, catalog_description, is_system_catalog, valid_from, is_current, is_valid, run_id, change_reason)
+    VALUES (gen_random_uuid(), v_rec.catalog_code, v_rec.catalog_name, v_rec.descr, v_rec.system_flag, now(), true, true, 'seed_tthh_followups_catalogs_v1', 'initial_load');
+  END LOOP;
+END
+$seed_groups$;
+
+-- Invalidar catálogos de frecuencia eliminados (both core and profile)
+UPDATE public.common_ref_catalog_group_id_core_scd2
+  SET is_current = false, is_valid = false, valid_to = now(),
       change_reason = 'catalog_retired', run_id = 'cleanup_remove_frequency_catalogs_v1'
-  where catalog_code in ('agr_followup_frequency', 'adm_followup_frequency')
-    and is_valid = true;
+  WHERE catalog_code IN ('agr_followup_frequency', 'adm_followup_frequency')
+    AND is_valid = true;
 
-update public.common_dim_catalog_item_scd2
-  set is_current = false, is_valid = false, valid_to = now(),
+UPDATE public.common_dim_catalog_group_profile_scd2
+  SET is_current = false, is_valid = false, valid_to = now(),
       change_reason = 'catalog_retired', run_id = 'cleanup_remove_frequency_catalogs_v1'
-  where catalog_code in ('agr_followup_frequency', 'adm_followup_frequency')
-    and is_valid = true;
+  WHERE catalog_code IN ('agr_followup_frequency', 'adm_followup_frequency')
+    AND is_valid = true;
 
 -- ============================================================================
--- 6. SEEDS DE ÍTEMS
+-- 6. SEEDS DE ÍTEMS (dual core + profile)
 -- ============================================================================
 
-insert into public.common_dim_catalog_item_scd2 (catalog_code, item_code, item_label_es, display_order, run_id, change_reason)
-select v.catalog_code, v.item_code, v.label, v.ord, 'seed_tthh_followups_catalogs_v1', 'initial_load'
-from (values
-  -- 6.1 employee_followup_change_reason
-  ('employee_followup_change_reason', 'initial_load',       'Carga inicial',              10),
-  ('employee_followup_change_reason', 'manual_insert',      'Registro manual',            20),
-  ('employee_followup_change_reason', 'manual_update',      'Corrección manual',          30),
-  ('employee_followup_change_reason', 'source_correction',  'Corrección de fuente',       40),
-  ('employee_followup_change_reason', 'form_resubmission',  'Reenvío de formulario',      70),
-  ('employee_followup_change_reason', 'merge_resolution',   'Resolución de duplicado',    80),
-  ('employee_followup_change_reason', 'backfill',           'Carga histórica',            90),
+DO $seed_items$
+DECLARE
+  v_rec record;
+BEGIN
+  FOR v_rec IN
+    SELECT v.catalog_code, v.item_code, v.label, v.ord
+    FROM (VALUES
+      -- 6.1 employee_followup_change_reason
+      ('employee_followup_change_reason', 'initial_load',       'Carga inicial',              10),
+      ('employee_followup_change_reason', 'manual_insert',      'Registro manual',            20),
+      ('employee_followup_change_reason', 'manual_update',      'Corrección manual',          30),
+      ('employee_followup_change_reason', 'source_correction',  'Corrección de fuente',       40),
+      ('employee_followup_change_reason', 'form_resubmission',  'Reenvío de formulario',      70),
+      ('employee_followup_change_reason', 'merge_resolution',   'Resolución de duplicado',    80),
+      ('employee_followup_change_reason', 'backfill',           'Carga histórica',            90),
 
-  -- 6.2 employee_followup_invalid_reason
-  ('employee_followup_invalid_reason', 'duplicate_record',     'Registro duplicado',           10),
-  ('employee_followup_invalid_reason', 'wrong_person',         'Persona incorrecta',           20),
-  ('employee_followup_invalid_reason', 'wrong_followup_code',  'Código de seguimiento incorrecto', 30),
-  ('employee_followup_invalid_reason', 'data_entry_error',     'Error de digitación',          40),
-  ('employee_followup_invalid_reason', 'test_record',          'Registro de prueba',           60),
-  ('employee_followup_invalid_reason', 'superseded_by_update', 'Versión reemplazada por modificación', 65),
-  ('employee_followup_invalid_reason', 'other',                'Otro',                         70),
+      -- 6.2 employee_followup_invalid_reason
+      ('employee_followup_invalid_reason', 'duplicate_record',     'Registro duplicado',           10),
+      ('employee_followup_invalid_reason', 'wrong_person',         'Persona incorrecta',           20),
+      ('employee_followup_invalid_reason', 'wrong_followup_code',  'Código de seguimiento incorrecto', 30),
+      ('employee_followup_invalid_reason', 'data_entry_error',     'Error de digitación',          40),
+      ('employee_followup_invalid_reason', 'test_record',          'Registro de prueba',           60),
+      ('employee_followup_invalid_reason', 'superseded_by_update', 'Versión reemplazada por modificación', 65),
+      ('employee_followup_invalid_reason', 'other',                'Otro',                         70),
 
-  -- 6.3 followup_route
-  ('followup_route', 'AGR', 'Agrícola',         10),
-  ('followup_route', 'ADM', 'Administrativo',   20),
+      -- 6.3 followup_route
+      ('followup_route', 'AGR', 'Agrícola',         10),
+      ('followup_route', 'ADM', 'Administrativo',   20),
 
-  -- 6.4 followup_route_source
-  ('followup_route_source', 'scheduled_followup',           'Derivado de seguimiento programado',  10),
-  ('followup_route_source', 'job_classification_fallback',  'Derivado de clasificación laboral',   20),
-  ('followup_route_source', 'manual_admin_override',        'Ajuste manual autorizado',            30),
+      -- 6.4 followup_route_source
+      ('followup_route_source', 'scheduled_followup',           'Derivado de seguimiento programado',  10),
+      ('followup_route_source', 'job_classification_fallback',  'Derivado de clasificación laboral',   20),
+      ('followup_route_source', 'manual_admin_override',        'Ajuste manual autorizado',            30),
 
-  -- 6.5 work_difficulty (multiselect — incluye lack_of_training NUEVA)
-  ('work_difficulty', 'none',                  'Ninguna',                                                  10),
-  ('work_difficulty', 'missing_tools',         'No cuenta con las herramientas necesarias',                20),
-  ('work_difficulty', 'missing_implements',    'No le entregan los implementos necesarios',                30),
-  ('work_difficulty', 'missing_instructions',  'No recibe las instrucciones para realizar las actividades',40),
-  ('work_difficulty', 'health_problems',       'Problemas de salud',                                       50),
-  ('work_difficulty', 'family_situations',     'Situaciones familiares',                                   60),
-  ('work_difficulty', 'lack_of_training',      'Falta de entrenamiento',                                   70),
-  ('work_difficulty', 'other',                 'Otros',                                                    80),
+      -- 6.5 work_difficulty (multiselect)
+      ('work_difficulty', 'none',                  'Ninguna',                                                  10),
+      ('work_difficulty', 'missing_tools',         'No cuenta con las herramientas necesarias',                20),
+      ('work_difficulty', 'missing_implements',    'No le entregan los implementos necesarios',                30),
+      ('work_difficulty', 'missing_instructions',  'No recibe las instrucciones para realizar las actividades',40),
+      ('work_difficulty', 'health_problems',       'Problemas de salud',                                       50),
+      ('work_difficulty', 'family_situations',     'Situaciones familiares',                                   60),
+      ('work_difficulty', 'lack_of_training',      'Falta de entrenamiento',                                   70),
+      ('work_difficulty', 'other',                 'Otros',                                                    80),
 
-  -- 6.7 treatment_rating
-  ('treatment_rating', 'excellent', 'Excelente', 10),
-  ('treatment_rating', 'good',      'Bueno',     20),
-  ('treatment_rating', 'regular',   'Regular',   30),
-  ('treatment_rating', 'bad',       'Malo',      40),
+      -- 6.7 treatment_rating
+      ('treatment_rating', 'excellent', 'Excelente', 10),
+      ('treatment_rating', 'good',      'Bueno',     20),
+      ('treatment_rating', 'regular',   'Regular',   30),
+      ('treatment_rating', 'bad',       'Malo',      40),
 
-  -- 6.8 work_like_most (multiselect)
-  ('work_like_most', 'adequate_tools_and_implements', 'Cuenta con herramientas e implementos adecuadas', 10),
-  ('work_like_most', 'good_treatment',                'Existe un buen trato',                            20),
-  ('work_like_most', 'companionship',                 'Compañerismo',                                    30),
-  ('work_like_most', 'recognition_good_work',         'Reconocimiento de un buen trabajo',               40),
-  ('work_like_most', 'remuneration',                  'Remuneración',                                    50),
-  ('work_like_most', 'cafeteria',                     'Comedor',                                         60),
-  ('work_like_most', 'transport',                     'Transporte',                                      70),
-  ('work_like_most', 'medical_office',                'Consultorio Médico',                              80),
-  ('work_like_most', 'permit_management',             'Gestión de permisos',                             90),
-  ('work_like_most', 'human_talent_attention',        'Atención de Talento Humano',                     100),
-  ('work_like_most', 'social_work_support',           'Apoyo de Trabajo Social',                        110),
-  ('work_like_most', 'other',                         'Otros',                                          120),
+      -- 6.8 work_like_most (multiselect)
+      ('work_like_most', 'adequate_tools_and_implements', 'Cuenta con herramientas e implementos adecuadas', 10),
+      ('work_like_most', 'good_treatment',                'Existe un buen trato',                            20),
+      ('work_like_most', 'companionship',                 'Compañerismo',                                    30),
+      ('work_like_most', 'recognition_good_work',         'Reconocimiento de un buen trabajo',               40),
+      ('work_like_most', 'remuneration',                  'Remuneración',                                    50),
+      ('work_like_most', 'cafeteria',                     'Comedor',                                         60),
+      ('work_like_most', 'transport',                     'Transporte',                                      70),
+      ('work_like_most', 'medical_office',                'Consultorio Médico',                              80),
+      ('work_like_most', 'permit_management',             'Gestión de permisos',                             90),
+      ('work_like_most', 'human_talent_attention',        'Atención de Talento Humano',                     100),
+      ('work_like_most', 'social_work_support',           'Apoyo de Trabajo Social',                        110),
+      ('work_like_most', 'other',                         'Otros',                                          120),
 
-  -- 6.9 improvement_opportunity (multiselect)
-  ('improvement_opportunity', 'review_tools_and_implements',     'Revisión de herramientas e implementos',  10),
-  ('improvement_opportunity', 'improve_staff_treatment',         'Mejorar el trato al personal',            20),
-  ('improvement_opportunity', 'strengthen_peer_relationships',   'Fortalecer relaciones entre compañeros',  30),
-  ('improvement_opportunity', 'recognize_good_work',             'Reconocer un buen trabajo',               40),
-  ('improvement_opportunity', 'recognize_fair_remuneration',     'Reconocer una justa remuneración',        50),
-  ('improvement_opportunity', 'cafeteria',                       'Comedor',                                 60),
-  ('improvement_opportunity', 'transport',                       'Transporte',                              70),
-  ('improvement_opportunity', 'medical_office',                  'Consultorio médico',                      80),
-  ('improvement_opportunity', 'permit_management',               'Gestión de permisos',                     90),
-  ('improvement_opportunity', 'human_talent_attention',          'Atención de Talento Humano',             100),
-  ('improvement_opportunity', 'social_work_support',             'Apoyo de Trabajo Social',                110),
-  ('improvement_opportunity', 'other',                           'Otros',                                  120),
+      -- 6.9 improvement_opportunity (multiselect)
+      ('improvement_opportunity', 'review_tools_and_implements',     'Revisión de herramientas e implementos',  10),
+      ('improvement_opportunity', 'improve_staff_treatment',         'Mejorar el trato al personal',            20),
+      ('improvement_opportunity', 'strengthen_peer_relationships',   'Fortalecer relaciones entre compañeros',  30),
+      ('improvement_opportunity', 'recognize_good_work',             'Reconocer un buen trabajo',               40),
+      ('improvement_opportunity', 'recognize_fair_remuneration',     'Reconocer una justa remuneración',        50),
+      ('improvement_opportunity', 'cafeteria',                       'Comedor',                                 60),
+      ('improvement_opportunity', 'transport',                       'Transporte',                              70),
+      ('improvement_opportunity', 'medical_office',                  'Consultorio médico',                      80),
+      ('improvement_opportunity', 'permit_management',               'Gestión de permisos',                     90),
+      ('improvement_opportunity', 'human_talent_attention',          'Atención de Talento Humano',             100),
+      ('improvement_opportunity', 'social_work_support',             'Apoyo de Trabajo Social',                110),
+      ('improvement_opportunity', 'other',                           'Otros',                                  120),
 
-  -- 6.10 retention_intention (label canónico singular)
-  ('retention_intention', 'less_than_3_months',           'Menos de 3 meses',           10),
-  ('retention_intention', 'between_3_and_6_months',       'Entre 3 y 6 meses',          20),
-  ('retention_intention', 'between_6_months_and_1_year',  'Entre 6 meses a 1 año',      30),
-  ('retention_intention', 'more_than_1_year',             'Más de 1 año',               40),
+      -- 6.10 retention_intention
+      ('retention_intention', 'less_than_3_months',           'Menos de 3 meses',           10),
+      ('retention_intention', 'between_3_and_6_months',       'Entre 3 y 6 meses',          20),
+      ('retention_intention', 'between_6_months_and_1_year',  'Entre 6 meses a 1 año',      30),
+      ('retention_intention', 'more_than_1_year',             'Más de 1 año',               40),
 
-  -- 6.11 short_retention_reason (multiselect)
-  ('short_retention_reason', 'working_conditions',                  'Condiciones de trabajo',                              10),
-  ('short_retention_reason', 'better_opportunities_elsewhere',      'Mejores oportunidades en otras empresas o sectores',  20),
-  ('short_retention_reason', 'conflict_with_peers_or_bosses',       'Conflicto con compañeros o jefes',                    30),
-  ('short_retention_reason', 'conflict_with_partner_or_family',     'Conflicto con pareja o familiares',                   40),
-  ('short_retention_reason', 'family_care',                         'Cuidado de familiares',                               50),
-  ('short_retention_reason', 'transport_difficulties',              'Dificultades en el traslado',                         60),
-  ('short_retention_reason', 'residence_change',                    'Cambio de residencia',                                70),
-  ('short_retention_reason', 'health',                              'Salud',                                               80),
-  ('short_retention_reason', 'studies',                             'Estudios',                                            90),
-  ('short_retention_reason', 'other',                               'Otros',                                              100),
+      -- 6.11 short_retention_reason (multiselect)
+      ('short_retention_reason', 'working_conditions',                  'Condiciones de trabajo',                              10),
+      ('short_retention_reason', 'better_opportunities_elsewhere',      'Mejores oportunidades en otras empresas o sectores',  20),
+      ('short_retention_reason', 'conflict_with_peers_or_bosses',       'Conflicto con compañeros o jefes',                    30),
+      ('short_retention_reason', 'conflict_with_partner_or_family',     'Conflicto con pareja o familiares',                   40),
+      ('short_retention_reason', 'family_care',                         'Cuidado de familiares',                               50),
+      ('short_retention_reason', 'transport_difficulties',              'Dificultades en el traslado',                         60),
+      ('short_retention_reason', 'residence_change',                    'Cambio de residencia',                                70),
+      ('short_retention_reason', 'health',                              'Salud',                                               80),
+      ('short_retention_reason', 'studies',                             'Estudios',                                            90),
+      ('short_retention_reason', 'other',                               'Otros',                                              100),
 
-  -- 6.12 hr_support_need
-  ('hr_support_need', 'study_support',                  'Ayuda para continuar con sus estudios',     10),
-  ('hr_support_need', 'license_procedure_support',      'Ayuda para el trámite de licencias',        20),
-  ('hr_support_need', 'transport_request',              'Solicitud de uso de transporte',            30),
-  ('hr_support_need', 'commissary_credit_procedure',    'Trámite de crédito en comisariatos',        40),
-  ('hr_support_need', 'pharmacy_credit_procedure',      'Trámite de crédito en farmacias',           50),
-  ('hr_support_need', 'breakfast_credit',               'Crédito de desayuno',                       60),
-  ('hr_support_need', 'permits_or_vacation_management', 'Gestión de permisos o vacaciones',          70),
-  ('hr_support_need', 'not_applicable',                 'NA',                                        80),
-  ('hr_support_need', 'other',                          'Otros',                                     90),
+      -- 6.12 hr_support_need
+      ('hr_support_need', 'study_support',                  'Ayuda para continuar con sus estudios',     10),
+      ('hr_support_need', 'license_procedure_support',      'Ayuda para el trámite de licencias',        20),
+      ('hr_support_need', 'transport_request',              'Solicitud de uso de transporte',            30),
+      ('hr_support_need', 'commissary_credit_procedure',    'Trámite de crédito en comisariatos',        40),
+      ('hr_support_need', 'pharmacy_credit_procedure',      'Trámite de crédito en farmacias',           50),
+      ('hr_support_need', 'breakfast_credit',               'Crédito de desayuno',                       60),
+      ('hr_support_need', 'permits_or_vacation_management', 'Gestión de permisos o vacaciones',          70),
+      ('hr_support_need', 'not_applicable',                 'NA',                                        80),
+      ('hr_support_need', 'other',                          'Otros',                                     90),
 
-  -- 6.13 family_pregnancy_relation
-  ('family_pregnancy_relation', 'partner',  'Pareja',      10),
-  ('family_pregnancy_relation', 'employee', 'Colaboradora',20),
-  ('family_pregnancy_relation', 'none',     'Ninguna',     30),
+      -- 6.13 family_pregnancy_relation
+      ('family_pregnancy_relation', 'partner',  'Pareja',      10),
+      ('family_pregnancy_relation', 'employee', 'Colaboradora',20),
+      ('family_pregnancy_relation', 'none',     'Ninguna',     30),
 
-  -- 6.14 yes_no
-  ('yes_no', 'yes', 'Sí', 10),
-  ('yes_no', 'no',  'No', 20),
+      -- 6.14 yes_no
+      ('yes_no', 'yes', 'Sí', 10),
+      ('yes_no', 'no',  'No', 20),
 
-  -- 6.15 inconvenience_activity
-  ('inconvenience_activity', 'disbudding',           'Desbrote',               10),
-  ('inconvenience_activity', 'harvest',              'Cosecha',                20),
-  ('inconvenience_activity', 'pruning',              'Poda',                   30),
-  ('inconvenience_activity', 'thinning',             'Raleo',                  40),
-  ('inconvenience_activity', 'combing',              'Peinado',                50),
-  ('inconvenience_activity', 'scarification',        'Escarificado',           60),
-  ('inconvenience_activity', 'reseeding',            'Resiembra',              70),
-  ('inconvenience_activity', 'green_classification', 'Clasificación en verde', 80),
-  ('inconvenience_activity', 'white_classification', 'Clasificado en Blanco',  90),
-  ('inconvenience_activity', 'weighing',             'Pesado',                100),
-  ('inconvenience_activity', 'dyeing',               'Tinturado',             110),
-  ('inconvenience_activity', 'bunching',             'Embonchado',            120),
-  ('inconvenience_activity', 'flower_runner',        'Sacador de Flor',       130),
-  ('inconvenience_activity', 'other',                'Otro',                  140),
+      -- 6.15 inconvenience_activity
+      ('inconvenience_activity', 'disbudding',           'Desbrote',               10),
+      ('inconvenience_activity', 'harvest',              'Cosecha',                20),
+      ('inconvenience_activity', 'pruning',              'Poda',                   30),
+      ('inconvenience_activity', 'thinning',             'Raleo',                  40),
+      ('inconvenience_activity', 'combing',              'Peinado',                50),
+      ('inconvenience_activity', 'scarification',        'Escarificado',           60),
+      ('inconvenience_activity', 'reseeding',            'Resiembra',              70),
+      ('inconvenience_activity', 'green_classification', 'Clasificación en verde', 80),
+      ('inconvenience_activity', 'white_classification', 'Clasificado en Blanco',  90),
+      ('inconvenience_activity', 'weighing',             'Pesado',                100),
+      ('inconvenience_activity', 'dyeing',               'Tinturado',             110),
+      ('inconvenience_activity', 'bunching',             'Embonchado',            120),
+      ('inconvenience_activity', 'flower_runner',        'Sacador de Flor',       130),
+      ('inconvenience_activity', 'other',                'Otro',                  140),
 
-  -- 6.16 inconvenience_type
-  ('inconvenience_type', 'delayed_activity',        'Actividad atrasada',                  10),
-  ('inconvenience_type', 'hard_block',              'Bloque duro',                         20),
-  ('inconvenience_type', 'new_block',               'Bloque nuevo',                        30),
-  ('inconvenience_type', 'botrytis',                'Botritis',                            40),
-  ('inconvenience_type', 'process_change',          'Cambio en el proceso',                50),
-  ('inconvenience_type', 'activity_complexity',     'Complejidad de la actividad',         60),
-  ('inconvenience_type', 'mechanical_damage',       'Daño mecánico',                       70),
-  ('inconvenience_type', 'excessive_mosquitoes',    'Excesos de mosquitos en el área',     80),
-  ('inconvenience_type', 'uncut_flower_arrives',    'Flor llega sin cortar',               90),
-  ('inconvenience_type', 'dry_flower',              'Flor seca',                          100),
-  ('inconvenience_type', 'rain',                    'Lluvia',                             110),
-  ('inconvenience_type', 'too_much_waste',          'Mucha Basura',                       120),
-  ('inconvenience_type', 'too_many_weeds',          'Muchos montes',                      130),
-  ('inconvenience_type', 'no_flower_to_classify',   'No hay flor para clasificar',        140),
-  ('inconvenience_type', 'no_flower_to_harvest',    'No hay flor para cosechar',          150),
-  ('inconvenience_type', 'oidium',                  'Oidium',                             160),
-  ('inconvenience_type', 'weak_plant',              'Planta está débil',                  170),
-  ('inconvenience_type', 'dead_plants',             'Plantas muertas',                    180),
-  ('inconvenience_type', 'borrowed',                'Prestado',                           190),
-  ('inconvenience_type', 'performance',             'Rendimiento',                        200),
-  ('inconvenience_type', 'very_tall_stems',         'Tallos muy altos',                   210),
-  ('inconvenience_type', 'transfer',                'Traslado',                           220),
-  ('inconvenience_type', 'other',                   'Otros',                              230),
+      -- 6.16 inconvenience_type
+      ('inconvenience_type', 'delayed_activity',        'Actividad atrasada',                  10),
+      ('inconvenience_type', 'hard_block',              'Bloque duro',                         20),
+      ('inconvenience_type', 'new_block',               'Bloque nuevo',                        30),
+      ('inconvenience_type', 'botrytis',                'Botritis',                            40),
+      ('inconvenience_type', 'process_change',          'Cambio en el proceso',                50),
+      ('inconvenience_type', 'activity_complexity',     'Complejidad de la actividad',         60),
+      ('inconvenience_type', 'mechanical_damage',       'Daño mecánico',                       70),
+      ('inconvenience_type', 'excessive_mosquitoes',    'Excesos de mosquitos en el área',     80),
+      ('inconvenience_type', 'uncut_flower_arrives',    'Flor llega sin cortar',               90),
+      ('inconvenience_type', 'dry_flower',              'Flor seca',                          100),
+      ('inconvenience_type', 'rain',                    'Lluvia',                             110),
+      ('inconvenience_type', 'too_much_waste',          'Mucha Basura',                       120),
+      ('inconvenience_type', 'too_many_weeds',          'Muchos montes',                      130),
+      ('inconvenience_type', 'no_flower_to_classify',   'No hay flor para clasificar',        140),
+      ('inconvenience_type', 'no_flower_to_harvest',    'No hay flor para cosechar',          150),
+      ('inconvenience_type', 'oidium',                  'Oidium',                             160),
+      ('inconvenience_type', 'weak_plant',              'Planta está débil',                  170),
+      ('inconvenience_type', 'dead_plants',             'Plantas muertas',                    180),
+      ('inconvenience_type', 'borrowed',                'Prestado',                           190),
+      ('inconvenience_type', 'performance',             'Rendimiento',                        200),
+      ('inconvenience_type', 'very_tall_stems',         'Tallos muy altos',                   210),
+      ('inconvenience_type', 'transfer',                'Traslado',                           220),
+      ('inconvenience_type', 'other',                   'Otros',                              230),
 
-  -- 6.17 adaptation_response
-  ('adaptation_response', 'yes',       'Sí',          10),
-  ('adaptation_response', 'partially', 'Parcialmente', 20),
-  ('adaptation_response', 'no',        'No',          30),
+      -- 6.17 adaptation_response
+      ('adaptation_response', 'yes',       'Sí',          10),
+      ('adaptation_response', 'partially', 'Parcialmente', 20),
+      ('adaptation_response', 'no',        'No',          30),
 
-  -- 6.18 satisfaction_level
-  ('satisfaction_level', 'satisfied',    'Satisfecha',   10),
-  ('satisfaction_level', 'normal',       'Normal',       20),
-  ('satisfaction_level', 'dissatisfied', 'Insatisfecha', 30),
+      -- 6.18 satisfaction_level
+      ('satisfaction_level', 'satisfied',    'Satisfecha',   10),
+      ('satisfaction_level', 'normal',       'Normal',       20),
+      ('satisfaction_level', 'dissatisfied', 'Insatisfecha', 30),
 
-  -- 6.19 work_aspect_to_improve (single)
-  ('work_aspect_to_improve', 'team_communication',                'Comunicación con el equipo',                              10),
-  ('work_aspect_to_improve', 'area_manager_communication',        'Comunicación con el jefe de área',                        20),
-  ('work_aspect_to_improve', 'training_and_growth_opportunities', 'Oportunidades de capacitación y crecimiento profesional', 30),
-  ('work_aspect_to_improve', 'tools_and_resources',               'Herramientas y recursos',                                 40),
-  ('work_aspect_to_improve', 'support_and_feedback',              'Apoyo y retroalimentación',                               50),
-  ('work_aspect_to_improve', 'cafeteria',                         'Comedor',                                                 60),
-  ('work_aspect_to_improve', 'transport',                         'Transporte',                                              70),
-  ('work_aspect_to_improve', 'medical_office',                    'Consultorio médico',                                      80),
-  ('work_aspect_to_improve', 'permit_management',                 'Gestión de permisos',                                     90),
-  ('work_aspect_to_improve', 'human_talent_attention',            'Atención de Talento Humano',                             100),
-  ('work_aspect_to_improve', 'social_work_support',               'Apoyo de Trabajo Social',                                110),
-  ('work_aspect_to_improve', 'none',                              'Ninguna',                                                120),
-  ('work_aspect_to_improve', 'other',                             'Otros',                                                  130)
-) as v(catalog_code, item_code, label, ord)
-where not exists (
-  select 1 from public.common_dim_catalog_item_scd2 i
-  where i.catalog_code = v.catalog_code
-    and i.item_code = v.item_code
-    and i.is_current = true and i.is_valid = true
-);
+      -- 6.19 work_aspect_to_improve (single)
+      ('work_aspect_to_improve', 'team_communication',                'Comunicación con el equipo',                              10),
+      ('work_aspect_to_improve', 'area_manager_communication',        'Comunicación con el jefe de área',                        20),
+      ('work_aspect_to_improve', 'training_and_growth_opportunities', 'Oportunidades de capacitación y crecimiento profesional', 30),
+      ('work_aspect_to_improve', 'tools_and_resources',               'Herramientas y recursos',                                 40),
+      ('work_aspect_to_improve', 'support_and_feedback',              'Apoyo y retroalimentación',                               50),
+      ('work_aspect_to_improve', 'cafeteria',                         'Comedor',                                                 60),
+      ('work_aspect_to_improve', 'transport',                         'Transporte',                                              70),
+      ('work_aspect_to_improve', 'medical_office',                    'Consultorio médico',                                      80),
+      ('work_aspect_to_improve', 'permit_management',                 'Gestión de permisos',                                     90),
+      ('work_aspect_to_improve', 'human_talent_attention',            'Atención de Talento Humano',                             100),
+      ('work_aspect_to_improve', 'social_work_support',               'Apoyo de Trabajo Social',                                110),
+      ('work_aspect_to_improve', 'none',                              'Ninguna',                                                120),
+      ('work_aspect_to_improve', 'other',                             'Otros',                                                  130)
+    ) AS v(catalog_code, item_code, label, ord)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.common_ref_catalog_item_id_core_scd2 c
+      WHERE c.catalog_code = v.catalog_code AND c.item_code = v.item_code
+        AND c.is_current = true AND c.is_valid = true
+    )
+  LOOP
+    INSERT INTO public.common_ref_catalog_item_id_core_scd2
+      (record_id, catalog_code, item_code, valid_from, is_current, is_valid, run_id, change_reason)
+    VALUES (gen_random_uuid(), v_rec.catalog_code, v_rec.item_code, now(), true, true, 'seed_tthh_followups_catalogs_v1', 'initial_load');
 
-update public.common_dim_catalog_item_scd2
-set is_valid = false,
-    is_current = false,
-    valid_to = coalesce(valid_to, now()),
-    loaded_at = now(),
-    run_id = 'seed_tthh_followups_catalogs_v2',
-    change_reason = 'manual_update'
-where catalog_code = 'employee_followup_change_reason'
-  and item_code in ('soft_delete', 'reactivation')
-  and (is_valid = true or is_current = true);
+    INSERT INTO public.common_dim_catalog_item_profile_scd2
+      (record_id, catalog_code, item_code, item_label_es, display_order, valid_from, is_current, is_valid, run_id, change_reason)
+    VALUES (gen_random_uuid(), v_rec.catalog_code, v_rec.item_code, v_rec.label, v_rec.ord, now(), true, true, 'seed_tthh_followups_catalogs_v1', 'initial_load');
+  END LOOP;
+END
+$seed_items$;
 
-update public.common_dim_catalog_item_scd2
-set is_valid = false,
-    is_current = false,
-    valid_to = coalesce(valid_to, now()),
-    loaded_at = now(),
-    run_id = 'seed_tthh_followups_catalogs_v2',
-    change_reason = 'manual_update'
-where catalog_code = 'employee_followup_invalid_reason'
-  and item_code = 'cancelled_followup'
-  and (is_valid = true or is_current = true);
+-- Invalidar items de frecuencia eliminados (both core and profile)
+UPDATE public.common_ref_catalog_item_id_core_scd2
+  SET is_current = false, is_valid = false, valid_to = now(),
+      change_reason = 'catalog_retired', run_id = 'cleanup_remove_frequency_catalogs_v1'
+  WHERE catalog_code IN ('agr_followup_frequency', 'adm_followup_frequency')
+    AND is_valid = true;
+
+UPDATE public.common_dim_catalog_item_profile_scd2
+  SET is_current = false, is_valid = false, valid_to = now(),
+      change_reason = 'catalog_retired', run_id = 'cleanup_remove_frequency_catalogs_v1'
+  WHERE catalog_code IN ('agr_followup_frequency', 'adm_followup_frequency')
+    AND is_valid = true;
+
+-- Invalidar items obsoletos (both core and profile)
+UPDATE public.common_ref_catalog_item_id_core_scd2
+SET is_valid = false, is_current = false, valid_to = coalesce(valid_to, now()),
+    loaded_at = now(), run_id = 'seed_tthh_followups_catalogs_v2', change_reason = 'manual_update'
+WHERE catalog_code = 'employee_followup_change_reason'
+  AND item_code IN ('soft_delete', 'reactivation')
+  AND (is_valid = true OR is_current = true);
+
+UPDATE public.common_dim_catalog_item_profile_scd2
+SET is_valid = false, is_current = false, valid_to = coalesce(valid_to, now()),
+    loaded_at = now(), run_id = 'seed_tthh_followups_catalogs_v2', change_reason = 'manual_update'
+WHERE catalog_code = 'employee_followup_change_reason'
+  AND item_code IN ('soft_delete', 'reactivation')
+  AND (is_valid = true OR is_current = true);
+
+UPDATE public.common_ref_catalog_item_id_core_scd2
+SET is_valid = false, is_current = false, valid_to = coalesce(valid_to, now()),
+    loaded_at = now(), run_id = 'seed_tthh_followups_catalogs_v2', change_reason = 'manual_update'
+WHERE catalog_code = 'employee_followup_invalid_reason'
+  AND item_code = 'cancelled_followup'
+  AND (is_valid = true OR is_current = true);
+
+UPDATE public.common_dim_catalog_item_profile_scd2
+SET is_valid = false, is_current = false, valid_to = coalesce(valid_to, now()),
+    loaded_at = now(), run_id = 'seed_tthh_followups_catalogs_v2', change_reason = 'manual_update'
+WHERE catalog_code = 'employee_followup_invalid_reason'
+  AND item_code = 'cancelled_followup'
+  AND (is_valid = true OR is_current = true);
 
 -- ============================================================================
 -- 7. CATALOG USAGE — registrar dónde se consume cada catálogo
@@ -788,8 +882,6 @@ from (values
   -- Fact — selección única
   ('followup_route',                   'public','tthh_fact_employee_followup_response_cur','followup_route_code',                'fact_code', true),
   ('followup_route_source',            'public','tthh_fact_employee_followup_response_cur','followup_route_source',              'fact_code', true),
-  ('agr_followup_frequency',           'public','tthh_fact_employee_followup_response_cur','agr_followup_frequency_code',        'fact_code', false),
-  ('adm_followup_frequency',           'public','tthh_fact_employee_followup_response_cur','adm_followup_frequency_code',        'fact_code', false),
   ('treatment_rating',                 'public','tthh_fact_employee_followup_response_cur','coworker_treatment_rating_code',     'fact_code', false),
   ('treatment_rating',                 'public','tthh_fact_employee_followup_response_cur','supervisor_treatment_rating_code',   'fact_code', false),
   ('treatment_rating',                 'public','tthh_fact_employee_followup_response_cur','area_manager_treatment_rating_code', 'fact_code', false),
@@ -831,7 +923,7 @@ where not exists (
 -- ============================================================================
 
 -- Alinear labels/opciones de permanencia con el formulario Google original.
-update public.common_dim_catalog_item_scd2
+update public.common_dim_catalog_item_profile_scd2
 set item_label_es = 'Ambiente de trabajo',
     loaded_at = now(),
     change_reason = 'source_correction'
@@ -841,21 +933,32 @@ where catalog_code = 'short_retention_reason'
   and is_valid = true
   and item_label_es is distinct from 'Ambiente de trabajo';
 
-insert into public.common_dim_catalog_item_scd2
-  (catalog_code, item_code, item_label_es, display_order, run_id, change_reason)
-select v.catalog_code, v.item_code, v.label, v.ord, 'seed_tthh_followups_pdf_alignment_v2', 'source_correction'
-from (values
-  ('short_retention_reason', 'low_remuneration', 'Baja remuneración', 95),
-  ('short_retention_reason', 'long_workday',      'Larga jornada laboral', 96)
-) as v(catalog_code, item_code, label, ord)
-where not exists (
-  select 1
-  from public.common_dim_catalog_item_scd2 i
-  where i.catalog_code = v.catalog_code
-    and i.item_code = v.item_code
-    and i.is_current = true
-    and i.is_valid = true
-);
+DO $seed_pdf_items$
+DECLARE
+  v_rec record;
+BEGIN
+  FOR v_rec IN
+    SELECT v.catalog_code, v.item_code, v.label, v.ord
+    FROM (VALUES
+      ('short_retention_reason', 'low_remuneration', 'Baja remuneración', 95),
+      ('short_retention_reason', 'long_workday',      'Larga jornada laboral', 96)
+    ) AS v(catalog_code, item_code, label, ord)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.common_ref_catalog_item_id_core_scd2 c
+      WHERE c.catalog_code = v.catalog_code AND c.item_code = v.item_code
+        AND c.is_current = true AND c.is_valid = true
+    )
+  LOOP
+    INSERT INTO public.common_ref_catalog_item_id_core_scd2
+      (record_id, catalog_code, item_code, valid_from, is_current, is_valid, run_id, change_reason)
+    VALUES (gen_random_uuid(), v_rec.catalog_code, v_rec.item_code, now(), true, true, 'seed_tthh_followups_pdf_alignment_v2', 'source_correction');
+
+    INSERT INTO public.common_dim_catalog_item_profile_scd2
+      (record_id, catalog_code, item_code, item_label_es, display_order, valid_from, is_current, is_valid, run_id, change_reason)
+    VALUES (gen_random_uuid(), v_rec.catalog_code, v_rec.item_code, v_rec.label, v_rec.ord, now(), true, true, 'seed_tthh_followups_pdf_alignment_v2', 'source_correction');
+  END LOOP;
+END
+$seed_pdf_items$;
 
 -- ============================================================================
 -- FIN

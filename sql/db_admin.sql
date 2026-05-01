@@ -2,6 +2,12 @@
 -- db_admin.sql - Esquema canon para Administracion Maestros
 -- Aplicar contra: db_admin (cluster admin, separado del DW operacional)
 --
+-- Patron architecture.md:
+--   ref_*_core_scd2    identidad minima + ciclo de vida
+--   dim_*_profile_scd2 atributos descriptivos de negocio
+--   asgn_*_scd2        relaciones/asignaciones multiselect
+--   dim_*_profile_cur  dimension simple sin historial
+--
 -- Convenciones SCD2 (canon CoreX v4):
 --   record_id        uuid PK fisico (gen_random_uuid)
 --   <entity>_code    clave de negocio (unica activa via UNIQUE INDEX parcial)
@@ -15,9 +21,9 @@
 -- =========================================================================
 
 -- =========================================================================
--- DOMINIOS (raiz de catalogos + macro-dominio de metas)
+-- DOMINIOS (dimension simple cur, sin historial SCD2)
 -- =========================================================================
-CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_domain_cur (
+CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_domain_profile_cur (
   domain_code         text PRIMARY KEY,
   domain_name         text NOT NULL,
   domain_description  text,
@@ -30,18 +36,41 @@ CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_domain_cur (
 );
 
 CREATE INDEX IF NOT EXISTS ix_adm_catalog_domain_valid
-  ON public.adm_dim_catalog_domain_cur (display_order, domain_code)
+  ON public.adm_dim_catalog_domain_profile_cur (display_order, domain_code)
   WHERE is_valid = true;
 
 -- =========================================================================
--- GRUPOS DE CATALOGO (listas)
+-- GRUPOS DE CATALOGO — core (identidad)
 -- =========================================================================
-CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_group_scd2 (
+CREATE TABLE IF NOT EXISTS public.adm_ref_catalog_group_id_core_scd2 (
+  record_id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  catalog_code   text NOT NULL,
+  valid_from     timestamptz NOT NULL DEFAULT now(),
+  valid_to       timestamptz,
+  is_current     boolean NOT NULL DEFAULT true,
+  is_valid       boolean NOT NULL DEFAULT true,
+  loaded_at      timestamptz NOT NULL DEFAULT now(),
+  run_id         text NOT NULL,
+  actor_id       text,
+  change_reason  text NOT NULL DEFAULT 'manual_update'
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_ref_catalog_group_active
+  ON public.adm_ref_catalog_group_id_core_scd2 (catalog_code)
+  WHERE is_current = true AND is_valid = true;
+
+CREATE INDEX IF NOT EXISTS ix_adm_ref_catalog_group_history
+  ON public.adm_ref_catalog_group_id_core_scd2 (catalog_code, valid_from DESC);
+
+-- =========================================================================
+-- GRUPOS DE CATALOGO — profile (atributos)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_group_profile_scd2 (
   record_id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   catalog_code         text NOT NULL,
   catalog_name         text NOT NULL,
   catalog_description  text,
-  domain_code          text NOT NULL REFERENCES public.adm_dim_catalog_domain_cur(domain_code),
+  domain_code          text NOT NULL REFERENCES public.adm_dim_catalog_domain_profile_cur(domain_code),
   is_system_catalog    boolean NOT NULL DEFAULT false,
   valid_from           timestamptz NOT NULL DEFAULT now(),
   valid_to             timestamptz,
@@ -53,21 +82,45 @@ CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_group_scd2 (
   change_reason        text NOT NULL DEFAULT 'manual_update'
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_catalog_group_active
-  ON public.adm_dim_catalog_group_scd2 (catalog_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_catalog_group_profile_active
+  ON public.adm_dim_catalog_group_profile_scd2 (catalog_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_catalog_group_domain
-  ON public.adm_dim_catalog_group_scd2 (domain_code)
+CREATE INDEX IF NOT EXISTS ix_adm_catalog_group_profile_domain
+  ON public.adm_dim_catalog_group_profile_scd2 (domain_code)
   WHERE is_current = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_catalog_group_history
-  ON public.adm_dim_catalog_group_scd2 (catalog_code, valid_from DESC);
+CREATE INDEX IF NOT EXISTS ix_adm_catalog_group_profile_history
+  ON public.adm_dim_catalog_group_profile_scd2 (catalog_code, valid_from DESC);
 
 -- =========================================================================
--- ITEMS DE CATALOGO (opciones dentro de cada lista)
+-- ITEMS DE CATALOGO — core (identidad)
 -- =========================================================================
-CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_item_scd2 (
+CREATE TABLE IF NOT EXISTS public.adm_ref_catalog_item_id_core_scd2 (
+  record_id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  catalog_code   text NOT NULL,
+  item_code      text NOT NULL,
+  valid_from     timestamptz NOT NULL DEFAULT now(),
+  valid_to       timestamptz,
+  is_current     boolean NOT NULL DEFAULT true,
+  is_valid       boolean NOT NULL DEFAULT true,
+  loaded_at      timestamptz NOT NULL DEFAULT now(),
+  run_id         text NOT NULL,
+  actor_id       text,
+  change_reason  text NOT NULL DEFAULT 'manual_update'
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_ref_catalog_item_active
+  ON public.adm_ref_catalog_item_id_core_scd2 (catalog_code, item_code)
+  WHERE is_current = true AND is_valid = true;
+
+CREATE INDEX IF NOT EXISTS ix_adm_ref_catalog_item_history
+  ON public.adm_ref_catalog_item_id_core_scd2 (catalog_code, item_code, valid_from DESC);
+
+-- =========================================================================
+-- ITEMS DE CATALOGO — profile (atributos)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_item_profile_scd2 (
   record_id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   catalog_code       text NOT NULL,
   item_code          text NOT NULL,
@@ -86,21 +139,44 @@ CREATE TABLE IF NOT EXISTS public.adm_dim_catalog_item_scd2 (
   change_reason      text NOT NULL DEFAULT 'manual_update'
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_catalog_item_active
-  ON public.adm_dim_catalog_item_scd2 (catalog_code, item_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_catalog_item_profile_active
+  ON public.adm_dim_catalog_item_profile_scd2 (catalog_code, item_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_catalog_item_catalog
-  ON public.adm_dim_catalog_item_scd2 (catalog_code)
+CREATE INDEX IF NOT EXISTS ix_adm_catalog_item_profile_catalog
+  ON public.adm_dim_catalog_item_profile_scd2 (catalog_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_catalog_item_history
-  ON public.adm_dim_catalog_item_scd2 (catalog_code, item_code, valid_from DESC);
+CREATE INDEX IF NOT EXISTS ix_adm_catalog_item_profile_history
+  ON public.adm_dim_catalog_item_profile_scd2 (catalog_code, item_code, valid_from DESC);
 
 -- =========================================================================
--- UNIDADES DE MEDIDA
+-- UNIDADES DE MEDIDA — core (identidad)
 -- =========================================================================
-CREATE TABLE IF NOT EXISTS public.adm_dim_unit_of_measure_scd2 (
+CREATE TABLE IF NOT EXISTS public.adm_ref_unit_of_measure_id_core_scd2 (
+  record_id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_code      text NOT NULL,
+  valid_from     timestamptz NOT NULL DEFAULT now(),
+  valid_to       timestamptz,
+  is_current     boolean NOT NULL DEFAULT true,
+  is_valid       boolean NOT NULL DEFAULT true,
+  loaded_at      timestamptz NOT NULL DEFAULT now(),
+  run_id         text NOT NULL,
+  actor_id       text,
+  change_reason  text NOT NULL DEFAULT 'manual_update'
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_ref_unit_active
+  ON public.adm_ref_unit_of_measure_id_core_scd2 (unit_code)
+  WHERE is_current = true AND is_valid = true;
+
+CREATE INDEX IF NOT EXISTS ix_adm_ref_unit_history
+  ON public.adm_ref_unit_of_measure_id_core_scd2 (unit_code, valid_from DESC);
+
+-- =========================================================================
+-- UNIDADES DE MEDIDA — profile (atributos)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS public.adm_dim_unit_of_measure_profile_scd2 (
   record_id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   unit_code           text NOT NULL,
   unit_name           text NOT NULL,
@@ -117,28 +193,51 @@ CREATE TABLE IF NOT EXISTS public.adm_dim_unit_of_measure_scd2 (
   change_reason       text NOT NULL DEFAULT 'manual_update'
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_unit_active
-  ON public.adm_dim_unit_of_measure_scd2 (unit_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_unit_profile_active
+  ON public.adm_dim_unit_of_measure_profile_scd2 (unit_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_unit_category
-  ON public.adm_dim_unit_of_measure_scd2 (unit_category_code)
+CREATE INDEX IF NOT EXISTS ix_adm_unit_profile_category
+  ON public.adm_dim_unit_of_measure_profile_scd2 (unit_category_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_unit_history
-  ON public.adm_dim_unit_of_measure_scd2 (unit_code, valid_from DESC);
+CREATE INDEX IF NOT EXISTS ix_adm_unit_profile_history
+  ON public.adm_dim_unit_of_measure_profile_scd2 (unit_code, valid_from DESC);
 
 -- =========================================================================
--- METRICAS
+-- METRICAS — core (identidad)
 -- =========================================================================
-CREATE TABLE IF NOT EXISTS public.adm_dim_metric_scd2 (
+CREATE TABLE IF NOT EXISTS public.adm_ref_metric_id_core_scd2 (
+  record_id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  metric_code    text NOT NULL,
+  valid_from     timestamptz NOT NULL DEFAULT now(),
+  valid_to       timestamptz,
+  is_current     boolean NOT NULL DEFAULT true,
+  is_valid       boolean NOT NULL DEFAULT true,
+  loaded_at      timestamptz NOT NULL DEFAULT now(),
+  run_id         text NOT NULL,
+  actor_id       text,
+  change_reason  text NOT NULL DEFAULT 'manual_update'
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_ref_metric_active
+  ON public.adm_ref_metric_id_core_scd2 (metric_code)
+  WHERE is_current = true AND is_valid = true;
+
+CREATE INDEX IF NOT EXISTS ix_adm_ref_metric_history
+  ON public.adm_ref_metric_id_core_scd2 (metric_code, valid_from DESC);
+
+-- =========================================================================
+-- METRICAS — profile (atributos)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS public.adm_dim_metric_profile_scd2 (
   record_id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   metric_code          text NOT NULL,
   metric_name          text NOT NULL,
   metric_description   text,
-  data_type_code       text NOT NULL,   -- ref logico a adm_dim_catalog_item_scd2 (catalog_code='metric_data_types')
-  direction_code       text NOT NULL,   -- ref logico a adm_dim_catalog_item_scd2 (catalog_code='metric_directions')
-  unit_code            text,            -- ref logico a adm_dim_unit_of_measure_scd2 (current valid)
+  data_type_code       text NOT NULL,
+  direction_code       text NOT NULL,
+  unit_code            text,
   notes_text           text,
   valid_from           timestamptz NOT NULL DEFAULT now(),
   valid_to             timestamptz,
@@ -150,32 +249,55 @@ CREATE TABLE IF NOT EXISTS public.adm_dim_metric_scd2 (
   change_reason        text NOT NULL DEFAULT 'manual_update'
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_metric_active
-  ON public.adm_dim_metric_scd2 (metric_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_metric_profile_active
+  ON public.adm_dim_metric_profile_scd2 (metric_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_metric_data_type
-  ON public.adm_dim_metric_scd2 (data_type_code)
+CREATE INDEX IF NOT EXISTS ix_adm_metric_profile_data_type
+  ON public.adm_dim_metric_profile_scd2 (data_type_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_metric_history
-  ON public.adm_dim_metric_scd2 (metric_code, valid_from DESC);
+CREATE INDEX IF NOT EXISTS ix_adm_metric_profile_history
+  ON public.adm_dim_metric_profile_scd2 (metric_code, valid_from DESC);
 
 -- =========================================================================
--- METAS Y OBJETIVOS (arbol N-niveles, jerarquia recursiva)
+-- METAS Y OBJETIVOS — core (identidad)
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS public.adm_ref_goal_target_id_core_scd2 (
+  record_id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  target_code    text NOT NULL,
+  valid_from     timestamptz NOT NULL,
+  valid_to       timestamptz,
+  is_current     boolean NOT NULL DEFAULT true,
+  is_valid       boolean NOT NULL DEFAULT true,
+  loaded_at      timestamptz NOT NULL DEFAULT now(),
+  run_id         text NOT NULL,
+  actor_id       text,
+  change_reason  text NOT NULL DEFAULT 'manual_update'
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_ref_goal_target_active
+  ON public.adm_ref_goal_target_id_core_scd2 (target_code)
+  WHERE is_current = true AND is_valid = true;
+
+CREATE INDEX IF NOT EXISTS ix_adm_ref_goal_target_history
+  ON public.adm_ref_goal_target_id_core_scd2 (target_code, valid_from DESC);
+
+-- =========================================================================
+-- METAS Y OBJETIVOS — profile (atributos, arbol N-niveles)
 -- valid_from / valid_to: fechas DE NEGOCIO (usuario define inicio,
 -- valid_to = nuevo_valid_from - 1 dia al crear nueva version)
 -- =========================================================================
-CREATE TABLE IF NOT EXISTS public.adm_dim_goal_target_scd2 (
+CREATE TABLE IF NOT EXISTS public.adm_dim_goal_target_profile_scd2 (
   record_id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   target_code          text NOT NULL,
   target_name          text NOT NULL,
   target_description   text,
-  parent_target_code   text,            -- self-reference (logico, por code)
+  parent_target_code   text,
   level_index          int NOT NULL DEFAULT 1,
-  level_label          text,            -- "sub_area", "categoria", etc.
-  metric_code          text,            -- ref logico a adm_dim_metric_scd2 (solo en hojas)
-  operator_code        text,            -- ref logico a adm_dim_catalog_item_scd2 (catalog_code='comparison_operators')
+  level_label          text,
+  metric_code          text,
+  operator_code        text,
   value_min            numeric,
   value_max            numeric,
   value_text           text,
@@ -189,26 +311,26 @@ CREATE TABLE IF NOT EXISTS public.adm_dim_goal_target_scd2 (
   actor_id             text,
   change_reason        text NOT NULL DEFAULT 'manual_update',
 
-  CONSTRAINT chk_adm_goal_target_level CHECK (level_index >= 1),
-  CONSTRAINT chk_adm_goal_target_value_range CHECK (
+  CONSTRAINT chk_adm_goal_target_profile_level CHECK (level_index >= 1),
+  CONSTRAINT chk_adm_goal_target_profile_value_range CHECK (
     value_min IS NULL OR value_max IS NULL OR value_min <= value_max
   )
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_goal_target_active
-  ON public.adm_dim_goal_target_scd2 (target_code)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_adm_goal_target_profile_active
+  ON public.adm_dim_goal_target_profile_scd2 (target_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_goal_target_parent
-  ON public.adm_dim_goal_target_scd2 (parent_target_code)
+CREATE INDEX IF NOT EXISTS ix_adm_goal_target_profile_parent
+  ON public.adm_dim_goal_target_profile_scd2 (parent_target_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_goal_target_metric
-  ON public.adm_dim_goal_target_scd2 (metric_code)
+CREATE INDEX IF NOT EXISTS ix_adm_goal_target_profile_metric
+  ON public.adm_dim_goal_target_profile_scd2 (metric_code)
   WHERE is_current = true AND is_valid = true;
 
-CREATE INDEX IF NOT EXISTS ix_adm_goal_target_history
-  ON public.adm_dim_goal_target_scd2 (target_code, valid_from DESC);
+CREATE INDEX IF NOT EXISTS ix_adm_goal_target_profile_history
+  ON public.adm_dim_goal_target_profile_scd2 (target_code, valid_from DESC);
 
 -- =========================================================================
 -- DOMINIOS asignados a META (multiselect, bridge)
@@ -216,7 +338,7 @@ CREATE INDEX IF NOT EXISTS ix_adm_goal_target_history
 CREATE TABLE IF NOT EXISTS public.adm_asgn_goal_target_domain_scd2 (
   record_id      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   target_code    text NOT NULL,
-  domain_code    text NOT NULL REFERENCES public.adm_dim_catalog_domain_cur(domain_code),
+  domain_code    text NOT NULL REFERENCES public.adm_dim_catalog_domain_profile_cur(domain_code),
   valid_from     timestamptz NOT NULL,
   valid_to       timestamptz,
   is_current     boolean NOT NULL DEFAULT true,
@@ -241,7 +363,7 @@ CREATE INDEX IF NOT EXISTS ix_adm_goal_target_domain_target
 CREATE TABLE IF NOT EXISTS public.adm_asgn_goal_target_type_scd2 (
   record_id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   target_code      text NOT NULL,
-  type_item_code   text NOT NULL,           -- catalog_code='goal_types'
+  type_item_code   text NOT NULL,
   valid_from       timestamptz NOT NULL,
   valid_to         timestamptz,
   is_current       boolean NOT NULL DEFAULT true,
@@ -264,7 +386,6 @@ CREATE INDEX IF NOT EXISTS ix_adm_goal_target_type_target
 -- VISTAS (helpers de consulta)
 -- =========================================================================
 
--- Ultima version activa de meta + metric + unit + operator label
 CREATE OR REPLACE VIEW public.vw_adm_goal_target_active AS
 SELECT
   t.target_code,
@@ -289,17 +410,16 @@ SELECT
   t.actor_id,
   t.loaded_at,
   t.change_reason
-FROM public.adm_dim_goal_target_scd2 t
-LEFT JOIN public.adm_dim_metric_scd2 m
+FROM public.adm_dim_goal_target_profile_scd2 t
+LEFT JOIN public.adm_dim_metric_profile_scd2 m
   ON m.metric_code = t.metric_code AND m.is_current AND m.is_valid
-LEFT JOIN public.adm_dim_unit_of_measure_scd2 u
+LEFT JOIN public.adm_dim_unit_of_measure_profile_scd2 u
   ON u.unit_code = m.unit_code AND u.is_current AND u.is_valid
-LEFT JOIN public.adm_dim_catalog_item_scd2 op
+LEFT JOIN public.adm_dim_catalog_item_profile_scd2 op
   ON op.catalog_code = 'comparison_operators' AND op.item_code = t.operator_code
   AND op.is_current AND op.is_valid
 WHERE t.is_current AND t.is_valid;
 
--- Historial completo de una meta
 CREATE OR REPLACE VIEW public.vw_adm_goal_target_history AS
 SELECT
   t.target_code,
@@ -319,134 +439,158 @@ SELECT
   t.loaded_at,
   t.actor_id,
   t.change_reason
-FROM public.adm_dim_goal_target_scd2 t
+FROM public.adm_dim_goal_target_profile_scd2 t
 ORDER BY t.target_code, t.valid_from DESC, t.loaded_at DESC;
 
 -- =========================================================================
 -- SEEDS iniciales (idempotente)
 -- =========================================================================
 
--- Macro-dominios base (organizan catalogos y se usan en metas)
-INSERT INTO public.adm_dim_catalog_domain_cur
+INSERT INTO public.adm_dim_catalog_domain_profile_cur
   (domain_code, domain_name, domain_description, display_order, run_id, actor_id, change_reason)
 VALUES
-  ('admin_masters', 'Administracion Maestros', 'Catalogos del sistema admin', 1, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('produccion',    'Produccion',              'Maestros relacionados a produccion', 2, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('calidad',       'Calidad',                 'Maestros relacionados a calidad', 3, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('rrhh',          'Talento Humano',          'Maestros relacionados a personal', 4, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('financiero',    'Financiero',              'Maestros relacionados a finanzas', 5, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comercial',     'Comercial',               'Maestros relacionados a ventas y mercados', 6, 'seed_db_admin_v1', 'system', 'initial_load')
+  ('admin_masters', 'Administracion Maestros', 'Catalogos del sistema admin', 1, 'seed_db_admin_v2', 'system', 'initial_load'),
+  ('produccion',    'Produccion',              'Maestros relacionados a produccion', 2, 'seed_db_admin_v2', 'system', 'initial_load'),
+  ('calidad',       'Calidad',                 'Maestros relacionados a calidad', 3, 'seed_db_admin_v2', 'system', 'initial_load'),
+  ('rrhh',          'Talento Humano',          'Maestros relacionados a personal', 4, 'seed_db_admin_v2', 'system', 'initial_load'),
+  ('financiero',    'Financiero',              'Maestros relacionados a finanzas', 5, 'seed_db_admin_v2', 'system', 'initial_load'),
+  ('comercial',     'Comercial',               'Maestros relacionados a ventas y mercados', 6, 'seed_db_admin_v2', 'system', 'initial_load')
 ON CONFLICT (domain_code) DO NOTHING;
 
--- Grupos de catalogo del sistema
-INSERT INTO public.adm_dim_catalog_group_scd2
-  (catalog_code, catalog_name, catalog_description, domain_code, is_system_catalog, valid_from, run_id, actor_id, change_reason)
-SELECT v.catalog_code, v.catalog_name, v.catalog_description, v.domain_code, v.is_system_catalog, now(), v.run_id, v.actor_id, v.change_reason
-FROM (VALUES
-  ('metric_data_types',     'Tipos de dato de metricas',  'Tipos primitivos para metricas (integer, decimal, ...)', 'admin_masters', true,  'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_directions',     'Direcciones de metrica',     'Sentido esperado del cambio',                            'admin_masters', true,  'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators',  'Operadores de comparacion',  'Operadores para metas (>, <, =, between)',               'admin_masters', true,  'seed_db_admin_v1', 'system', 'initial_load'),
-  ('goal_types',            'Tipos de meta',              'Clasificacion semantica de objetivos',                   'admin_masters', false, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('unit_categories',       'Categorias de unidad',       'Familia de unidad de medida',                            'admin_masters', true,  'seed_db_admin_v1', 'system', 'initial_load')
-) AS v(catalog_code, catalog_name, catalog_description, domain_code, is_system_catalog, run_id, actor_id, change_reason)
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.adm_dim_catalog_group_scd2 g
-  WHERE g.catalog_code = v.catalog_code AND g.is_current AND g.is_valid
-);
+-- Seed: catalog groups (core + profile)
+DO $$
+DECLARE
+  v_catalog_code text;
+  v_catalog_name text;
+  v_catalog_description text;
+  v_domain_code text;
+  v_is_system boolean;
+  v_run_id text := 'seed_db_admin_v2';
+  v_now timestamptz := now();
+BEGIN
+  FOR v_catalog_code, v_catalog_name, v_catalog_description, v_domain_code, v_is_system IN
+    VALUES
+      ('metric_data_types',     'Tipos de dato de metricas',  'Tipos primitivos para metricas (integer, decimal, ...)', 'admin_masters', true),
+      ('metric_directions',     'Direcciones de metrica',     'Sentido esperado del cambio',                            'admin_masters', true),
+      ('comparison_operators',  'Operadores de comparacion',  'Operadores para metas (>, <, =, between)',               'admin_masters', true),
+      ('goal_types',            'Tipos de meta',              'Clasificacion semantica de objetivos',                   'admin_masters', false),
+      ('unit_categories',       'Categorias de unidad',       'Familia de unidad de medida',                            'admin_masters', true)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM public.adm_ref_catalog_group_id_core_scd2
+      WHERE catalog_code = v_catalog_code AND is_current AND is_valid
+    ) THEN
+      INSERT INTO public.adm_ref_catalog_group_id_core_scd2
+        (catalog_code, valid_from, is_current, is_valid, loaded_at, run_id, actor_id, change_reason)
+      VALUES (v_catalog_code, v_now, true, true, v_now, v_run_id, 'system', 'initial_load');
 
--- Items: metric_data_types
-INSERT INTO public.adm_dim_catalog_item_scd2
-  (catalog_code, item_code, item_label_es, item_label_en, display_order, valid_from, run_id, actor_id, change_reason)
-SELECT v.catalog_code, v.item_code, v.item_label_es, v.item_label_en, v.display_order, now(), v.run_id, v.actor_id, v.change_reason
-FROM (VALUES
-  ('metric_data_types', 'integer',    'Entero',     'Integer',    1, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_data_types', 'decimal',    'Decimal',    'Decimal',    2, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_data_types', 'percentage', 'Porcentaje', 'Percentage', 3, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_data_types', 'boolean',    'Booleano',   'Boolean',    4, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_data_types', 'text',       'Texto',      'Text',       5, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_data_types', 'date',       'Fecha',      'Date',       6, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_data_types', 'duration',   'Duracion',   'Duration',   7, 'seed_db_admin_v1', 'system', 'initial_load')
-) AS v(catalog_code, item_code, item_label_es, item_label_en, display_order, run_id, actor_id, change_reason)
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.adm_dim_catalog_item_scd2 i
-  WHERE i.catalog_code = v.catalog_code AND i.item_code = v.item_code AND i.is_current AND i.is_valid
-);
+      INSERT INTO public.adm_dim_catalog_group_profile_scd2
+        (catalog_code, catalog_name, catalog_description, domain_code, is_system_catalog,
+         valid_from, is_current, is_valid, loaded_at, run_id, actor_id, change_reason)
+      VALUES (v_catalog_code, v_catalog_name, v_catalog_description, v_domain_code, v_is_system,
+              v_now, true, true, v_now, v_run_id, 'system', 'initial_load');
+    END IF;
+  END LOOP;
+END $$;
 
--- Items: metric_directions
-INSERT INTO public.adm_dim_catalog_item_scd2
-  (catalog_code, item_code, item_label_es, item_label_en, display_order, valid_from, run_id, actor_id, change_reason)
-SELECT v.catalog_code, v.item_code, v.item_label_es, v.item_label_en, v.display_order, now(), v.run_id, v.actor_id, v.change_reason
-FROM (VALUES
-  ('metric_directions', 'increase', 'Aumentar', 'Increase', 1, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_directions', 'decrease', 'Disminuir','Decrease', 2, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_directions', 'neutral',  'Neutral',  'Neutral',  3, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_directions', 'observe',  'Observar', 'Observe',  4, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('metric_directions', 'range',    'Rango',    'Range',    5, 'seed_db_admin_v1', 'system', 'initial_load')
-) AS v(catalog_code, item_code, item_label_es, item_label_en, display_order, run_id, actor_id, change_reason)
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.adm_dim_catalog_item_scd2 i
-  WHERE i.catalog_code = v.catalog_code AND i.item_code = v.item_code AND i.is_current AND i.is_valid
-);
+-- Seed: catalog items (core + profile) — metric_data_types
+DO $$
+DECLARE
+  v_catalog_code text;
+  v_item_code text;
+  v_label_es text;
+  v_label_en text;
+  v_order int;
+  v_run_id text := 'seed_db_admin_v2';
+  v_now timestamptz := now();
+BEGIN
+  FOR v_catalog_code, v_item_code, v_label_es, v_label_en, v_order IN
+    VALUES
+      ('metric_data_types', 'integer',    'Entero',     'Integer',    1),
+      ('metric_data_types', 'decimal',    'Decimal',    'Decimal',    2),
+      ('metric_data_types', 'percentage', 'Porcentaje', 'Percentage', 3),
+      ('metric_data_types', 'boolean',    'Booleano',   'Boolean',    4),
+      ('metric_data_types', 'text',       'Texto',      'Text',       5),
+      ('metric_data_types', 'date',       'Fecha',      'Date',       6),
+      ('metric_data_types', 'duration',   'Duracion',   'Duration',   7),
+      ('metric_directions', 'increase', 'Aumentar', 'Increase', 1),
+      ('metric_directions', 'decrease', 'Disminuir','Decrease', 2),
+      ('metric_directions', 'neutral',  'Neutral',  'Neutral',  3),
+      ('metric_directions', 'observe',  'Observar', 'Observe',  4),
+      ('metric_directions', 'range',    'Rango',    'Range',    5),
+      ('comparison_operators', 'gt',      'Mayor que (>)',      'Greater than',     1),
+      ('comparison_operators', 'gte',     'Mayor o igual (>=)', 'Greater or equal', 2),
+      ('comparison_operators', 'lt',      'Menor que (<)',      'Less than',        3),
+      ('comparison_operators', 'lte',     'Menor o igual (<=)', 'Less or equal',    4),
+      ('comparison_operators', 'eq',      'Igual a (=)',        'Equal',            5),
+      ('comparison_operators', 'neq',     'Distinto de (!=)',   'Not equal',        6),
+      ('comparison_operators', 'between', 'Entre (rango)',      'Between',          7),
+      ('comparison_operators', 'in_list', 'En lista',           'In list',          8),
+      ('unit_categories', 'mass',       'Masa',       'Mass',       1),
+      ('unit_categories', 'volume',     'Volumen',    'Volume',     2),
+      ('unit_categories', 'time',       'Tiempo',     'Time',       3),
+      ('unit_categories', 'percentage', 'Porcentaje', 'Percentage', 4),
+      ('unit_categories', 'count',      'Cuenta',     'Count',      5),
+      ('unit_categories', 'distance',   'Distancia',  'Distance',   6),
+      ('unit_categories', 'monetary',   'Monetario',  'Monetary',   7)
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM public.adm_ref_catalog_item_id_core_scd2
+      WHERE catalog_code = v_catalog_code AND item_code = v_item_code AND is_current AND is_valid
+    ) THEN
+      INSERT INTO public.adm_ref_catalog_item_id_core_scd2
+        (catalog_code, item_code, valid_from, is_current, is_valid, loaded_at, run_id, actor_id, change_reason)
+      VALUES (v_catalog_code, v_item_code, v_now, true, true, v_now, v_run_id, 'system', 'initial_load');
 
--- Items: comparison_operators
-INSERT INTO public.adm_dim_catalog_item_scd2
-  (catalog_code, item_code, item_label_es, item_label_en, display_order, valid_from, run_id, actor_id, change_reason)
-SELECT v.catalog_code, v.item_code, v.item_label_es, v.item_label_en, v.display_order, now(), v.run_id, v.actor_id, v.change_reason
-FROM (VALUES
-  ('comparison_operators', 'gt',      'Mayor que (>)',      'Greater than',     1, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators', 'gte',     'Mayor o igual (>=)', 'Greater or equal', 2, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators', 'lt',      'Menor que (<)',      'Less than',        3, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators', 'lte',     'Menor o igual (<=)', 'Less or equal',    4, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators', 'eq',      'Igual a (=)',        'Equal',            5, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators', 'neq',     'Distinto de (!=)',   'Not equal',        6, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators', 'between', 'Entre (rango)',      'Between',          7, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('comparison_operators', 'in_list', 'En lista',           'In list',          8, 'seed_db_admin_v1', 'system', 'initial_load')
-) AS v(catalog_code, item_code, item_label_es, item_label_en, display_order, run_id, actor_id, change_reason)
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.adm_dim_catalog_item_scd2 i
-  WHERE i.catalog_code = v.catalog_code AND i.item_code = v.item_code AND i.is_current AND i.is_valid
-);
+      INSERT INTO public.adm_dim_catalog_item_profile_scd2
+        (catalog_code, item_code, item_label_es, item_label_en, display_order,
+         valid_from, is_current, is_valid, loaded_at, run_id, actor_id, change_reason)
+      VALUES (v_catalog_code, v_item_code, v_label_es, v_label_en, v_order,
+              v_now, true, true, v_now, v_run_id, 'system', 'initial_load');
+    END IF;
+  END LOOP;
+END $$;
 
--- Items: unit_categories
-INSERT INTO public.adm_dim_catalog_item_scd2
-  (catalog_code, item_code, item_label_es, item_label_en, display_order, valid_from, run_id, actor_id, change_reason)
-SELECT v.catalog_code, v.item_code, v.item_label_es, v.item_label_en, v.display_order, now(), v.run_id, v.actor_id, v.change_reason
-FROM (VALUES
-  ('unit_categories', 'mass',       'Masa',       'Mass',       1, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('unit_categories', 'volume',     'Volumen',    'Volume',     2, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('unit_categories', 'time',       'Tiempo',     'Time',       3, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('unit_categories', 'percentage', 'Porcentaje', 'Percentage', 4, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('unit_categories', 'count',      'Cuenta',     'Count',      5, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('unit_categories', 'distance',   'Distancia',  'Distance',   6, 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('unit_categories', 'monetary',   'Monetario',  'Monetary',   7, 'seed_db_admin_v1', 'system', 'initial_load')
-) AS v(catalog_code, item_code, item_label_es, item_label_en, display_order, run_id, actor_id, change_reason)
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.adm_dim_catalog_item_scd2 i
-  WHERE i.catalog_code = v.catalog_code AND i.item_code = v.item_code AND i.is_current AND i.is_valid
-);
+-- Seed: units (core + profile)
+DO $$
+DECLARE
+  v_unit_code text;
+  v_unit_name text;
+  v_unit_symbol text;
+  v_unit_category text;
+  v_run_id text := 'seed_db_admin_v2';
+  v_now timestamptz := now();
+BEGIN
+  FOR v_unit_code, v_unit_name, v_unit_symbol, v_unit_category IN
+    VALUES
+      ('UNIT',  'Unidades',    'u',     'count'),
+      ('PCT',   'Porcentaje',  '%',     'percentage'),
+      ('KG',    'Kilogramos',  'kg',    'mass'),
+      ('GR',    'Gramos',      'g',     'mass'),
+      ('HR',    'Horas',       'h',     'time'),
+      ('DAY',   'Dias',        'd',     'time'),
+      ('USD',   'Dolares',     'USD',   'monetary'),
+      ('STEMS', 'Tallos',      'tallos','count'),
+      ('BCH',   'Bonches',     'bch',   'count'),
+      ('MIN',   'Minutos',     'min',   'time')
+  LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM public.adm_ref_unit_of_measure_id_core_scd2
+      WHERE unit_code = v_unit_code AND is_current AND is_valid
+    ) THEN
+      INSERT INTO public.adm_ref_unit_of_measure_id_core_scd2
+        (unit_code, valid_from, is_current, is_valid, loaded_at, run_id, actor_id, change_reason)
+      VALUES (v_unit_code, v_now, true, true, v_now, v_run_id, 'system', 'initial_load');
 
--- Unidades de medida base
-INSERT INTO public.adm_dim_unit_of_measure_scd2
-  (unit_code, unit_name, unit_symbol, unit_category_code, valid_from, run_id, actor_id, change_reason)
-SELECT v.unit_code, v.unit_name, v.unit_symbol, v.unit_category_code, now(), v.run_id, v.actor_id, v.change_reason
-FROM (VALUES
-  ('UNIT',  'Unidades',    'u',     'count',      'seed_db_admin_v1', 'system', 'initial_load'),
-  ('PCT',   'Porcentaje',  '%',     'percentage', 'seed_db_admin_v1', 'system', 'initial_load'),
-  ('KG',    'Kilogramos',  'kg',    'mass',       'seed_db_admin_v1', 'system', 'initial_load'),
-  ('GR',    'Gramos',      'g',     'mass',       'seed_db_admin_v1', 'system', 'initial_load'),
-  ('HR',    'Horas',       'h',     'time',       'seed_db_admin_v1', 'system', 'initial_load'),
-  ('DAY',   'Dias',        'd',     'time',       'seed_db_admin_v1', 'system', 'initial_load'),
-  ('USD',   'Dolares',     'USD',   'monetary',   'seed_db_admin_v1', 'system', 'initial_load'),
-  ('STEMS', 'Tallos',      'tallos','count',      'seed_db_admin_v1', 'system', 'initial_load'),
-  ('BCH',   'Bonches',     'bch',   'count',      'seed_db_admin_v1', 'system', 'initial_load'),
-  ('MIN',   'Minutos',     'min',   'time',       'seed_db_admin_v1', 'system', 'initial_load')
-) AS v(unit_code, unit_name, unit_symbol, unit_category_code, run_id, actor_id, change_reason)
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.adm_dim_unit_of_measure_scd2 u
-  WHERE u.unit_code = v.unit_code AND u.is_current AND u.is_valid
-);
+      INSERT INTO public.adm_dim_unit_of_measure_profile_scd2
+        (unit_code, unit_name, unit_symbol, unit_category_code,
+         valid_from, is_current, is_valid, loaded_at, run_id, actor_id, change_reason)
+      VALUES (v_unit_code, v_unit_name, v_unit_symbol, v_unit_category,
+              v_now, true, true, v_now, v_run_id, 'system', 'initial_load');
+    END IF;
+  END LOOP;
+END $$;
 
--- Sentinel para verificacion del despliegue
-COMMENT ON TABLE public.adm_dim_goal_target_scd2 IS 'Metas y objetivos jerarquicos N-niveles, SCD2 con valid_from/valid_to definidos por usuario';
-COMMENT ON COLUMN public.adm_dim_goal_target_scd2.valid_from IS 'Fecha de inicio definida por el usuario (no fecha de carga)';
-COMMENT ON COLUMN public.adm_dim_goal_target_scd2.valid_to IS 'Auto-calculado: nuevo_valid_from - 1 dia al crear nueva version';
+COMMENT ON TABLE public.adm_dim_goal_target_profile_scd2 IS 'Metas y objetivos jerarquicos N-niveles, SCD2 con valid_from/valid_to definidos por usuario';
+COMMENT ON COLUMN public.adm_dim_goal_target_profile_scd2.valid_from IS 'Fecha de inicio definida por el usuario (no fecha de carga)';
+COMMENT ON COLUMN public.adm_dim_goal_target_profile_scd2.valid_to IS 'Auto-calculado: nuevo_valid_from - 1 dia al crear nueva version';

@@ -353,24 +353,6 @@ function countRowDemand(row: PoscosechaClasificacionOrderRow) {
   );
 }
 
-function reduceOneSoftBunchForSku(
-  softOrders: PoscosechaClasificacionOrderRow[],
-  sku: string,
-) {
-  const nextRows = softOrders.map((row) => ({ ...row }));
-  const rowIndex = nextRows.findIndex((row) => row.sku === sku);
-  if (rowIndex < 0) return null;
-
-  for (const key of ["fecha_5", "fecha_4", "fecha_3", "fecha_2", "fecha_1"] as SolverDateKey[]) {
-    const captured = sanitizeDateValue(nextRows[rowIndex][key]);
-    if (captured <= 0) continue;
-    nextRows[rowIndex][key] = captured - 1;
-    return nextRows;
-  }
-
-  return null;
-}
-
 function reduceSoftDemandForSku(
   softOrders: PoscosechaClasificacionOrderRow[],
   sku: string,
@@ -393,21 +375,6 @@ function reduceSoftDemandForSku(
   }
 
   return remaining > 0 ? null : nextRows;
-}
-
-function getWorstSkuDeviation(result: PoscosechaClasificacionResult | null) {
-  if (!result) return null;
-
-  const rows = result.orderRows
-    .filter((row) => Number(row.pedidoResuelto ?? 0) > 0)
-    .map((row) => ({
-      sku: row.sku,
-      pct: Number(row.sobrepesoPct ?? 0),
-      absPct: Math.abs(Number(row.sobrepesoPct ?? 0)),
-    }))
-    .sort((left, right) => right.absPct - left.absPct);
-
-  return rows[0] ?? null;
 }
 
 function getUnderTargetSkus(result: PoscosechaClasificacionResult | null) {

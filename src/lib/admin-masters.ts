@@ -1,4 +1,6 @@
-import { queryHumanTalent } from "@/lib/human-talent-db";
+import crypto from "node:crypto";
+
+import { queryHumanTalent, withHumanTalentTransaction } from "@/lib/human-talent-db";
 
 export type TthhCatalogGroup = {
   catalogCode: string;
@@ -26,6 +28,13 @@ export type TthhCatalogItem = {
   isValid: boolean;
 };
 
+const DOMAIN_TABLE = "public.common_dim_catalog_domain_profile_cur";
+const GROUP_CORE_TABLE = "public.common_ref_catalog_group_id_core_scd2";
+const GROUP_PROFILE_TABLE = "public.common_dim_catalog_group_profile_scd2";
+const ITEM_CORE_TABLE = "public.common_ref_catalog_item_id_core_scd2";
+const ITEM_PROFILE_TABLE = "public.common_dim_catalog_item_profile_scd2";
+const RUN_ID = "corex_admin_catalogs";
+
 export async function listTthhCatalogs() {
   const [domains, groups, items] = await Promise.all([
     queryHumanTalent<TthhCatalogDomain & {
@@ -37,7 +46,7 @@ export async function listTthhCatalogs() {
       is_valid: boolean;
     }>(`
       SELECT domain_code, domain_name, domain_description, module_code, display_order, is_valid
-      FROM public.common_dim_catalog_domain_cur
+      FROM ${DOMAIN_TABLE}
       ORDER BY display_order, domain_name
     `),
     queryHumanTalent<TthhCatalogGroup & {
@@ -48,7 +57,7 @@ export async function listTthhCatalogs() {
       is_valid: boolean;
     }>(`
       SELECT catalog_code, catalog_name, catalog_description, domain_code, is_valid
-      FROM public.common_dim_catalog_group_scd2
+      FROM ${GROUP_PROFILE_TABLE}
       WHERE is_current = true
       ORDER BY domain_code, catalog_code
     `),
@@ -61,7 +70,7 @@ export async function listTthhCatalogs() {
       is_valid: boolean;
     }>(`
       SELECT catalog_code, item_code, item_label_es, item_description, display_order, is_valid
-      FROM public.common_dim_catalog_item_scd2
+      FROM ${ITEM_PROFILE_TABLE}
       WHERE is_current = true
       ORDER BY catalog_code, display_order, item_label_es
     `),
@@ -105,9 +114,9 @@ export async function upsertTthhCatalogDomain(input: {
 }) {
   await queryHumanTalent(
     `
-    INSERT INTO public.common_dim_catalog_domain_cur (
+    INSERT INTO ${DOMAIN_TABLE} (
       domain_code, domain_name, domain_description, module_code, display_order, is_valid, run_id, actor_id, change_reason
-    ) VALUES ($1, $2, $3, $4, $5, $6, 'corex_tthh_catalog_domains', $7, 'manual_update')
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual_update')
     ON CONFLICT (domain_code)
     DO UPDATE SET
       domain_name = EXCLUDED.domain_name,
@@ -126,6 +135,7 @@ export async function upsertTthhCatalogDomain(input: {
       input.moduleCode ?? "tthh",
       input.displayOrder ?? 0,
       input.isValid ?? true,
+      RUN_ID,
       input.actorId ?? null,
     ],
   );
@@ -139,30 +149,45 @@ export async function upsertTthhCatalogGroup(input: {
   isValid?: boolean;
   actorId?: string;
 }) {
-  await queryHumanTalent(
-    `
-    INSERT INTO public.common_dim_catalog_group_scd2 (
-      catalog_code, catalog_name, catalog_description, module_code, domain_code, is_valid, run_id, actor_id, change_reason
-    ) VALUES ($1, $2, $3, 'tthh_followups', $4, $5, 'corex_admin_catalogs', $6, 'manual_update')
-    ON CONFLICT (catalog_code) WHERE is_current = true and is_valid = true
-    DO UPDATE SET
-      catalog_name = EXCLUDED.catalog_name,
-      catalog_description = EXCLUDED.catalog_description,
-      domain_code = EXCLUDED.domain_code,
-      is_valid = EXCLUDED.is_valid,
-      loaded_at = now(),
-      actor_id = EXCLUDED.actor_id,
-      change_reason = 'manual_update'
-    `,
-    [
-      input.catalogCode,
-      input.catalogName,
-      input.catalogDescription ?? null,
-      input.domainCode ?? "seguimiento_trabajo_social",
-      input.isValid ?? true,
-      input.actorId ?? null,
-    ],
-  );
+  await withHumanTalentTransaction(async (client) => {
+    const actor = input.actorId ?? null;
+
+    await client.query(
+      `UPDATE ${GROUP_CORE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = 'manual_update'
+       WHERE catalog_code = $1 AND is_current = true AND is_valid = true`,
+      [input.catalogCode, actor],
+    );
+    await client.query(
+      `UPDATE ${GROUP_PROFILE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = 'manual_update'
+       WHERE catalog_code = $1 AND is_current = true AND is_valid = true`,
+      [input.catalogCode, actor],
+    );
+
+    await client.query(
+      `INSERT INTO ${GROUP_CORE_TABLE}
+        (record_id, catalog_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, now(), true, true, $3, $4, 'manual_update')`,
+      [crypto.randomUUID(), input.catalogCode, RUN_ID, actor],
+    );
+    await client.query(
+      `INSERT INTO ${GROUP_PROFILE_TABLE}
+        (record_id, catalog_code, catalog_name, catalog_description, module_code, domain_code, is_valid,
+         valid_from, is_current, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, $4, 'tthh_followups', $5, $6, now(), true, $7, $8, 'manual_update')`,
+      [
+        crypto.randomUUID(),
+        input.catalogCode,
+        input.catalogName,
+        input.catalogDescription ?? null,
+        input.domainCode ?? "seguimiento_trabajo_social",
+        input.isValid ?? true,
+        RUN_ID,
+        actor,
+      ],
+    );
+  });
 }
 
 export async function upsertTthhCatalogItem(input: {
@@ -174,31 +199,46 @@ export async function upsertTthhCatalogItem(input: {
   isValid?: boolean;
   actorId?: string;
 }) {
-  await queryHumanTalent(
-    `
-    INSERT INTO public.common_dim_catalog_item_scd2 (
-      catalog_code, item_code, item_label_es, item_description, display_order, is_valid, run_id, actor_id, change_reason
-    ) VALUES ($1, $2, $3, $4, $5, $6, 'corex_admin_catalog_items', $7, 'manual_update')
-    ON CONFLICT (catalog_code, item_code) WHERE is_current = true and is_valid = true
-    DO UPDATE SET
-      item_label_es = EXCLUDED.item_label_es,
-      item_description = EXCLUDED.item_description,
-      display_order = EXCLUDED.display_order,
-      is_valid = EXCLUDED.is_valid,
-      loaded_at = now(),
-      actor_id = EXCLUDED.actor_id,
-      change_reason = 'manual_update'
-    `,
-    [
-      input.catalogCode,
-      input.itemCode,
-      input.itemLabelEs,
-      input.itemDescription ?? null,
-      input.displayOrder ?? 0,
-      input.isValid ?? true,
-      input.actorId ?? null,
-    ],
-  );
+  await withHumanTalentTransaction(async (client) => {
+    const actor = input.actorId ?? null;
+
+    await client.query(
+      `UPDATE ${ITEM_CORE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $3, change_reason = 'manual_update'
+       WHERE catalog_code = $1 AND item_code = $2 AND is_current = true AND is_valid = true`,
+      [input.catalogCode, input.itemCode, actor],
+    );
+    await client.query(
+      `UPDATE ${ITEM_PROFILE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $3, change_reason = 'manual_update'
+       WHERE catalog_code = $1 AND item_code = $2 AND is_current = true AND is_valid = true`,
+      [input.catalogCode, input.itemCode, actor],
+    );
+
+    await client.query(
+      `INSERT INTO ${ITEM_CORE_TABLE}
+        (record_id, catalog_code, item_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, now(), true, true, $4, $5, 'manual_update')`,
+      [crypto.randomUUID(), input.catalogCode, input.itemCode, RUN_ID, actor],
+    );
+    await client.query(
+      `INSERT INTO ${ITEM_PROFILE_TABLE}
+        (record_id, catalog_code, item_code, item_label_es, item_description, display_order, is_valid,
+         valid_from, is_current, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), true, $8, $9, 'manual_update')`,
+      [
+        crypto.randomUUID(),
+        input.catalogCode,
+        input.itemCode,
+        input.itemLabelEs,
+        input.itemDescription ?? null,
+        input.displayOrder ?? 0,
+        input.isValid ?? true,
+        RUN_ID,
+        actor,
+      ],
+    );
+  });
 }
 
 export async function setTthhCatalogValidity(kind: "domain" | "group" | "item", input: {
@@ -210,7 +250,7 @@ export async function setTthhCatalogValidity(kind: "domain" | "group" | "item", 
 }) {
   if (kind === "domain") {
     await queryHumanTalent(
-      `UPDATE public.common_dim_catalog_domain_cur
+      `UPDATE ${DOMAIN_TABLE}
        SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = 'manual_update'
        WHERE domain_code = $1`,
       [input.domainCode, input.isValid, input.actorId ?? null],
@@ -218,19 +258,35 @@ export async function setTthhCatalogValidity(kind: "domain" | "group" | "item", 
     return;
   }
   if (kind === "group") {
-    await queryHumanTalent(
-      `UPDATE public.common_dim_catalog_group_scd2
-       SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = 'manual_update'
-       WHERE catalog_code = $1 AND is_current = true`,
-      [input.catalogCode, input.isValid, input.actorId ?? null],
-    );
+    await withHumanTalentTransaction(async (client) => {
+      await client.query(
+        `UPDATE ${GROUP_CORE_TABLE}
+         SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = 'manual_update'
+         WHERE catalog_code = $1 AND is_current = true`,
+        [input.catalogCode, input.isValid, input.actorId ?? null],
+      );
+      await client.query(
+        `UPDATE ${GROUP_PROFILE_TABLE}
+         SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = 'manual_update'
+         WHERE catalog_code = $1 AND is_current = true`,
+        [input.catalogCode, input.isValid, input.actorId ?? null],
+      );
+    });
     return;
   }
 
-  await queryHumanTalent(
-    `UPDATE public.common_dim_catalog_item_scd2
-     SET is_valid = $3, loaded_at = now(), actor_id = $4, change_reason = 'manual_update'
-     WHERE catalog_code = $1 AND item_code = $2 AND is_current = true`,
-    [input.catalogCode, input.itemCode, input.isValid, input.actorId ?? null],
-  );
+  await withHumanTalentTransaction(async (client) => {
+    await client.query(
+      `UPDATE ${ITEM_CORE_TABLE}
+       SET is_valid = $3, loaded_at = now(), actor_id = $4, change_reason = 'manual_update'
+       WHERE catalog_code = $1 AND item_code = $2 AND is_current = true`,
+      [input.catalogCode, input.itemCode, input.isValid, input.actorId ?? null],
+    );
+    await client.query(
+      `UPDATE ${ITEM_PROFILE_TABLE}
+       SET is_valid = $3, loaded_at = now(), actor_id = $4, change_reason = 'manual_update'
+       WHERE catalog_code = $1 AND item_code = $2 AND is_current = true`,
+      [input.catalogCode, input.itemCode, input.isValid, input.actorId ?? null],
+    );
+  });
 }

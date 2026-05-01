@@ -62,7 +62,6 @@ const RULE_LINE_TABLE = "public.field_bridge_drench_program_rule_line_scd2";
 const DRENCH_ACTIVITY_ID = DRENCH_PROGRAM_ACTIVITY_ID;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __dashboardDrenchProgramInitialized: boolean | undefined;
 }
 

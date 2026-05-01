@@ -13,7 +13,7 @@ export async function loadFollowupCatalogs(): Promise<EmployeeFollowupCatalogMap
   try {
     const result = await queryHumanTalent<CatalogItemQueryRow>(`
       SELECT i.catalog_code, i.item_code, i.item_label_es, i.display_order
-      FROM public.common_dim_catalog_item_scd2 i
+      FROM public.common_dim_catalog_item_profile_scd2 i
       WHERE i.is_current = true
         AND i.is_valid = true
       ORDER BY i.catalog_code, i.display_order, i.item_code
@@ -48,7 +48,7 @@ export async function loadFollowupCatalogItems(catalogCode: string) {
     const result = await queryHumanTalent<CatalogItemQueryRow>(
       `
       SELECT i.catalog_code, i.item_code, i.item_label_es, i.display_order
-      FROM public.common_dim_catalog_item_scd2 i
+      FROM public.common_dim_catalog_item_profile_scd2 i
       WHERE i.catalog_code = $1
         AND i.is_current = true
         AND i.is_valid = true

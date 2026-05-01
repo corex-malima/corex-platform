@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { queryAdmin, withAdminTransaction } from "@/lib/admin-db";
 
 export type AdminMetric = {
@@ -47,6 +49,10 @@ type MetricRow = {
   change_reason: string;
 };
 
+const CORE_TABLE = "public.adm_ref_metric_id_core_scd2";
+const PROFILE_TABLE = "public.adm_dim_metric_profile_scd2";
+const ITEM_PROFILE_TABLE = "public.adm_dim_catalog_item_profile_scd2";
+const UNIT_PROFILE_TABLE = "public.adm_dim_unit_of_measure_profile_scd2";
 const RUN_ID = "corex_admin_metrics";
 
 function toIso(v: Date | string): string {
@@ -84,14 +90,14 @@ const SELECT_METRIC_WITH_LABELS = `
          m.unit_code, u.unit_name, u.unit_symbol,
          m.notes_text, m.valid_from, m.valid_to, m.is_current, m.is_valid,
          m.loaded_at, m.actor_id, m.change_reason
-  FROM public.adm_dim_metric_scd2 m
-  LEFT JOIN public.adm_dim_catalog_item_scd2 dt
+  FROM ${PROFILE_TABLE} m
+  LEFT JOIN ${ITEM_PROFILE_TABLE} dt
     ON dt.catalog_code = 'metric_data_types' AND dt.item_code = m.data_type_code
     AND dt.is_current AND dt.is_valid
-  LEFT JOIN public.adm_dim_catalog_item_scd2 dr
+  LEFT JOIN ${ITEM_PROFILE_TABLE} dr
     ON dr.catalog_code = 'metric_directions' AND dr.item_code = m.direction_code
     AND dr.is_current AND dr.is_valid
-  LEFT JOIN public.adm_dim_unit_of_measure_scd2 u
+  LEFT JOIN ${UNIT_PROFILE_TABLE} u
     ON u.unit_code = m.unit_code AND u.is_current AND u.is_valid
 `;
 
@@ -137,42 +143,23 @@ export type UpsertMetricInput = {
 };
 
 export async function createMetric(input: UpsertMetricInput): Promise<void> {
-  await queryAdmin(
-    `INSERT INTO public.adm_dim_metric_scd2
-      (metric_code, metric_name, metric_description, data_type_code, direction_code,
-       unit_code, notes_text, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, now(), true, true, $8, $9, $10)`,
-    [
-      input.metricCode,
-      input.metricName,
-      input.metricDescription ?? null,
-      input.dataTypeCode,
-      input.directionCode,
-      input.unitCode ?? null,
-      input.notesText ?? null,
-      RUN_ID,
-      input.actorId ?? null,
-      input.changeReason ?? "manual_create",
-    ],
-  );
-}
-
-export async function updateMetric(input: UpsertMetricInput): Promise<void> {
   await withAdminTransaction(async (client) => {
-    await client.query(
-      `UPDATE public.adm_dim_metric_scd2
-       SET is_current = false, valid_to = now(), loaded_at = now(),
-           actor_id = $2, change_reason = $3
-       WHERE metric_code = $1 AND is_current = true AND is_valid = true`,
-      [input.metricCode, input.actorId ?? null, input.changeReason ?? "manual_update"],
-    );
+    const actor = input.actorId ?? null;
+    const reason = input.changeReason ?? "manual_create";
 
     await client.query(
-      `INSERT INTO public.adm_dim_metric_scd2
-        (metric_code, metric_name, metric_description, data_type_code, direction_code,
+      `INSERT INTO ${CORE_TABLE}
+        (record_id, metric_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, now(), true, true, $3, $4, $5)`,
+      [crypto.randomUUID(), input.metricCode, RUN_ID, actor, reason],
+    );
+    await client.query(
+      `INSERT INTO ${PROFILE_TABLE}
+        (record_id, metric_code, metric_name, metric_description, data_type_code, direction_code,
          unit_code, notes_text, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), true, true, $8, $9, $10)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), true, true, $9, $10, $11)`,
       [
+        crypto.randomUUID(),
         input.metricCode,
         input.metricName,
         input.metricDescription ?? null,
@@ -181,8 +168,54 @@ export async function updateMetric(input: UpsertMetricInput): Promise<void> {
         input.unitCode ?? null,
         input.notesText ?? null,
         RUN_ID,
-        input.actorId ?? null,
-        input.changeReason ?? "manual_update",
+        actor,
+        reason,
+      ],
+    );
+  });
+}
+
+export async function updateMetric(input: UpsertMetricInput): Promise<void> {
+  await withAdminTransaction(async (client) => {
+    const actor = input.actorId ?? null;
+    const reason = input.changeReason ?? "manual_update";
+
+    await client.query(
+      `UPDATE ${CORE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = $3
+       WHERE metric_code = $1 AND is_current = true AND is_valid = true`,
+      [input.metricCode, actor, reason],
+    );
+    await client.query(
+      `UPDATE ${PROFILE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = $3
+       WHERE metric_code = $1 AND is_current = true AND is_valid = true`,
+      [input.metricCode, actor, reason],
+    );
+
+    await client.query(
+      `INSERT INTO ${CORE_TABLE}
+        (record_id, metric_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, now(), true, true, $3, $4, $5)`,
+      [crypto.randomUUID(), input.metricCode, RUN_ID, actor, reason],
+    );
+    await client.query(
+      `INSERT INTO ${PROFILE_TABLE}
+        (record_id, metric_code, metric_name, metric_description, data_type_code, direction_code,
+         unit_code, notes_text, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), true, true, $9, $10, $11)`,
+      [
+        crypto.randomUUID(),
+        input.metricCode,
+        input.metricName,
+        input.metricDescription ?? null,
+        input.dataTypeCode,
+        input.directionCode,
+        input.unitCode ?? null,
+        input.notesText ?? null,
+        RUN_ID,
+        actor,
+        reason,
       ],
     );
   });
@@ -194,10 +227,18 @@ export async function setMetricValidity(
   actorId: string | null,
   changeReason: string = "manual_update",
 ): Promise<void> {
-  await queryAdmin(
-    `UPDATE public.adm_dim_metric_scd2
-     SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
-     WHERE metric_code = $1 AND is_current = true`,
-    [metricCode, isValid, actorId, changeReason],
-  );
+  await withAdminTransaction(async (client) => {
+    await client.query(
+      `UPDATE ${CORE_TABLE}
+       SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
+       WHERE metric_code = $1 AND is_current = true`,
+      [metricCode, isValid, actorId, changeReason],
+    );
+    await client.query(
+      `UPDATE ${PROFILE_TABLE}
+       SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
+       WHERE metric_code = $1 AND is_current = true`,
+      [metricCode, isValid, actorId, changeReason],
+    );
+  });
 }

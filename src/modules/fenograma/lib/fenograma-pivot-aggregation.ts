@@ -1,5 +1,4 @@
 import type {
-  FenogramaMetric,
   FenogramaPivotRow,
   FenogramaWeekMetricValues,
 } from "@/lib/fenograma";

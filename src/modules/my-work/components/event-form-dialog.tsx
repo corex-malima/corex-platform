@@ -10,8 +10,6 @@ import { ToggleSwitch } from "@/shared/forms/toggle-switch";
 import { SingleSelectField } from "@/shared/filters/single-select-field";
 import type { EventFormValue, MyWorkSpace, MyWorkTask } from "@/modules/my-work/server/types";
 
-const selectClassName =
-  "h-11 w-full rounded-[16px] border border-input bg-background px-4 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40";
 const textareaClassName =
   "flex min-h-[120px] w-full rounded-[16px] border border-input bg-background px-4 py-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40";
 

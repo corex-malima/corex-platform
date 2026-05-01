@@ -140,7 +140,6 @@ export function PoscosechaSkusExplorer({
 
   const {
     data,
-    error,
     isValidating,
     mutate,
   } = useSWR(

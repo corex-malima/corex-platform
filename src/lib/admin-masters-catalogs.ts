@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { queryAdmin, withAdminTransaction } from "@/lib/admin-db";
 
 export type AdminCatalogDomain = {
@@ -64,6 +66,12 @@ type ItemRow = {
   valid_to: Date | string | null;
 };
 
+const DOMAIN_TABLE = "public.adm_dim_catalog_domain_profile_cur";
+const GROUP_CORE_TABLE = "public.adm_ref_catalog_group_id_core_scd2";
+const GROUP_PROFILE_TABLE = "public.adm_dim_catalog_group_profile_scd2";
+const ITEM_CORE_TABLE = "public.adm_ref_catalog_item_id_core_scd2";
+const ITEM_PROFILE_TABLE = "public.adm_dim_catalog_item_profile_scd2";
+
 const RUN_ID = "corex_admin_masters";
 
 function toIsoDate(value: Date | string): string {
@@ -80,18 +88,18 @@ export async function loadAdminCatalogs(): Promise<AdminCatalogPayload> {
     const [domains, groups, items] = await Promise.all([
       queryAdmin<DomainRow>(
         `SELECT domain_code, domain_name, domain_description, display_order, is_valid
-         FROM public.adm_dim_catalog_domain_cur
+         FROM ${DOMAIN_TABLE}
          ORDER BY display_order, domain_code`,
       ),
       queryAdmin<GroupRow>(
         `SELECT catalog_code, catalog_name, catalog_description, domain_code, is_system_catalog, valid_from, valid_to
-         FROM public.adm_dim_catalog_group_scd2
+         FROM ${GROUP_PROFILE_TABLE}
          WHERE is_current = true AND is_valid = true
          ORDER BY domain_code, catalog_code`,
       ),
       queryAdmin<ItemRow>(
         `SELECT catalog_code, item_code, item_label_es, item_label_en, item_description, display_order, valid_from, valid_to
-         FROM public.adm_dim_catalog_item_scd2
+         FROM ${ITEM_PROFILE_TABLE}
          WHERE is_current = true AND is_valid = true
          ORDER BY catalog_code, display_order, item_code`,
       ),
@@ -145,7 +153,7 @@ export type UpsertDomainInput = {
 export async function upsertAdminDomain(input: UpsertDomainInput): Promise<void> {
   await queryAdmin(
     `
-    INSERT INTO public.adm_dim_catalog_domain_cur
+    INSERT INTO ${DOMAIN_TABLE}
       (domain_code, domain_name, domain_description, display_order, is_valid, run_id, actor_id, change_reason)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     ON CONFLICT (domain_code) DO UPDATE SET
@@ -177,14 +185,14 @@ export async function setAdminDomainValidity(
   changeReason: string = "manual_update",
 ): Promise<void> {
   await queryAdmin(
-    `UPDATE public.adm_dim_catalog_domain_cur
+    `UPDATE ${DOMAIN_TABLE}
      SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
      WHERE domain_code = $1`,
     [domainCode, isValid, actorId, changeReason],
   );
 }
 
-// ===== GRUPOS DE CATALOGO (SCD2: insert nueva version, cierra anterior) =====
+// ===== GRUPOS DE CATALOGO (SCD2: core + profile) =====
 
 export type UpsertGroupInput = {
   catalogCode: string;
@@ -198,30 +206,43 @@ export type UpsertGroupInput = {
 
 export async function upsertAdminCatalogGroup(input: UpsertGroupInput): Promise<void> {
   await withAdminTransaction(async (client) => {
-    // Cerrar version actual si existe
+    const actor = input.actorId ?? null;
+    const reason = input.changeReason ?? "manual_update";
+
     await client.query(
-      `UPDATE public.adm_dim_catalog_group_scd2
-       SET is_current = false, valid_to = now(), loaded_at = now(),
-           actor_id = $2, change_reason = $3
+      `UPDATE ${GROUP_CORE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = $3
        WHERE catalog_code = $1 AND is_current = true AND is_valid = true`,
-      [input.catalogCode, input.actorId ?? null, input.changeReason ?? "manual_update"],
+      [input.catalogCode, actor, reason],
+    );
+    await client.query(
+      `UPDATE ${GROUP_PROFILE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = $3
+       WHERE catalog_code = $1 AND is_current = true AND is_valid = true`,
+      [input.catalogCode, actor, reason],
     );
 
-    // Insertar nueva version
     await client.query(
-      `INSERT INTO public.adm_dim_catalog_group_scd2
-        (catalog_code, catalog_name, catalog_description, domain_code, is_system_catalog,
+      `INSERT INTO ${GROUP_CORE_TABLE}
+        (record_id, catalog_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, now(), true, true, $3, $4, $5)`,
+      [crypto.randomUUID(), input.catalogCode, RUN_ID, actor, reason],
+    );
+    await client.query(
+      `INSERT INTO ${GROUP_PROFILE_TABLE}
+        (record_id, catalog_code, catalog_name, catalog_description, domain_code, is_system_catalog,
          valid_from, is_current, is_valid, run_id, actor_id, change_reason)
-       VALUES ($1, $2, $3, $4, $5, now(), true, true, $6, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, now(), true, true, $7, $8, $9)`,
       [
+        crypto.randomUUID(),
         input.catalogCode,
         input.catalogName,
         input.catalogDescription ?? null,
         input.domainCode,
         input.isSystemCatalog ?? false,
         RUN_ID,
-        input.actorId ?? null,
-        input.changeReason ?? "manual_update",
+        actor,
+        reason,
       ],
     );
   });
@@ -233,15 +254,23 @@ export async function setAdminCatalogGroupValidity(
   actorId: string | null,
   changeReason: string = "manual_update",
 ): Promise<void> {
-  await queryAdmin(
-    `UPDATE public.adm_dim_catalog_group_scd2
-     SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
-     WHERE catalog_code = $1 AND is_current = true`,
-    [catalogCode, isValid, actorId, changeReason],
-  );
+  await withAdminTransaction(async (client) => {
+    await client.query(
+      `UPDATE ${GROUP_CORE_TABLE}
+       SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
+       WHERE catalog_code = $1 AND is_current = true`,
+      [catalogCode, isValid, actorId, changeReason],
+    );
+    await client.query(
+      `UPDATE ${GROUP_PROFILE_TABLE}
+       SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
+       WHERE catalog_code = $1 AND is_current = true`,
+      [catalogCode, isValid, actorId, changeReason],
+    );
+  });
 }
 
-// ===== ITEMS DE CATALOGO (SCD2) =====
+// ===== ITEMS DE CATALOGO (SCD2: core + profile) =====
 
 export type UpsertItemInput = {
   catalogCode: string;
@@ -256,25 +285,35 @@ export type UpsertItemInput = {
 
 export async function upsertAdminCatalogItem(input: UpsertItemInput): Promise<void> {
   await withAdminTransaction(async (client) => {
+    const actor = input.actorId ?? null;
+    const reason = input.changeReason ?? "manual_update";
+
     await client.query(
-      `UPDATE public.adm_dim_catalog_item_scd2
-       SET is_current = false, valid_to = now(), loaded_at = now(),
-           actor_id = $3, change_reason = $4
+      `UPDATE ${ITEM_CORE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $3, change_reason = $4
        WHERE catalog_code = $1 AND item_code = $2 AND is_current = true AND is_valid = true`,
-      [
-        input.catalogCode,
-        input.itemCode,
-        input.actorId ?? null,
-        input.changeReason ?? "manual_update",
-      ],
+      [input.catalogCode, input.itemCode, actor, reason],
+    );
+    await client.query(
+      `UPDATE ${ITEM_PROFILE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $3, change_reason = $4
+       WHERE catalog_code = $1 AND item_code = $2 AND is_current = true AND is_valid = true`,
+      [input.catalogCode, input.itemCode, actor, reason],
     );
 
     await client.query(
-      `INSERT INTO public.adm_dim_catalog_item_scd2
-        (catalog_code, item_code, item_label_es, item_label_en, item_description, display_order,
+      `INSERT INTO ${ITEM_CORE_TABLE}
+        (record_id, catalog_code, item_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, now(), true, true, $4, $5, $6)`,
+      [crypto.randomUUID(), input.catalogCode, input.itemCode, RUN_ID, actor, reason],
+    );
+    await client.query(
+      `INSERT INTO ${ITEM_PROFILE_TABLE}
+        (record_id, catalog_code, item_code, item_label_es, item_label_en, item_description, display_order,
          valid_from, is_current, is_valid, run_id, actor_id, change_reason)
-       VALUES ($1, $2, $3, $4, $5, $6, now(), true, true, $7, $8, $9)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, now(), true, true, $8, $9, $10)`,
       [
+        crypto.randomUUID(),
         input.catalogCode,
         input.itemCode,
         input.itemLabelEs,
@@ -282,8 +321,8 @@ export async function upsertAdminCatalogItem(input: UpsertItemInput): Promise<vo
         input.itemDescription ?? null,
         input.displayOrder ?? 0,
         RUN_ID,
-        input.actorId ?? null,
-        input.changeReason ?? "manual_update",
+        actor,
+        reason,
       ],
     );
   });
@@ -296,10 +335,18 @@ export async function setAdminCatalogItemValidity(
   actorId: string | null,
   changeReason: string = "manual_update",
 ): Promise<void> {
-  await queryAdmin(
-    `UPDATE public.adm_dim_catalog_item_scd2
-     SET is_valid = $3, loaded_at = now(), actor_id = $4, change_reason = $5
-     WHERE catalog_code = $1 AND item_code = $2 AND is_current = true`,
-    [catalogCode, itemCode, isValid, actorId, changeReason],
-  );
+  await withAdminTransaction(async (client) => {
+    await client.query(
+      `UPDATE ${ITEM_CORE_TABLE}
+       SET is_valid = $3, loaded_at = now(), actor_id = $4, change_reason = $5
+       WHERE catalog_code = $1 AND item_code = $2 AND is_current = true`,
+      [catalogCode, itemCode, isValid, actorId, changeReason],
+    );
+    await client.query(
+      `UPDATE ${ITEM_PROFILE_TABLE}
+       SET is_valid = $3, loaded_at = now(), actor_id = $4, change_reason = $5
+       WHERE catalog_code = $1 AND item_code = $2 AND is_current = true`,
+      [catalogCode, itemCode, isValid, actorId, changeReason],
+    );
+  });
 }

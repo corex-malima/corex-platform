@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { queryAdmin, withAdminTransaction } from "@/lib/admin-db";
 
 export type AdminUnit = {
@@ -35,6 +37,8 @@ type UnitRow = {
   change_reason: string;
 };
 
+const CORE_TABLE = "public.adm_ref_unit_of_measure_id_core_scd2";
+const PROFILE_TABLE = "public.adm_dim_unit_of_measure_profile_scd2";
 const RUN_ID = "corex_admin_units";
 
 function toIso(value: Date | string): string {
@@ -64,7 +68,7 @@ export async function listActiveUnits(): Promise<AdminUnit[]> {
     const result = await queryAdmin<UnitRow>(
       `SELECT record_id, unit_code, unit_name, unit_symbol, unit_category_code, notes_text,
               valid_from, valid_to, is_current, is_valid, loaded_at, actor_id, change_reason
-       FROM public.adm_dim_unit_of_measure_scd2
+       FROM ${PROFILE_TABLE}
        WHERE is_current = true AND is_valid = true
        ORDER BY unit_category_code NULLS LAST, unit_code`,
     );
@@ -78,7 +82,7 @@ export async function listUnitHistory(unitCode: string): Promise<AdminUnitHistor
   const result = await queryAdmin<UnitRow>(
     `SELECT record_id, unit_code, unit_name, unit_symbol, unit_category_code, notes_text,
             valid_from, valid_to, is_current, is_valid, loaded_at, actor_id, change_reason
-     FROM public.adm_dim_unit_of_measure_scd2
+     FROM ${PROFILE_TABLE}
      WHERE unit_code = $1
      ORDER BY valid_from DESC, loaded_at DESC`,
     [unitCode],
@@ -103,52 +107,75 @@ export type UpsertUnitInput = {
 };
 
 export async function createUnit(input: UpsertUnitInput): Promise<void> {
-  await queryAdmin(
-    `INSERT INTO public.adm_dim_unit_of_measure_scd2
-      (unit_code, unit_name, unit_symbol, unit_category_code, notes_text,
-       valid_from, is_current, is_valid, run_id, actor_id, change_reason)
-     VALUES ($1, $2, $3, $4, $5, now(), true, true, $6, $7, $8)`,
-    [
-      input.unitCode,
-      input.unitName,
-      input.unitSymbol ?? null,
-      input.unitCategoryCode ?? null,
-      input.notesText ?? null,
-      RUN_ID,
-      input.actorId ?? null,
-      input.changeReason ?? "manual_create",
-    ],
-  );
-}
-
-/**
- * SCD2 update: cierra la version actual (is_current=false, valid_to=now)
- * e inserta una nueva version con is_current=true.
- */
-export async function updateUnit(input: UpsertUnitInput): Promise<void> {
   await withAdminTransaction(async (client) => {
-    await client.query(
-      `UPDATE public.adm_dim_unit_of_measure_scd2
-       SET is_current = false, valid_to = now(), loaded_at = now(),
-           actor_id = $2, change_reason = $3
-       WHERE unit_code = $1 AND is_current = true AND is_valid = true`,
-      [input.unitCode, input.actorId ?? null, input.changeReason ?? "manual_update"],
-    );
+    const actor = input.actorId ?? null;
+    const reason = input.changeReason ?? "manual_create";
 
     await client.query(
-      `INSERT INTO public.adm_dim_unit_of_measure_scd2
-        (unit_code, unit_name, unit_symbol, unit_category_code, notes_text,
+      `INSERT INTO ${CORE_TABLE}
+        (record_id, unit_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, now(), true, true, $3, $4, $5)`,
+      [crypto.randomUUID(), input.unitCode, RUN_ID, actor, reason],
+    );
+    await client.query(
+      `INSERT INTO ${PROFILE_TABLE}
+        (record_id, unit_code, unit_name, unit_symbol, unit_category_code, notes_text,
          valid_from, is_current, is_valid, run_id, actor_id, change_reason)
-       VALUES ($1, $2, $3, $4, $5, now(), true, true, $6, $7, $8)`,
+       VALUES ($1, $2, $3, $4, $5, $6, now(), true, true, $7, $8, $9)`,
       [
+        crypto.randomUUID(),
         input.unitCode,
         input.unitName,
         input.unitSymbol ?? null,
         input.unitCategoryCode ?? null,
         input.notesText ?? null,
         RUN_ID,
-        input.actorId ?? null,
-        input.changeReason ?? "manual_update",
+        actor,
+        reason,
+      ],
+    );
+  });
+}
+
+export async function updateUnit(input: UpsertUnitInput): Promise<void> {
+  await withAdminTransaction(async (client) => {
+    const actor = input.actorId ?? null;
+    const reason = input.changeReason ?? "manual_update";
+
+    await client.query(
+      `UPDATE ${CORE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = $3
+       WHERE unit_code = $1 AND is_current = true AND is_valid = true`,
+      [input.unitCode, actor, reason],
+    );
+    await client.query(
+      `UPDATE ${PROFILE_TABLE}
+       SET is_current = false, valid_to = now(), loaded_at = now(), actor_id = $2, change_reason = $3
+       WHERE unit_code = $1 AND is_current = true AND is_valid = true`,
+      [input.unitCode, actor, reason],
+    );
+
+    await client.query(
+      `INSERT INTO ${CORE_TABLE}
+        (record_id, unit_code, valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, now(), true, true, $3, $4, $5)`,
+      [crypto.randomUUID(), input.unitCode, RUN_ID, actor, reason],
+    );
+    await client.query(
+      `INSERT INTO ${PROFILE_TABLE}
+        (record_id, unit_code, unit_name, unit_symbol, unit_category_code, notes_text,
+         valid_from, is_current, is_valid, run_id, actor_id, change_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, now(), true, true, $7, $8, $9)`,
+      [
+        crypto.randomUUID(),
+        input.unitCode,
+        input.unitName,
+        input.unitSymbol ?? null,
+        input.unitCategoryCode ?? null,
+        input.notesText ?? null,
+        RUN_ID,
+        actor,
+        reason,
       ],
     );
   });
@@ -160,10 +187,18 @@ export async function setUnitValidity(
   actorId: string | null,
   changeReason: string = "manual_update",
 ): Promise<void> {
-  await queryAdmin(
-    `UPDATE public.adm_dim_unit_of_measure_scd2
-     SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
-     WHERE unit_code = $1 AND is_current = true`,
-    [unitCode, isValid, actorId, changeReason],
-  );
+  await withAdminTransaction(async (client) => {
+    await client.query(
+      `UPDATE ${CORE_TABLE}
+       SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
+       WHERE unit_code = $1 AND is_current = true`,
+      [unitCode, isValid, actorId, changeReason],
+    );
+    await client.query(
+      `UPDATE ${PROFILE_TABLE}
+       SET is_valid = $2, loaded_at = now(), actor_id = $3, change_reason = $4
+       WHERE unit_code = $1 AND is_current = true`,
+      [unitCode, isValid, actorId, changeReason],
+    );
+  });
 }

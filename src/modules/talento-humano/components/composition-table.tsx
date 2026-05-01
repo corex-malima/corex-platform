@@ -57,10 +57,10 @@ export function CompositionTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, rowIndex) => (
-              <CompositionTableRow key={row.label} row={row} rowIndex={rowIndex} onClick={() => onSelect(row)} />
+            {rows.map((row) => (
+              <CompositionTableRow key={row.label} row={row} onClick={() => onSelect(row)} />
             ))}
-            <CompositionTableRow row={totalRow} rowIndex={-1} total onClick={() => onSelect(totalRow)} />
+            <CompositionTableRow row={totalRow} total onClick={() => onSelect(totalRow)} />
           </tbody>
         </table>
       </ScrollFadeTable>
@@ -70,12 +70,10 @@ export function CompositionTable({
 
 function CompositionTableRow({
   row,
-  rowIndex,
   total,
   onClick,
 }: {
   row: CompositionRow;
-  rowIndex: number;
   total?: boolean;
   onClick: () => void;
 }) {

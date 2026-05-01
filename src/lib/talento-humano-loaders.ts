@@ -95,11 +95,6 @@ function toIsoDate(value: DateValue): string | null {
   return s.includes("T") ? s.slice(0, 10) : s;
 }
 
-function normalizeDate(value: string | undefined, fallback: string) {
-  const cleaned = value?.trim();
-  return cleaned && /^\d{4}-\d{2}-\d{2}$/.test(cleaned) ? cleaned : fallback;
-}
-
 function pushCommonFilter(
   filters: TalentoFilters,
   activeAlias: string,
