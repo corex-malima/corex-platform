@@ -1,7 +1,6 @@
 import { Pool, type PoolClient, type PoolConfig, type QueryResultRow } from "pg";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __dashboardBodegaPool: Pool | undefined;
 }
 

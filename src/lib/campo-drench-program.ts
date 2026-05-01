@@ -927,7 +927,7 @@ export async function deleteDrenchProgramRule(ruleId: string, actorId: string) {
 export async function deleteDrenchProgramGroup(
   cycleType: DrenchProgramCycleType,
   varietyCode: string,
-  actorId: string,
+  _actorId: string,
 ) {
   await initializeDrenchProgramMaster();
   const currentRules = await getCurrentRulesByGroup(cycleType, varietyCode);

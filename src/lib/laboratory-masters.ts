@@ -85,7 +85,6 @@ const PRODUCT_USAGE_TABLE = "public.lab_bridge_product_usage_scd2";
 const PRODUCT_RECIPE_TABLE = "public.lab_bridge_product_recipe_line_scd2";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __dashboardLaboratoryMastersSetup: Promise<void> | undefined;
 }
 
