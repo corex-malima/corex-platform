@@ -173,6 +173,21 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/campo/administrar-maestros/programacion-drench"],
   },
   {
+    pathnamePrefix: "/api/laboratorio/administrar-maestros/receta-productos",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/laboratorio/administrar-maestros/receta-productos"],
+  },
+  {
+    pathnamePrefix: "/api/laboratorio/administrar-maestros/tipos-elaboracion",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/laboratorio/administrar-maestros/tipos-elaboracion"],
+  },
+  {
+    pathnamePrefix: "/api/bodega/planificacion/programaciones",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/bodega/planificacion/programaciones"],
+  },
+  {
     pathnamePrefix: "/api/bodega/administrar-maestros/actividades-fuente",
     policy: "resource-bound",
     requiredResources: ["/dashboard/bodega/administrar-maestros/productos"],

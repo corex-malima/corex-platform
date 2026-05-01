@@ -1,11 +1,11 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 
 import {
   formatActivityUsageLabel,
   getCurrentBodegaSourceActivitiesById,
 } from "@/lib/bodega-activity-source";
-import { queryCamp, withCampTransaction } from "@/lib/camp-db";
+import { queryBodega, withBodegaTransaction } from "@/lib/bodega-db";
 import type {
   BodegaActiveComponentMode,
   BodegaActivityRecord,
@@ -116,15 +116,15 @@ type CurrentPresentationRow = {
   change_reason: string | null;
 };
 
-const UNIT_REF_TABLE = "public.bodega_ref_unit_id_core_scd2";
-const UNIT_DIM_TABLE = "public.bodega_dim_unit_profile_scd2";
-const CATEGORY_REF_TABLE = "public.bodega_ref_category_id_core_scd2";
-const CATEGORY_DIM_TABLE = "public.bodega_dim_category_profile_scd2";
-const PRODUCT_REF_TABLE = "public.bodega_ref_product_id_core_scd2";
-const PRODUCT_DIM_TABLE = "public.bodega_dim_product_profile_scd2";
-const PRODUCT_USAGE_TABLE = "public.bodega_bridge_product_usage_scd2";
-const PRESENTATION_REF_TABLE = "public.bodega_ref_product_presentation_id_core_scd2";
-const PRESENTATION_DIM_TABLE = "public.bodega_dim_product_presentation_profile_scd2";
+const UNIT_REF_TABLE = "public.sr_ref_unit_id_core_scd2";
+const UNIT_DIM_TABLE = "public.sr_dim_unit_profile_scd2";
+const CATEGORY_REF_TABLE = "public.sr_ref_category_id_core_scd2";
+const CATEGORY_DIM_TABLE = "public.sr_dim_category_profile_scd2";
+const PRODUCT_REF_TABLE = "public.sr_ref_product_id_core_scd2";
+const PRODUCT_DIM_TABLE = "public.sr_dim_product_profile_scd2";
+const PRODUCT_USAGE_TABLE = "public.sr_bridge_product_usage_scd2";
+const PRESENTATION_REF_TABLE = "public.sr_ref_product_presentation_id_core_scd2";
+const PRESENTATION_DIM_TABLE = "public.sr_dim_product_presentation_profile_scd2";
 
 declare global {
   var __dashboardBodegaMastersSetup: Promise<void> | undefined;
@@ -407,12 +407,12 @@ function sanitizePresentationInput(input: BodegaPresentationInput) {
 }
 
 async function ensureTables(client?: PoolClient) {
-  const runQuery = (text: string) => client ? client.query(text) : queryCamp(text);
+  const runQuery = (text: string) => client ? client.query(text) : queryBodega(text);
   const runTypedQuery = <T extends QueryResultRow>(text: string, values: unknown[] = []) => {
     if (client) {
       return client.query<T>(text, values);
     }
-    return queryCamp<T>(text, values);
+    return queryBodega<T>(text, values);
   };
 
   await runQuery(`
@@ -452,19 +452,19 @@ async function ensureTables(client?: PoolClient) {
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_ref_unit_id_core_scd2_current_idx
+create unique index if not exists sr_ref_unit_id_core_scd2_current_idx
       on ${UNIT_REF_TABLE} (unit_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_unit_profile_scd2_current_idx
+create unique index if not exists sr_dim_unit_profile_scd2_current_idx
       on ${UNIT_DIM_TABLE} (unit_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_unit_profile_scd2_current_code_unique_idx
+create unique index if not exists sr_dim_unit_profile_scd2_current_code_unique_idx
       on ${UNIT_DIM_TABLE} (lower(regexp_replace(trim(unit_code), '\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
@@ -508,26 +508,26 @@ async function ensureTables(client?: PoolClient) {
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_ref_category_id_core_scd2_current_idx
+create unique index if not exists sr_ref_category_id_core_scd2_current_idx
       on ${CATEGORY_REF_TABLE} (category_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_category_profile_scd2_current_idx
+create unique index if not exists sr_dim_category_profile_scd2_current_idx
       on ${CATEGORY_DIM_TABLE} (category_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_category_profile_scd2_current_code_unique_idx
+create unique index if not exists sr_dim_category_profile_scd2_current_code_unique_idx
       on ${CATEGORY_DIM_TABLE} (lower(regexp_replace(trim(category_code), '\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_category_profile_scd2_name_parent_unique_idx
+create unique index if not exists sr_dim_category_profile_scd2_name_parent_unique_idx
       on ${CATEGORY_DIM_TABLE} (
         lower(regexp_replace(trim(category_name), '\s+', ' ', 'g')),
         category_level,
@@ -649,45 +649,45 @@ async function ensureTables(client?: PoolClient) {
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_ref_product_id_core_scd2_current_idx
+create unique index if not exists sr_ref_product_id_core_scd2_current_idx
       on ${PRODUCT_REF_TABLE} (product_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_product_profile_scd2_current_idx
+create unique index if not exists sr_dim_product_profile_scd2_current_idx
       on ${PRODUCT_DIM_TABLE} (product_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_product_profile_scd2_current_code_unique_idx
+create unique index if not exists sr_dim_product_profile_scd2_current_code_unique_idx
       on ${PRODUCT_DIM_TABLE} (lower(regexp_replace(trim(product_code), '\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_product_profile_scd2_current_name_unique_idx
+create unique index if not exists sr_dim_product_profile_scd2_current_name_unique_idx
       on ${PRODUCT_DIM_TABLE} (lower(regexp_replace(trim(product_name), '\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_ref_product_presentation_id_core_scd2_current_idx
+create unique index if not exists sr_ref_product_presentation_id_core_scd2_current_idx
       on ${PRESENTATION_REF_TABLE} (presentation_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_product_presentation_profile_scd2_current_idx
+create unique index if not exists sr_dim_product_presentation_profile_scd2_current_idx
       on ${PRESENTATION_DIM_TABLE} (presentation_id)
       where is_current
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_dim_product_presentation_profile_scd2_current_code_unique_idx
+create unique index if not exists sr_dim_product_presentation_profile_scd2_current_code_unique_idx
       on ${PRESENTATION_DIM_TABLE} (lower(regexp_replace(trim(presentation_code), '\s+', ' ', 'g')))
       where is_current = true
         and is_valid = true
@@ -698,7 +698,7 @@ async function ensureTables(client?: PoolClient) {
       select column_name
       from information_schema.columns
       where table_schema = 'public'
-        and table_name = 'bodega_bridge_product_usage_scd2'
+and table_name = 'sr_bridge_product_usage_scd2'
     `,
   );
   const existingUsageColumns = new Set(usageTableColumns.rows.map((row) => row.column_name));
@@ -726,19 +726,19 @@ async function ensureTables(client?: PoolClient) {
   `);
 
   await runQuery(`
-    create index if not exists bodega_bridge_product_usage_scd2_current_product_idx
+create index if not exists sr_bridge_product_usage_scd2_current_product_idx
       on ${PRODUCT_USAGE_TABLE} (product_id, branch_order)
       where is_current = true
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_bridge_product_usage_scd2_current_branch_unique_idx
+create unique index if not exists sr_bridge_product_usage_scd2_current_branch_unique_idx
       on ${PRODUCT_USAGE_TABLE} (product_id, branch_order)
       where is_current = true
   `);
 
   await runQuery(`
-    create unique index if not exists bodega_bridge_product_usage_scd2_current_activity_unique_idx
+create unique index if not exists sr_bridge_product_usage_scd2_current_activity_unique_idx
       on ${PRODUCT_USAGE_TABLE} (product_id, activity_id)
       where is_current = true
   `);
@@ -847,7 +847,7 @@ function mapAssignments(
 async function getCurrentCategoryRows() {
   await initializeBodegaMasters();
 
-  const result = await queryCamp<CurrentCategoryRow>(
+  const result = await queryBodega<CurrentCategoryRow>(
     `
       select
         category_id,
@@ -881,7 +881,7 @@ async function getCurrentCategoryRows() {
 }
 
 async function ensureUniqueCurrentUnitCode(code: string, excludeUnitId?: string) {
-  const result = await queryCamp<{ unit_id: string }>(
+  const result = await queryBodega<{ unit_id: string }>(
     `
       select unit_id
       from ${UNIT_DIM_TABLE}
@@ -900,7 +900,7 @@ async function ensureUniqueCurrentUnitCode(code: string, excludeUnitId?: string)
 }
 
 async function ensureUniqueCurrentCategoryCode(code: string, excludeCategoryId?: string) {
-  const result = await queryCamp<{ category_id: string }>(
+  const result = await queryBodega<{ category_id: string }>(
     `
       select category_id
       from ${CATEGORY_DIM_TABLE}
@@ -919,7 +919,7 @@ async function ensureUniqueCurrentCategoryCode(code: string, excludeCategoryId?:
 }
 
 async function ensureUniqueCurrentProductCode(code: string, excludeProductId?: string) {
-  const result = await queryCamp<{ product_id: string }>(
+  const result = await queryBodega<{ product_id: string }>(
     `
       select product_id
       from ${PRODUCT_DIM_TABLE}
@@ -938,7 +938,7 @@ async function ensureUniqueCurrentProductCode(code: string, excludeProductId?: s
 }
 
 async function getCurrentUnitById(unitId: string) {
-  const result = await queryCamp<CurrentUnitRow>(
+  const result = await queryBodega<CurrentUnitRow>(
     `
       select
         unit_id,
@@ -1001,7 +1001,7 @@ async function validateCategoryParent(
 export async function listCurrentBodegaUnits() {
   await initializeBodegaMasters();
 
-  const result = await queryCamp<CurrentUnitRow>(
+  const result = await queryBodega<CurrentUnitRow>(
     `
       select
         unit_id,
@@ -1037,7 +1037,7 @@ export async function createBodegaUnit(input: BodegaUnitInput, actorId: string) 
   const runId = makeRunId("bodega_unit_create");
   const changeReason = sanitized.changeReason ?? "CREATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `
         insert into ${UNIT_REF_TABLE} (
@@ -1089,7 +1089,7 @@ export async function updateBodegaUnit(unitId: string, input: BodegaUnitInput, a
   const runId = makeRunId("bodega_unit_update");
   const changeReason = sanitized.changeReason ?? "UPDATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `update ${UNIT_REF_TABLE} set is_current = false, valid_to = $2 where unit_id = $1 and is_current = true`,
       [unitId, now],
@@ -1152,7 +1152,7 @@ export async function createBodegaCategory(input: BodegaCategoryInput, actorId: 
   const runId = makeRunId("bodega_category_create");
   const changeReason = sanitized.changeReason ?? "CREATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `
         insert into ${CATEGORY_REF_TABLE} (
@@ -1206,7 +1206,7 @@ export async function updateBodegaCategory(categoryId: string, input: BodegaCate
   const runId = makeRunId("bodega_category_update");
   const changeReason = sanitized.changeReason ?? "UPDATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `update ${CATEGORY_REF_TABLE} set is_current = false, valid_to = $2 where category_id = $1 and is_current = true`,
       [categoryId, now],
@@ -1283,7 +1283,7 @@ async function ensureCurrentActivitiesExist(activityIds: string[]) {
 async function getCurrentProductRows() {
   await initializeBodegaMasters();
 
-  const result = await queryCamp<CurrentProductRow>(
+  const result = await queryBodega<CurrentProductRow>(
     `
       select
         dim.product_id,
@@ -1319,7 +1319,7 @@ async function getCurrentProductRows() {
 }
 
 async function getCurrentAssignments() {
-  const result = await queryCamp<CurrentAssignmentRow>(
+  const result = await queryBodega<CurrentAssignmentRow>(
     `
       select
         product_id,
@@ -1429,7 +1429,7 @@ export async function createBodegaProduct(input: BodegaProductInput, actorId: st
   const runId = makeRunId("bodega_product_create");
   const changeReason = sanitized.changeReason ?? "CREATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `
         insert into ${PRODUCT_REF_TABLE} (
@@ -1508,7 +1508,7 @@ export async function updateBodegaProduct(productId: string, input: BodegaProduc
   const runId = makeRunId("bodega_product_update");
   const changeReason = sanitized.changeReason ?? "UPDATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `update ${PRODUCT_REF_TABLE} set is_current = false, valid_to = $2 where product_id = $1 and is_current = true`,
       [productId, now],
@@ -1583,7 +1583,7 @@ export async function updateBodegaProduct(productId: string, input: BodegaProduc
 }
 
 async function ensureUniqueCurrentPresentationCode(code: string, excludePresentationId?: string) {
-  const result = await queryCamp<{ presentation_id: string }>(
+  const result = await queryBodega<{ presentation_id: string }>(
     `
       select presentation_id
       from ${PRESENTATION_DIM_TABLE}
@@ -1640,7 +1640,7 @@ function resolvePresentationConversion(
 async function getCurrentPresentationRows() {
   await initializeBodegaMasters();
 
-  const result = await queryCamp<CurrentPresentationRow>(
+  const result = await queryBodega<CurrentPresentationRow>(
     `
       select
         pres.presentation_id,
@@ -1759,7 +1759,7 @@ export async function createBodegaPresentation(input: BodegaPresentationInput, a
   const runId = makeRunId("bodega_presentation_create");
   const changeReason = sanitized.changeReason ?? "CREATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `
         insert into ${PRESENTATION_REF_TABLE} (
@@ -1831,7 +1831,7 @@ export async function updateBodegaPresentation(presentationId: string, input: Bo
   const runId = makeRunId("bodega_presentation_update");
   const changeReason = sanitized.changeReason ?? "UPDATE_FROM_COREX_UI";
 
-  await withCampTransaction(async (client) => {
+  await withBodegaTransaction(async (client) => {
     await client.query(
       `update ${PRESENTATION_REF_TABLE} set is_current = false, valid_to = $2 where presentation_id = $1 and is_current = true`,
       [presentationId, now],
@@ -1889,10 +1889,10 @@ export async function getBodegaMasterCounts() {
   await initializeBodegaMasters();
 
   const [units, categories, products, presentations] = await Promise.all([
-    queryCamp<CountRow>(`select count(*)::int as total from ${UNIT_DIM_TABLE} where is_current = true`),
-    queryCamp<CountRow>(`select count(*)::int as total from ${CATEGORY_DIM_TABLE} where is_current = true`),
-    queryCamp<CountRow>(`select count(*)::int as total from ${PRODUCT_DIM_TABLE} where is_current = true`),
-    queryCamp<CountRow>(`select count(*)::int as total from ${PRESENTATION_DIM_TABLE} where is_current = true`),
+    queryBodega<CountRow>(`select count(*)::int as total from ${UNIT_DIM_TABLE} where is_current = true`),
+    queryBodega<CountRow>(`select count(*)::int as total from ${CATEGORY_DIM_TABLE} where is_current = true`),
+    queryBodega<CountRow>(`select count(*)::int as total from ${PRODUCT_DIM_TABLE} where is_current = true`),
+    queryBodega<CountRow>(`select count(*)::int as total from ${PRESENTATION_DIM_TABLE} where is_current = true`),
   ]);
 
   return {
@@ -1902,3 +1902,4 @@ export async function getBodegaMasterCounts() {
     presentations: Number(presentations.rows[0]?.total ?? 0),
   };
 }
+

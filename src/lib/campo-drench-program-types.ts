@@ -1,19 +1,26 @@
 export type DrenchProgramCycleType = "S" | "P";
 export const DRENCH_PROGRAM_ACTIVITY_ID = "FM11";
+export type DrenchProductOrigin = "BODEGA" | "LABORATORIO";
+export type DrenchDosageBasis = "PER_LITER" | "PER_BED" | "PER_1000_LITERS";
 
 export type DrenchProgramLineRecord = {
   lineId: string;
   lineOrder: number;
   applicationMethod: string | null;
   litersPerBed: number | null;
+  dosageBasis: DrenchDosageBasis;
+  productOrigin: DrenchProductOrigin;
   productId: string | null;
   productCode: string | null;
   productName: string | null;
+  laboratoryProductId: string | null;
+  laboratoryProductCode: string | null;
+  laboratoryProductName: string | null;
   sourceProductName: string | null;
   sourceProductCode: string | null;
   sourceUnitCode: string | null;
-  quantityValue: number | null;
-  quantityReference: string | null;
+  productQuantityValue: number | null;
+  productQuantityReference: string | null;
   notes: string | null;
   isActive: boolean;
   validFrom: string | null;
@@ -46,12 +53,15 @@ export type DrenchProgramLineInput = {
   lineOrder?: number;
   applicationMethod?: string | null;
   litersPerBed?: number | null;
+  dosageBasis?: DrenchDosageBasis | null;
+  productOrigin?: DrenchProductOrigin | null;
   productId?: string | null;
+  laboratoryProductId?: string | null;
   sourceProductName?: string | null;
   sourceProductCode?: string | null;
   sourceUnitCode?: string | null;
-  quantityValue?: number | null;
-  quantityReference?: string | null;
+  productQuantityValue?: number | null;
+  productQuantityReference?: string | null;
   notes?: string | null;
   isActive?: boolean;
 };
