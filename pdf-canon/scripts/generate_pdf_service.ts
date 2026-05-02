@@ -35,7 +35,8 @@ export type CanonTemplateKey =
   | "ficha_resumen"
   | "anexo_tecnico"
   | "orden_trabajo_clasificacion"
-  | "tthh_agenda_seguimientos";
+  | "tthh_agenda_seguimientos"
+  | "bodega_programacion_drench";
 
 export type GeneratePdfPayload = {
   /**
