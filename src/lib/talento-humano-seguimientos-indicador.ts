@@ -120,10 +120,10 @@ async function loadOptions(): Promise<{ years: string[]; months: string[]; areas
         AND EXTRACT(YEAR FROM f.follow_up_date::date)::int <= EXTRACT(YEAR FROM CURRENT_DATE)::int
     )
     SELECT
-      (SELECT ARRAY_AGG(DISTINCT year_str ORDER BY year_str DESC) FROM base) AS years,
-      (SELECT ARRAY_AGG(DISTINCT month_str::int::text ORDER BY month_str::int ASC) FROM base) AS months,
-      (SELECT ARRAY_AGG(DISTINCT area_name ORDER BY area_name ASC) FROM base WHERE area_name IS NOT NULL) AS areas,
-      (SELECT ARRAY_AGG(DISTINCT associated_worker_name ORDER BY associated_worker_name ASC) FROM base WHERE associated_worker_name IS NOT NULL) AS workers
+      (SELECT ARRAY_AGG(y ORDER BY y::int DESC) FROM (SELECT DISTINCT year_str AS y FROM base) _y) AS years,
+      (SELECT ARRAY_AGG(m ORDER BY m::int ASC)  FROM (SELECT DISTINCT month_str AS m FROM base) _m) AS months,
+      (SELECT ARRAY_AGG(a ORDER BY a ASC)        FROM (SELECT DISTINCT area_name AS a FROM base WHERE area_name IS NOT NULL) _a) AS areas,
+      (SELECT ARRAY_AGG(w ORDER BY w ASC)        FROM (SELECT DISTINCT associated_worker_name AS w FROM base WHERE associated_worker_name IS NOT NULL) _w) AS workers
   `, [asOfDate]);
 
   const row = result.rows[0];
