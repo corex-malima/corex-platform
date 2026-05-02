@@ -17,7 +17,7 @@ import { MetricTile } from "@/shared/data-display/metric-tile";
 import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
-import { formatCount, formatDate, formatInteger, formatIsoWeekLabel } from "@/shared/lib/format";
+import { formatCount, formatDate, formatDecimal, formatInteger, formatIsoWeekLabel } from "@/shared/lib/format";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { ExportButton } from "@/shared/ui/export-button";
@@ -76,13 +76,6 @@ const weekLabel = (option: DrenchWeekCalendarOptions["isoWeeks"][number]) =>
 const fetcher = (url: string) =>
   fetchJson<ExplorerResponse>(url, "No se pudo cargar la calendarizacion semanal de drench.");
 
-function formatDecimal(value: number | null | undefined, digits = 1) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "-";
-  return new Intl.NumberFormat("es-EC", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value);
-}
 
 function buildQueryString(filters: DrenchWeekCalendarFilters) {
   const search = new URLSearchParams();

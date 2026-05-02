@@ -124,6 +124,8 @@ type YearGroup = {
   totalPlantsForRatio: number;
 };
 
+const esEcCollator = new Intl.Collator("es-EC", { numeric: true });
+
 function groupRows(rows: ProductividadRow[]): YearGroup[] {
   const cycleMap = new Map<string, CycleGroup>();
 
@@ -164,7 +166,7 @@ function groupRows(rows: ProductividadRow[]): YearGroup[] {
   }
 
   const yearMap = new Map<string, YearGroup>();
-  const collator = new Intl.Collator("es-EC", { numeric: true });
+  const collator = esEcCollator;
 
   for (const cycle of cycleMap.values()) {
     const year = String(cycle.representative.harvestYear ?? "Sin ano");

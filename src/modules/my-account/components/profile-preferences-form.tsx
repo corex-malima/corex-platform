@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -24,10 +24,7 @@ export function ProfilePreferencesForm({
     sourceSignature: null,
     draft: null,
   });
-  const valueSignature = useMemo(
-    () => `${value.displayName}\u0000${value.contactEmail}`,
-    [value.contactEmail, value.displayName],
-  );
+  const valueSignature = `${value.displayName}|${value.contactEmail}`;
   const currentValue = state.draft ?? value;
 
   if (state.sourceSignature !== valueSignature) {
