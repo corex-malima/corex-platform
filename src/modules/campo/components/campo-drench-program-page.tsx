@@ -95,16 +95,18 @@ const EMPTY_LINE: DrenchProgramLineInput = {
   isActive: true,
 };
 
-const EMPTY_FORM_VALUES: DrenchProgramRuleInput = {
-  phenologicalWeek: 1,
-  cycleType: "S",
-  varietyCode: "",
-  activityId: DRENCH_PROGRAM_ACTIVITY_ID,
-  isActive: true,
-  notes: "",
-  lines: [{ ...EMPTY_LINE }],
-  changeReason: "",
-};
+function makeEmptyFormValues(): DrenchProgramRuleInput {
+  return {
+    phenologicalWeek: 1,
+    cycleType: "S",
+    varietyCode: "",
+    activityId: DRENCH_PROGRAM_ACTIVITY_ID,
+    isActive: true,
+    notes: "",
+    lines: [{ ...EMPTY_LINE, _formKey: crypto.randomUUID() }],
+    changeReason: "",
+  };
+}
 
 const snapshotFetcher = (url: string) =>
   fetchJson<DrenchProgramSnapshot>(url, "No se pudo cargar la programacion de drench.");
@@ -245,6 +247,7 @@ function mapRecordToFormValues(record: DrenchProgramRuleRecord): DrenchProgramRu
     isActive: record.isActive,
     notes: record.notes ?? "",
     lines: record.lines.map((line) => ({
+      _formKey: crypto.randomUUID(),
       lineOrder: line.lineOrder,
       applicationMethod: line.applicationMethod ?? "",
       litersPerBed: line.litersPerBed,
@@ -386,9 +389,10 @@ function describeWeekBand(group: GroupedRecipe) {
 }
 
 function buildCreateValues(group: GroupedRecipe | null): DrenchProgramRuleInput {
-  if (!group) return EMPTY_FORM_VALUES;
+  const base = makeEmptyFormValues();
+  if (!group) return base;
   return {
-    ...EMPTY_FORM_VALUES,
+    ...base,
     cycleType: group.cycleType,
     varietyCode: group.varietyCode,
     phenologicalWeek: nextWeekForGroup(group),
@@ -409,7 +413,7 @@ export function CampoDrenchProgramPage({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
-  const [formValues, setFormValues] = useState<DrenchProgramRuleInput>(EMPTY_FORM_VALUES);
+  const [formValues, setFormValues] = useState<DrenchProgramRuleInput>(makeEmptyFormValues);
   const [lineProductSearchValues, setLineProductSearchValues] = useState<string[]>([""]);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [createGroupDraft, setCreateGroupDraft] = useState<CreateGroupDraft>({ cycleType: "S", varietyCode: "" });
@@ -700,6 +704,7 @@ export function CampoDrenchProgramPage({
         ...current.lines,
         {
           ...EMPTY_LINE,
+          _formKey: crypto.randomUUID(),
           lineOrder: current.lines.length + 1,
           litersPerBed: current.lines[0]?.litersPerBed ?? 50,
           dosageBasis: current.lines[0]?.dosageBasis ?? "PER_LITER",
@@ -748,7 +753,7 @@ export function CampoDrenchProgramPage({
       setSelectedRuleId(null);
       setSelectedGroupKey(existingGroup?.key ?? null);
       setFormValues({
-        ...EMPTY_FORM_VALUES,
+        ...makeEmptyFormValues(),
         cycleType: createGroupDraft.cycleType,
         varietyCode: normalizedVariety,
         phenologicalWeek: existingGroup ? nextWeekForGroup(existingGroup) : 1,
@@ -1292,7 +1297,7 @@ export function CampoDrenchProgramPage({
 
                     return (
                       <div
-                        key={`line-${index}`}
+                        key={line._formKey ?? `line-${index}`}
                         className="rounded-[24px] border border-border/70 bg-background/70 p-4 shadow-sm"
                       >
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

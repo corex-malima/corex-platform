@@ -50,6 +50,7 @@ export type LaboratoryRecipeLineRecord = {
 };
 
 export type LaboratoryRecipeLineInput = {
+  _formKey?: string;
   lineOrder?: number;
   ingredientProductId?: string | null;
   ingredientQuantityValue?: number | null;

@@ -50,6 +50,7 @@ export type DrenchProgramRuleRecord = {
 };
 
 export type DrenchProgramLineInput = {
+  _formKey?: string;
   lineOrder?: number;
   applicationMethod?: string | null;
   litersPerBed?: number | null;

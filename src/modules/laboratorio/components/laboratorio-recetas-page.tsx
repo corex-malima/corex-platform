@@ -67,17 +67,19 @@ const EMPTY_RECIPE_LINE: LaboratoryRecipeLineInput = {
   isActive: true,
 };
 
-const EMPTY_FORM_VALUES: LaboratoryProductInput = {
-  productCode: "",
-  productName: "",
-  description: "",
-  categoryId: "",
-  baseUnitId: "",
-  isActive: true,
-  assignments: [{ activityId: "", branchOrder: 1 }],
-  recipeLines: [{ ...EMPTY_RECIPE_LINE }],
-  changeReason: "",
-};
+function makeEmptyFormValues(): LaboratoryProductInput {
+  return {
+    productCode: "",
+    productName: "",
+    description: "",
+    categoryId: "",
+    baseUnitId: "",
+    isActive: true,
+    assignments: [{ _formKey: crypto.randomUUID(), activityId: "", branchOrder: 1 }],
+    recipeLines: [{ ...EMPTY_RECIPE_LINE, _formKey: crypto.randomUUID() }],
+    changeReason: "",
+  };
+}
 
 const productsFetcher = (url: string) =>
   fetchJson<LaboratoryProductRecord[]>(url, "No se pudo cargar el maestro de productos de Laboratorio.");
@@ -143,10 +145,12 @@ function mapRecordToFormValues(record: LaboratoryProductRecord): LaboratoryProdu
     baseUnitId: record.baseUnitId,
     isActive: record.isActive,
     assignments: record.assignments.map((assignment) => ({
+      _formKey: crypto.randomUUID(),
       activityId: assignment.activityId,
       branchOrder: assignment.branchOrder,
     })),
     recipeLines: record.recipeLines.map((line) => ({
+      _formKey: crypto.randomUUID(),
       lineOrder: line.lineOrder,
       ingredientProductId: line.ingredientProductId,
       ingredientQuantityValue: line.ingredientQuantityValue,
@@ -241,13 +245,9 @@ export function LaboratorioRecetasPage({
   const [selectedProductId, setSelectedProductId] = useState<string | null>(initialProducts[0]?.laboratoryProductId ?? null);
   const [search, setSearch] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [formValues, setFormValues] = useState<LaboratoryProductInput>(EMPTY_FORM_VALUES);
-  const [activitySearchValues, setActivitySearchValues] = useState<string[]>(
-    EMPTY_FORM_VALUES.assignments.map(() => ""),
-  );
-  const [ingredientSearchValues, setIngredientSearchValues] = useState<string[]>(
-    EMPTY_FORM_VALUES.recipeLines.map(() => ""),
-  );
+  const [formValues, setFormValues] = useState<LaboratoryProductInput>(makeEmptyFormValues);
+  const [activitySearchValues, setActivitySearchValues] = useState<string[]>([""]);
+  const [ingredientSearchValues, setIngredientSearchValues] = useState<string[]>([""]);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const deferredSearch = useDeferredValue(search);
 
@@ -272,7 +272,7 @@ export function LaboratorioRecetasPage({
     ? products.find((record) => record.laboratoryProductId === selectedProductId) ?? null
     : null;
   const baselinePayload = useMemo(
-    () => buildPayload(selectedRecord ? mapRecordToFormValues(selectedRecord) : EMPTY_FORM_VALUES),
+    () => buildPayload(selectedRecord ? mapRecordToFormValues(selectedRecord) : makeEmptyFormValues()),
     [selectedRecord],
   );
   const currentPayload = useMemo(() => buildPayload(formValues), [formValues]);
@@ -308,7 +308,7 @@ export function LaboratorioRecetasPage({
   }, [products, selectedProductId]);
 
   useEffect(() => {
-    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : EMPTY_FORM_VALUES;
+    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : makeEmptyFormValues();
     if (!selectedRecord && !nextForm.categoryId && categories[0]?.categoryId) {
       nextForm.categoryId = categories[0].categoryId;
     }
@@ -376,7 +376,7 @@ export function LaboratorioRecetasPage({
 
     setFormValues((current) => ({
       ...current,
-      assignments: [...current.assignments, { activityId: "", branchOrder: current.assignments.length + 1 }],
+      assignments: [...current.assignments, { _formKey: crypto.randomUUID(), activityId: "", branchOrder: current.assignments.length + 1 }],
     }));
     setActivitySearchValues((current) => [...current, ""]);
   }
@@ -435,14 +435,14 @@ export function LaboratorioRecetasPage({
   function addRecipeLine() {
     setFormValues((current) => ({
       ...current,
-      recipeLines: [...current.recipeLines, { ...EMPTY_RECIPE_LINE }],
+      recipeLines: [...current.recipeLines, { ...EMPTY_RECIPE_LINE, _formKey: crypto.randomUUID() }],
     }));
     setIngredientSearchValues((current) => [...current, ""]);
   }
 
   function removeRecipeLine(index: number) {
     if (formValues.recipeLines.length === 1) {
-      setFormValues((current) => ({ ...current, recipeLines: [{ ...EMPTY_RECIPE_LINE }] }));
+      setFormValues((current) => ({ ...current, recipeLines: [{ ...EMPTY_RECIPE_LINE, _formKey: crypto.randomUUID() }] }));
       setIngredientSearchValues([""]);
       return;
     }
@@ -458,7 +458,7 @@ export function LaboratorioRecetasPage({
     setEditorMode("create");
     setSelectedProductId(null);
     setFormValues({
-      ...EMPTY_FORM_VALUES,
+      ...makeEmptyFormValues(),
       categoryId: categories[0]?.categoryId ?? "",
     });
     setActivitySearchValues([""]);
@@ -467,7 +467,7 @@ export function LaboratorioRecetasPage({
   }
 
   function resetForm() {
-    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : EMPTY_FORM_VALUES;
+    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : makeEmptyFormValues();
     setFormValues(nextForm);
     setActivitySearchValues(nextForm.assignments.map((assignment) => {
       const match = activities.find((activity) => activity.activityId === assignment.activityId);
@@ -742,7 +742,7 @@ export function LaboratorioRecetasPage({
                       ? bodegaProducts.find((product) => product.productId === line.ingredientProductId) ?? null
                       : null;
                     return (
-                      <div key={`recipe-line-${index}`} className="rounded-[24px] border border-border/70 bg-background/70 p-4 shadow-sm">
+                      <div key={line._formKey ?? `recipe-line-${index}`} className="rounded-[24px] border border-border/70 bg-background/70 p-4 shadow-sm">
                         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="outline" className="rounded-full px-3 py-1">Linea {index + 1}</Badge>
@@ -844,7 +844,7 @@ export function LaboratorioRecetasPage({
                 </div>
                 <div className="space-y-3">
                   {formValues.assignments.map((assignment, index) => (
-                    <div key={`assignment-${index}`} className="grid gap-4 rounded-[20px] border border-border/70 bg-background/70 p-4 md:grid-cols-[1fr_auto]">
+                    <div key={assignment._formKey ?? `assignment-${index}`} className="grid gap-4 rounded-[20px] border border-border/70 bg-background/70 p-4 md:grid-cols-[1fr_auto]">
                       <div className="space-y-2">
                         <Label htmlFor={`laboratory-assignment-${index}`}>Actividad fuente</Label>
                         <Input

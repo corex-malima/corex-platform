@@ -78,6 +78,7 @@ export type BodegaProductAssignmentRecord = {
 };
 
 export type BodegaProductAssignmentInput = {
+  _formKey?: string;
   activityId: string;
   branchOrder?: number;
 };

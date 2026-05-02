@@ -51,18 +51,20 @@ type FormErrors = Partial<Record<Exclude<keyof BodegaProductInput, "assignments"
 
 const MAX_ASSIGNMENT_BRANCHES = 12;
 
-const EMPTY_FORM_VALUES: BodegaProductInput = {
-  productCode: "",
-  productName: "",
-  description: "",
-  baseUnitId: "",
-  categoryId: "",
-  activeComponentMode: "na",
-  activeComponentName: "",
-  isActive: true,
-  assignments: [{ activityId: "", branchOrder: 1 }],
-  changeReason: "",
-};
+function makeEmptyFormValues(): BodegaProductInput {
+  return {
+    productCode: "",
+    productName: "",
+    description: "",
+    baseUnitId: "",
+    categoryId: "",
+    activeComponentMode: "na",
+    activeComponentName: "",
+    isActive: true,
+    assignments: [{ _formKey: crypto.randomUUID(), activityId: "", branchOrder: 1 }],
+    changeReason: "",
+  };
+}
 
 const productsFetcher = (url: string) =>
   fetchJson<BodegaProductRecord[]>(url, "No se pudo cargar el maestro de productos.");
@@ -125,6 +127,7 @@ function mapRecordToFormValues(record: BodegaProductRecord): BodegaProductInput 
     activeComponentName: record.activeComponentName ?? "",
     isActive: record.isActive,
     assignments: record.assignments.map((assignment) => ({
+      _formKey: crypto.randomUUID(),
       activityId: assignment.activityId,
       branchOrder: assignment.branchOrder,
     })),
@@ -194,11 +197,9 @@ export function BodegaProductosPage({
   const [selectedProductId, setSelectedProductId] = useState<string | null>(initialProducts[0]?.productId ?? null);
   const [search, setSearch] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [formValues, setFormValues] = useState<BodegaProductInput>(EMPTY_FORM_VALUES);
+  const [formValues, setFormValues] = useState<BodegaProductInput>(makeEmptyFormValues);
   const [categorySearch, setCategorySearch] = useState("");
-  const [activitySearchValues, setActivitySearchValues] = useState<string[]>(
-    EMPTY_FORM_VALUES.assignments.map(() => ""),
-  );
+  const [activitySearchValues, setActivitySearchValues] = useState<string[]>([""]);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const deferredSearch = useDeferredValue(search);
 
@@ -250,7 +251,7 @@ export function BodegaProductosPage({
     ? products.find((record) => record.productId === selectedProductId) ?? null
     : null;
   const baselinePayload = useMemo(
-    () => buildPayload(selectedRecord ? mapRecordToFormValues(selectedRecord) : EMPTY_FORM_VALUES),
+    () => buildPayload(selectedRecord ? mapRecordToFormValues(selectedRecord) : makeEmptyFormValues()),
     [selectedRecord],
   );
   const currentPayload = useMemo(() => buildPayload(formValues), [formValues]);
@@ -285,7 +286,7 @@ export function BodegaProductosPage({
   }, [products, units, categories, activities]);
 
   useEffect(() => {
-    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : EMPTY_FORM_VALUES;
+    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : makeEmptyFormValues();
     setFormValues(nextForm);
     setCategorySearch(selectedRecord?.categoryPathLabel ?? "");
     setActivitySearchValues(
@@ -356,7 +357,7 @@ export function BodegaProductosPage({
         ...current,
         assignments: [
           ...current.assignments,
-          { activityId: "", branchOrder: current.assignments.length + 1 },
+          { _formKey: crypto.randomUUID(), activityId: "", branchOrder: current.assignments.length + 1 },
         ],
       };
     });
@@ -390,7 +391,7 @@ export function BodegaProductosPage({
   }
 
   function resetForm() {
-    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : EMPTY_FORM_VALUES;
+    const nextForm = selectedRecord ? mapRecordToFormValues(selectedRecord) : makeEmptyFormValues();
     setFormValues(nextForm);
     setCategorySearch(selectedRecord?.categoryPathLabel ?? "");
     setActivitySearchValues(
@@ -719,7 +720,7 @@ export function BodegaProductosPage({
                     <div className="space-y-3">
                       {formValues.assignments.map((assignment, index) => (
                         <div
-                          key={`assignment-${index}`}
+                          key={assignment._formKey ?? `assignment-${index}`}
                           className="grid gap-3 rounded-[20px] border border-dashed border-border/70 px-4 py-4 md:grid-cols-[1fr_auto]"
                         >
                           <div className="space-y-2">

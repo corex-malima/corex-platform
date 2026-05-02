@@ -131,6 +131,46 @@ function TreeNode({
   );
 }
 
+function CategoryTreeBranch({
+  childrenMap,
+  parentId,
+  depth,
+  selectedCategoryId,
+  editorMode,
+  onSelect,
+}: {
+  childrenMap: Map<string | null, BodegaCategoryRecord[]>;
+  parentId: string | null;
+  depth: number;
+  selectedCategoryId: string | null;
+  editorMode: EditorMode;
+  onSelect: (categoryId: string) => void;
+}) {
+  const items = childrenMap.get(parentId) ?? [];
+  return (
+    <>
+      {items.map((record) => (
+        <div key={record.categoryId} className="space-y-3">
+          <TreeNode
+            record={record}
+            depth={depth}
+            selected={editorMode === "edit" && selectedCategoryId === record.categoryId}
+            onSelect={onSelect}
+          />
+          <CategoryTreeBranch
+            childrenMap={childrenMap}
+            parentId={record.categoryId}
+            depth={depth + 1}
+            selectedCategoryId={selectedCategoryId}
+            editorMode={editorMode}
+            onSelect={onSelect}
+          />
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function BodegaCategoriasPage({
   initialData,
   initialError,
@@ -293,21 +333,6 @@ export function BodegaCategoriasPage({
     }
   }
 
-  function renderTree(parentId: string | null, depth = 0): React.ReactNode {
-    const items = childrenMap.get(parentId) ?? [];
-    return items.map((record) => (
-      <div key={record.categoryId} className="space-y-3">
-        <TreeNode
-          record={record}
-          depth={depth}
-          selected={editorMode === "edit" && selectedCategoryId === record.categoryId}
-          onSelect={openEditMode}
-        />
-        {renderTree(record.categoryId, depth + 1)}
-      </div>
-    ));
-  }
-
   return (
     <div className="space-y-4">
       <SectionPageShell
@@ -371,7 +396,16 @@ export function BodegaCategoriasPage({
           </CardHeader>
           <CardContent className="pt-1">
             <div className="max-h-[calc(100dvh-16rem)] space-y-3 overflow-y-auto pr-1">
-              {filteredRecords.length ? renderTree(null) : (
+              {filteredRecords.length ? (
+                <CategoryTreeBranch
+                  childrenMap={childrenMap}
+                  parentId={null}
+                  depth={0}
+                  selectedCategoryId={selectedCategoryId}
+                  editorMode={editorMode}
+                  onSelect={openEditMode}
+                />
+              ) : (
                 <div className="rounded-[24px] border border-dashed border-border/70 bg-background/80 px-4 py-8 text-center text-sm text-muted-foreground">
                   No hay ramas que coincidan con el filtro actual.
                 </div>
