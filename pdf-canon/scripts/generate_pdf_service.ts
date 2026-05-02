@@ -129,14 +129,23 @@ export async function generateCanonicalPdf(
     await mkdir(join(workDir, "base"), { recursive: true });
     await mkdir(join(workDir, "assets"), { recursive: true });
 
-    // Copiar canon.cls y canon_variables.tex
+    // Copiar canon.cls
     await copyFile(
       resolve(PDF_CANON_ROOT, "base", "canon.cls"),
       join(workDir, "base", "canon.cls"),
     );
-    await copyFile(
+
+    // Copiar canon_variables.tex ajustando la ruta del logo al workDir
+    const canonVarsContent = await readFile(
       resolve(PDF_CANON_ROOT, "base", "canon_variables.tex"),
+      "utf-8",
+    );
+    const adjustedCanonVars = canonVarsContent
+      .replace(/\{\.\.\/assets\/logo\.pdf\}/g, "{./assets/logo.pdf}");
+    await writeFile(
       join(workDir, "base", "canon_variables.tex"),
+      adjustedCanonVars,
+      "utf-8",
     );
 
     // Copiar logo si existe
