@@ -41,7 +41,7 @@ import type { FollowupIndicatorData, FollowupIndicatorFilters } from "@/lib/tale
 
 const COLOR_REGISTERED = "var(--color-chart-success-bold)";
 const COLOR_PENDING = "var(--color-chart-warning)";
-const COLOR_COMPLIANCE = "var(--color-chart-primary)";
+const COLOR_COMPLIANCE = "var(--color-chart-info-bold)";
 const COLOR_GOAL = "var(--color-chart-danger)";
 
 // ── SWR fetcher ────────────────────────────────────────────────────────────────
@@ -120,8 +120,7 @@ export function SeguimientosIndicadorExplorer({ initialData }: { initialData: Fo
         icon={<ClipboardCheck className="size-6" aria-hidden="true" />}
       >
         <FilterPanel>
-          {/* Filters row */}
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MultiSelectField
               id="ind-seg-year"
               label="Año"
@@ -179,19 +178,16 @@ export function SeguimientosIndicadorExplorer({ initialData }: { initialData: Fo
               value={filters.dateTo}
               onChange={(v) => setFilter("dateTo", v)}
             />
-            {filtersActive && (
-              <div className="flex items-end pb-0.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setFilters(DEFAULT_FILTERS)}
-                  className="h-9 gap-1.5 text-muted-foreground"
-                >
-                  <X className="size-3.5" />
-                  Limpiar filtros
-                </Button>
-              </div>
-            )}
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setFilters(DEFAULT_FILTERS)}
+              >
+                <X className="size-4" aria-hidden="true" />
+                Restablecer
+              </Button>
+            </div>
           </div>
 
           <KpiGrid>

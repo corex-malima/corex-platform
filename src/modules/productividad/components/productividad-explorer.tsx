@@ -48,6 +48,7 @@ function buildQueryString(filters: ProductividadFilters): string {
   params.set("spType", filters.spType);
   params.set("variety", filters.variety);
   params.set("area", filters.area);
+  params.set("block", filters.block);
   params.set("status", filters.status);
   return params.toString();
 }
@@ -701,12 +702,13 @@ export function ProductividadExplorer({ initialData }: { initialData: Productivi
         icon={<Clock className="size-6" aria-hidden="true" />}
       >
         <FilterPanel>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MultiSelectField id="prod-year" label="Año" value={filters.year} options={data.options.years} onChange={(value) => updateFilter("year", value)} />
             <MultiSelectField id="prod-month" label="Mes" value={filters.month} options={data.options.months} onChange={(value) => updateFilter("month", value)} displayValue={formatMonthNumeric} />
             <MultiSelectField id="prod-area" label="Área" value={filters.area} options={data.options.areas} onChange={(value) => updateFilter("area", value)} />
             <MultiSelectField id="prod-sp-type" label="Tipo SP" value={filters.spType} options={data.options.spTypes} onChange={(value) => updateFilter("spType", value)} />
             <MultiSelectField id="prod-variety" label="Variedad" value={filters.variety} options={data.options.varieties} onChange={(value) => updateFilter("variety", value)} />
+            <MultiSelectField id="prod-block" label="Bloque" value={filters.block} options={data.options.blocks} onChange={(value) => updateFilter("block", value)} />
             <MultiSelectField id="prod-status" label="Estado" value={filters.status} options={data.options.statuses} onChange={(value) => updateFilter("status", value)} />
             <div className="flex items-end">
               <Button variant="outline" className="w-full" onClick={resetFilters}>

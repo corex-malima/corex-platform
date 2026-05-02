@@ -66,6 +66,7 @@ export type ProductividadFilters = {
   spType: string;
   variety: string;
   area: string;
+  block: string;
   status: string;
 };
 
@@ -116,6 +117,7 @@ export type ProductividadFilterOptions = {
   spTypes: string[];
   varieties: string[];
   areas: string[];
+  blocks: string[];
   statuses: string[];
 };
 
@@ -145,6 +147,7 @@ export const defaultProductividadFilters: ProductividadFilters = {
   spType: "all",
   variety: "all",
   area: "all",
+  block: "all",
   status: "all",
 };
 
@@ -158,6 +161,7 @@ export function normalizeProductividadFilters(
     spType: parseSelectValue(input.spType),
     variety: parseSelectValue(input.variety),
     area: parseSelectValue(input.area),
+    block: parseSelectValue(input.block),
     status: parseSelectValue(input.status),
   };
 }
@@ -304,7 +308,7 @@ function matchesFilter(filterValue: string, candidateValue: string): boolean {
 export async function getProductividadDashboardData(
   filters: ProductividadFilters,
 ): Promise<ProductividadDashboardData> {
-  const cacheKey = `productividad:dashboard:v2:${filters.year}:${filters.month}:${filters.spType}:${filters.variety}:${filters.area}:${filters.status}`;
+  const cacheKey = `productividad:dashboard:v2:${filters.year}:${filters.month}:${filters.spType}:${filters.variety}:${filters.area}:${filters.block}:${filters.status}`;
 
   return cachedAsync(cacheKey, PRODUCTIVIDAD_TTL_MS, async () => {
     const [result, targetIndex] = await Promise.all([
@@ -561,6 +565,7 @@ export async function getProductividadDashboardData(
       if (!matchesFilter(filters.spType, row.spType)) return false;
       if (!matchesFilter(filters.variety, row.variety)) return false;
       if (!matchesFilter(filters.area, row.area)) return false;
+      if (!matchesFilter(filters.block, row.block)) return false;
       if (!matchesFilter(filters.status, row.cycleStatus)) return false;
       return true;
     });
@@ -586,6 +591,10 @@ export async function getProductividadDashboardData(
 
     const areas = Array.from(new Set(
       allRows.map((r) => r.area).filter(Boolean),
+    )).sort((a, b) => collator.compare(a, b));
+
+    const blocks = Array.from(new Set(
+      allRows.map((r) => r.block).filter(Boolean),
     )).sort((a, b) => collator.compare(a, b));
 
     const statuses = Array.from(new Set(
@@ -656,7 +665,7 @@ export async function getProductividadDashboardData(
     return {
       generatedAt: new Date().toISOString(),
       filters,
-      options: { years, months, spTypes, varieties, areas, statuses },
+      options: { years, months, spTypes, varieties, areas, blocks, statuses },
       rows: filtered,
       summary: {
         totalCycles: uniqueCycles,

@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
       spType: request.nextUrl.searchParams.get("spType") ?? undefined,
       variety: request.nextUrl.searchParams.get("variety") ?? undefined,
       area: request.nextUrl.searchParams.get("area") ?? undefined,
+      block: request.nextUrl.searchParams.get("block") ?? undefined,
       status: request.nextUrl.searchParams.get("status") ?? undefined,
     });
 
