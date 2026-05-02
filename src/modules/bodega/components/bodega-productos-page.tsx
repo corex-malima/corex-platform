@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { type ReactNode, startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   Building2,
   DatabaseZap,
@@ -616,11 +616,14 @@ export function BodegaProductosPage({
                       onChange={(event) => updateField("baseUnitId", event.target.value)}
                     >
                       <option value="">Selecciona una unidad</option>
-                      {units.filter((unit) => unit.isActive).map((unit) => (
-                        <option key={unit.unitId} value={unit.unitId}>
-                          {unit.code} · {unit.name}
-                        </option>
-                      ))}
+                      {units.reduce<ReactNode[]>((acc, unit) => {
+                        if (unit.isActive) acc.push(
+                          <option key={unit.unitId} value={unit.unitId}>
+                            {unit.code} · {unit.name}
+                          </option>
+                        );
+                        return acc;
+                      }, [])}
                     </select>
                     {formErrors.baseUnitId ? <p className="text-xs text-destructive">{formErrors.baseUnitId}</p> : null}
                   </div>

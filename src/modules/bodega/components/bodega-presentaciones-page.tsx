@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { type ReactNode, startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   Boxes,
   PencilLine,
@@ -708,11 +708,14 @@ export function BodegaPresentacionesPage({
                       onChange={(event) => updateField("presentationUnitId", event.target.value)}
                     >
                       <option value="">Selecciona una unidad</option>
-                      {units.filter((unit) => unit.isActive).map((unit) => (
-                        <option key={unit.unitId} value={unit.unitId}>
-                          {formatUnitOption(unit)}
-                        </option>
-                      ))}
+                      {units.reduce<ReactNode[]>((acc, unit) => {
+                        if (unit.isActive) acc.push(
+                          <option key={unit.unitId} value={unit.unitId}>
+                            {formatUnitOption(unit)}
+                          </option>
+                        );
+                        return acc;
+                      }, [])}
                     </select>
                     {formErrors.presentationUnitId ? <p className="text-xs text-destructive">{formErrors.presentationUnitId}</p> : null}
                   </div>

@@ -62,13 +62,13 @@ export function FollowupResponseViewer({ followup, catalogs, onClose }: Props) {
   const label = (catalogCode: string, value: string | null | undefined) =>
     value ? lookup.get(`${catalogCode}::${value}`) ?? value : null;
   const selections = (groupCode: string, catalogCode: string) => {
-    const values = data?.selections
-      .filter((selection) => selection.selectionGroupCode === groupCode)
-      .map((selection) => {
+    return (data?.selections ?? []).reduce<string[]>((acc, selection) => {
+      if (selection.selectionGroupCode === groupCode) {
         const base = label(catalogCode, selection.itemCode) ?? selection.itemCode;
-        return selection.otherDetail ? `${base}: ${selection.otherDetail}` : base;
-      }) ?? [];
-    return values.join(", ");
+        acc.push(selection.otherDetail ? `${base}: ${selection.otherDetail}` : base);
+      }
+      return acc;
+    }, []).join(", ");
   };
 
   return (

@@ -67,13 +67,13 @@ function HistoryItemDetail({ eventId, catalogs }: { eventId: string; catalogs: E
     v ? (lk.get(`${cat}::${v}`) ?? v) : null;
 
   const selOf = (group: string) =>
-    data.selections
-      .filter((s) => s.selectionGroupCode === group)
-      .map((s) => {
+    data.selections.reduce<string[]>((acc, s) => {
+      if (s.selectionGroupCode === group) {
         const base = label(s.catalogCode, s.itemCode) ?? s.itemCode;
-        return s.otherDetail ? `${base}: ${s.otherDetail}` : base;
-      })
-      .join(", ") || null;
+        acc.push(s.otherDetail ? `${base}: ${s.otherDetail}` : base);
+      }
+      return acc;
+    }, []).join(", ") || null;
 
   return (
     <div className="mt-2 grid grid-cols-2 gap-1.5">
