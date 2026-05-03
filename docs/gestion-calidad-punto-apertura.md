@@ -2,9 +2,7 @@
 
 ## Contexto funcional
 
-El dashboard `Dashboard > Calidad > Punto de apertura` consolida el analisis de homogeneidad de apertura construido originalmente en:
-
-`C:\Users\paul.loja\PYPROYECTOS\calidad\punto_apertura`
+El dashboard `Dashboard > Calidad > Punto de apertura` consolida el analisis de homogeneidad de apertura construido originalmente como prototipo Python externo (`PYPROYECTOS/calidad/punto_apertura`) y migrado a CoreX en 2026-04.
 
 La fuente primaria es PostgreSQL:
 
