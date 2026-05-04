@@ -10,24 +10,24 @@ Referencia por módulo activo: propósito, datos, KPIs, archivos clave y endpoin
 
 | Módulo | Ruta | Sección |
 |--------|------|---------|
-| [Campo](#campo) | `/dashboard/campo` | Dashboard |
-| [Fenograma](#fenograma) | `/dashboard/fenograma` | Dashboard |
-| [Mortandades](#mortandades) | `/dashboard/mortality` | Dashboard |
-| [Comparación](#comparacion) | `/dashboard/comparacion` | Dashboard |
-| [Productividad](#productividad) | `/dashboard/productividad` | Dashboard |
-| [Balanzas](#balanzas) | `/dashboard/postcosecha/balanzas` | Dashboard |
-| [Composición Laboral](#composicion-laboral) | `/dashboard/talento-humano/composicion-laboral` | Dashboard |
-| [Demografía Personal](#demografia-personal) | `/dashboard/talento-humano/demografia-personal` | Dashboard |
-| [Rotación Laboral](#rotacion-laboral) | `/dashboard/talento-humano/rotacion-laboral` | Dashboard |
+| [Campo](#campo) | `/dashboard/campo` | Analítica |
+| [Fenograma](#fenograma) | `/dashboard/fenograma` | Analítica |
+| [Mortalidad](#mortalidad) | `/dashboard/mortality` | Analítica |
+| [Comparación](#comparacion) | `/dashboard/comparacion` | Analítica |
+| [Productividad](#productividad) | `/dashboard/productividad` | Analítica |
+| [Balanzas](#balanzas) | `/dashboard/postcosecha/balanzas` | Analítica |
+| [Composición Laboral](#composicion-laboral) | `/dashboard/talento-humano/composicion-laboral` | Analítica |
+| [Demografía del personal](#demografia-del-personal) | `/dashboard/talento-humano/demografia-personal` | Analítica |
+| [Rotación Laboral](#rotacion-laboral) | `/dashboard/talento-humano/rotacion-laboral` | Analítica |
 | [Seguimientos Trabajo Social](#seguimientos-trabajo-social) | `/dashboard/talento-humano/seguimientos` | Gestión |
-| [Dominios TTHH](#dominios-tthh) | `/dashboard/talento-humano/administrar-maestros/dominios` | Gestión |
-| [Catálogos TTHH](#catalogos-tthh) | `/dashboard/talento-humano/administrar-maestros/catalogos` | Gestión |
-| [Programación Drench](#programacion-drench) | `/dashboard/campo/administrar-maestros/programacion-drench` | Gestión |
+| [Dominios TTHH](#dominios-tthh) | `/dashboard/talento-humano/administrar-maestros/dominios` | Administración |
+| [Catálogos TTHH](#catalogos-tthh) | `/dashboard/talento-humano/administrar-maestros/catalogos` | Administración |
+| [Programación Drench](#programacion-drench) | `/dashboard/campo/administrar-maestros/programacion-drench` | Administración |
 | [Programaciones](#programaciones) | `/dashboard/programaciones` | Gestión |
-| [Administrar SKUs](#administrar-skus) | `/dashboard/postcosecha/administrar-maestros/skus` | Gestión |
+| [SKU's](#skus) | `/dashboard/postcosecha/administrar-maestros/skus` | Administración |
 | [Clasificación en Blanco](#clasificacion-en-blanco) | `/dashboard/postcosecha/planificacion/solver/clasificacion-en-blanco` | Gestión |
 | [Métricas](#metricas-admin) | `/dashboard/admin/administracion-maestros/metricas` | Administración |
-| [Metas & Objetivos](#metas-objetivos) | `/dashboard/admin/administracion-maestros/metas-objetivos` | Administración |
+| [Metas y objetivos](#metas-y-objetivos) | `/dashboard/admin/administracion-maestros/metas-objetivos` | Administración |
 | [Usuarios](#usuarios) | `/dashboard/admin/seguridad/usuarios` | Administración |
 | [Mi trabajo](#mi-trabajo) | `/dashboard/mi-trabajo` | Personal |
 | [Mi cuenta](#mi-cuenta) | `/dashboard/mi-cuenta` | Personal |
@@ -111,7 +111,7 @@ Referencia por módulo activo: propósito, datos, KPIs, archivos clave y endpoin
 
 ---
 
-## Mortandades
+## Mortalidad
 
 **Propósito:** Análisis de mortalidad de plantas. Curvas diarias acumuladas y diferenciales por ciclo, válvula y cama.
 
@@ -281,7 +281,7 @@ Vistas `gld.mv_camp_ind_bal_apertura_*` para cada nodo de balanza (BAL1→BAL1C,
 
 ---
 
-## Demografia Personal
+## Demografía del personal
 
 **Propósito:** Distribución demográfica del personal (edad, género, estado civil, ciudad, antigüedad).
 
@@ -353,7 +353,7 @@ Vistas `gld.mv_camp_ind_bal_apertura_*` para cada nodo de balanza (BAL1→BAL1C,
 
 ---
 
-## Administrar SKUs
+## SKU's
 
 **Propósito:** CRUD de maestros de SKUs para postcosecha.
 
@@ -531,7 +531,7 @@ La composición DW + db_human_talent se realiza **en la API** (no por SQL JOIN) 
 
 **Clave catálogo:** `talento-dominios`
 **Ruta:** `/dashboard/talento-humano/administrar-maestros/dominios`
-**Sección:** Gestión / Talento Humano / Administrar Maestros
+**Sección:** Administración / Maestros por dominio / Talento Humano
 
 Administración de dominios que agrupan catálogos por formulario o proceso de Talento Humano (ej. `seguimientos_agr`, `seguimientos_adm`).
 
@@ -550,7 +550,7 @@ Administración de dominios que agrupan catálogos por formulario o proceso de T
 
 **Clave catálogo:** `talento-catalogos`
 **Ruta:** `/dashboard/talento-humano/administrar-maestros/catalogos`
-**Sección:** Gestión / Talento Humano / Administrar Maestros
+**Sección:** Administración / Maestros por dominio / Talento Humano
 
 Administración de ítems de catálogo para los formularios de Seguimientos Trabajo Social (opciones de selección, etiquetas, orden de visualización).
 
@@ -569,7 +569,7 @@ Administración de ítems de catálogo para los formularios de Seguimientos Trab
 
 **Clave catálogo:** `campo-drench-program`
 **Ruta:** `/dashboard/campo/administrar-maestros/programacion-drench`
-**Sección:** Gestión / Campo / Administrar Maestros
+**Sección:** Administración / Maestros por dominio / Campo
 
 Reglas editables de drench por semana fenológica, tipo de ciclo (`S` = sencillo, `P` = programa) y variedad. Cada regla agrupa líneas de productos FM11 de Bodega con cantidad, método de aplicación y litros por cama.
 
@@ -595,7 +595,7 @@ Reglas editables de drench por semana fenológica, tipo de ciclo (`S` = sencillo
 
 **Clave catálogo:** `admin-metrics`
 **Ruta:** `/dashboard/admin/administracion-maestros/metricas`
-**Sección:** Administración / Administración Maestros
+**Sección:** Administración / Maestros globales
 
 Maestro de métricas reutilizables para objetivos, metas y tableros del sistema.
 
@@ -608,11 +608,11 @@ Maestro de métricas reutilizables para objetivos, metas y tableros del sistema.
 
 ---
 
-## Metas & Objetivos
+## Metas y objetivos
 
 **Clave catálogo:** `admin-goals`
 **Ruta:** `/dashboard/admin/administracion-maestros/metas-objetivos`
-**Sección:** Administración / Administración Maestros
+**Sección:** Administración / Maestros globales
 
 Administración de objetivos, metas, dimensiones y su vinculación con métricas del sistema.
 
@@ -632,6 +632,6 @@ Administración de objetivos, metas, dimensiones y su vinculación con métricas
 | Postcosecha Registros | `/dashboard/postcosecha/registros` | `hidden` |
 | Postcosecha Programaciones | `/dashboard/postcosecha/planificacion/programaciones` | `hidden` |
 | Postcosecha Plan de Trabajo | `/dashboard/postcosecha/planificacion/plan-de-trabajo` | `hidden` |
-| Administración Maestros (overview) | `/dashboard/admin/administracion-maestros` | `hidden` |
+| Maestros globales (overview) | `/dashboard/admin/administracion-maestros` | `hidden` |
 
 Accesibles con permisos explícitos pero no visibles en navegación.

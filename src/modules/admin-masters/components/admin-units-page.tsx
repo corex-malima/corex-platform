@@ -148,7 +148,7 @@ export function AdminUnitsPage() {
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Administración / Administración Maestros / Unidades"
+        eyebrow="Administración / Maestros globales / Unidades"
         title="Unidades de medida"
         subtitle="Maestro de unidades (kg, %, horas, tallos, etc.) usadas en métricas y tableros."
         icon={<Scale className="size-5" aria-hidden="true" />}

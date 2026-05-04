@@ -113,7 +113,7 @@ export function SeguimientosIndicadorExplorer({ initialData }: { initialData: Fo
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Dashboard / Indicadores / Talento Humano"
+        eyebrow="Analítica / Talento Humano / Indicadores & KPI"
         title="Cumplimiento de seguimientos"
         subtitle="Seguimientos de Trabajo Social programados vs realizados, por trabajadora, área y período."
         icon={<ClipboardCheck className="size-6" aria-hidden="true" />}

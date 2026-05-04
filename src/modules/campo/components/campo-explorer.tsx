@@ -365,7 +365,7 @@ export function CampoExplorer({ initialData }: { initialData: CampoDashboardData
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Indicadores / Producción / Campo"
+        eyebrow="Analítica / Campo / Indicadores & KPI"
         title="Campo"
         subtitle="Vista espacial de bloques, valvulas y camas con capas agronomicas y navegacion interactiva."
         icon={<MapIcon className="size-6" aria-hidden="true" />}

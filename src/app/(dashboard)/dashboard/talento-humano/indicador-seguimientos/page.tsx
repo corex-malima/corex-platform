@@ -11,6 +11,6 @@ export default async function IndicadorSeguimientosPage() {
     fallbackMessage: "No se pudo cargar el indicador de seguimientos.",
   });
 
-  if (!data) return <DashboardRouteError title="Indicador de seguimientos" error={error} />;
+  if (!data) return <DashboardRouteError title="Seguimientos" error={error} />;
   return <SeguimientosIndicadorExplorer initialData={data} />;
 }

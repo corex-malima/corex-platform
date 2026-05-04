@@ -161,7 +161,7 @@ export function AdminMetricsPage() {
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Administración / Administración Maestros / Métricas"
+        eyebrow="Administración / Maestros globales / Métricas"
         title="Métricas"
         subtitle="Maestro de métricas reutilizables para objetivos, metas y tableros."
         icon={<Target className="size-5" aria-hidden="true" />}

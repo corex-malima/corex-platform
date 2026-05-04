@@ -95,7 +95,7 @@ Columnas relevantes:
 
 Ruta:
 
-- `Gestion / Bodega / Administrar Maestros / Productos`
+- `Administración / Maestros por dominio / Bodega / Productos`
 
 El formulario de productos debe trabajar asi:
 

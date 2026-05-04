@@ -12,6 +12,7 @@ Si eres nuevo en el proyecto, lee en este orden:
 2. [`datos.md`](./datos.md) — schema de base de datos, vistas, reglas de negocio SQL
 3. [`extender-modulos.md`](./extender-modulos.md) — cómo agregar un módulo nuevo sin romper nada
 4. [`module-contracts.md`](./module-contracts.md) — contratos de capa que nunca se violan
+5. [`navigation-canon.md`](./navigation-canon.md) — macrosecciones, sidebar e Inicio canónico
 
 ---
 
@@ -110,6 +111,7 @@ Cada AUD documenta hallazgos, correcciones aplicadas, riesgos residuales y crite
 | `extender-modulos.md` | Flujo único para agregar o extender módulos — OBLIGATORIO leer |
 | `reuse-index.md` | Matriz de componentes/helpers reutilizables — buscar aquí antes de crear |
 | `ui-canon.md` | Reglas visuales no negociables: layout, componentes, colores, excepciones |
+| `navigation-canon.md` | Canon de navegación: Inicio, Analítica, Gestión, Administración y mapeo visual vigente |
 | `module-contracts.md` | Contratos de capa: qué puede importar quién, qué nunca |
 | `definition-of-done.md` | Checklist de cierre de PR/tarea |
 | `security-ops.md` | Auth HMAC-SHA256, RBAC, rate limit, health, logging, env |

@@ -122,7 +122,7 @@ export function AdminDomainsPage() {
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Administración / Administración Maestros / Dominios"
+        eyebrow="Administración / Maestros globales / Dominios"
         title="Dominios"
         subtitle="Macro-dominios usados en métricas, metas y agrupación de catálogos."
         icon={<Blocks className="size-5" aria-hidden="true" />}

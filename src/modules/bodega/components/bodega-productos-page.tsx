@@ -455,7 +455,7 @@ export function BodegaProductosPage({
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestion / Bodega / Administrar Maestros"
+        eyebrow="Administración / Maestros por dominio / Bodega / Productos"
         title="Productos"
         subtitle="Maestro corporativo de productos de Bodega. Cada guardado crea una nueva version vigente y conserva trazabilidad SCD2 en db_camp.public."
         icon={<Building2 className="size-5" aria-hidden="true" />}
@@ -476,7 +476,7 @@ export function BodegaProductosPage({
           <KpiGrid>
             <MetricTile label="Productos activos" value={String(summary.totalProducts)} hint="Catalogo vigente de insumos y materiales." />
             <MetricTile label="Unidades disponibles" value={String(summary.totalUnits)} hint="Unidad base sale del maestro de Unidades." />
-            <MetricTile label="Ramas disponibles" value={String(summary.totalCategories)} hint="Categorias cargadas en Configurar catalogo." />
+            <MetricTile label="Ramas disponibles" value={String(summary.totalCategories)} hint="Categorías cargadas en Catálogos." />
             <MetricTile label="Actividades fuente" value={String(summary.totalActivities)} hint="Fuente vigente desde prod_dim_activity_profile_scd2." />
             <MetricTile label="Ultima carga" value={summary.latest?.loadedAt ? formatDateTime(summary.latest.loadedAt) : "-"} hint="Ultimo producto guardado o actualizado." />
           </KpiGrid>
@@ -593,7 +593,7 @@ export function BodegaProductosPage({
               <div className="rounded-[24px] border border-dashed border-border/70 bg-background/80 px-5 py-6 text-sm text-muted-foreground">
                 {!units.length ? "Primero debes crear al menos una unidad activa en el maestro de Unidades." : null}
                 {!units.length && (!leafOptions.length || !activities.length) ? " " : null}
-                {!leafOptions.length ? "Tambien debes crear al menos una subfamilia activa en Configurar catalogo." : null}
+                {!leafOptions.length ? "También debes crear al menos una subfamilia activa en Catálogos." : null}
                 {(!units.length || !leafOptions.length) && !activities.length ? " " : null}
                 {!activities.length ? "No hay actividades vigentes en slv.prod_dim_activity_profile_scd2 para asignar productos." : null}
               </div>

@@ -313,7 +313,7 @@ export function BodegaProgramacionesExplorer({
 
   return (
     <SectionPageShell
-      eyebrow="Gestion / Bodega / Planificacion"
+      eyebrow="Gestión / Bodega / Planificación"
       title="Programaciones"
       subtitle="Salida semanal de drench por bloque. La vista usa la semana ISO objetivo para calendarizar y muestra la receta resuelta del bloque en formato operativo."
       icon={<Icon className="size-6" aria-hidden="true" />}

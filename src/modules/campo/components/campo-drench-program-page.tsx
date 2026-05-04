@@ -932,8 +932,8 @@ export function CampoDrenchProgramPage({
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestion / Campo / Administrar Maestros"
-        title="Programacion Drench"
+        eyebrow="Administración / Maestros por dominio / Campo / Programación Drench"
+        title="Programación Drench"
         subtitle="La receta se administra por grupo base de ciclo y variedad. Cada linea ahora puede consumir producto desde Bodega o desde Laboratorio, respetando la vinculacion por actividad FM11."
         icon={<Beaker className="size-5" aria-hidden="true" />}
         actions={(

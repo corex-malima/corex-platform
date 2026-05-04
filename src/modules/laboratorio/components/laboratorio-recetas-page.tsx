@@ -531,8 +531,8 @@ export function LaboratorioRecetasPage({
 
   return (
     <SectionPageShell
-      eyebrow="Gestion / Laboratorio / Administrar Maestros"
-      title="Receta de productos"
+      eyebrow="Administración / Maestros por dominio / Laboratorio / Recetas de productos"
+      title="Recetas de productos"
       subtitle="Productos nacidos en Laboratorio, con receta propia de insumos y luego vinculados a actividades como FM11."
       icon={<Beaker className="size-5" aria-hidden="true" />}
       actions={(

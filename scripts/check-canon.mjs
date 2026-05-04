@@ -44,6 +44,7 @@ const officialDocs = new Set([
   "docs/gestion-calidad-punto-apertura.md",
   "docs/gestion-postcosecha-balanzas-process-engine.md",
   "docs/gestion-bodega-drench-migration.md",
+  "docs/navigation-canon.md",
   "docs/bodega/README.md",
   // Docs reclasificados a vigentes en Audit final preprod 2026-04-25:
   "docs/apis.md",

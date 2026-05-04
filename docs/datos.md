@@ -581,7 +581,7 @@ Si `db_human_talent` no está disponible o el SQL aún no se aplicó, `loadFollo
 
 ## Base de datos satelite: db_admin
 
-El módulo Administración Maestros (Catálogos / Dominios / Unidades / Métricas / Metas y Objetivos) vive en una base independiente: **`db_admin`** (variable `ADMIN_DATABASE_NAME=db_admin`, override completo `ADMIN_DATABASE_URL`).
+El bloque Administración / Maestros globales (Catálogos / Dominios / Unidades / Métricas / Metas y objetivos) vive en una base independiente: **`db_admin`** (variable `ADMIN_DATABASE_NAME=db_admin`, override completo `ADMIN_DATABASE_URL`).
 
 **Esta base está en un cluster PostgreSQL separado del DW operacional** (`datalakehouse`). El esquema legacy `datalakehouse.adm.*` quedó obsoleto y fue eliminado (`DROP SCHEMA adm CASCADE`). No usar — la fuente de verdad para masters administrativos es `db_admin.public.adm_*`.
 

@@ -428,7 +428,7 @@ export function BodegaPresentacionesPage({
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestion / Bodega / Administrar Maestros"
+        eyebrow="Administración / Maestros por dominio / Bodega / Presentaciones y conversiones"
         title="Presentaciones y conversiones"
         subtitle="Cada presentacion comercial cuelga de un producto maestro y siempre aterriza el inventario en la unidad base dominante del producto."
         icon={<Boxes className="size-5" aria-hidden="true" />}

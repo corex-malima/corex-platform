@@ -341,8 +341,8 @@ export function BodegaCategoriasPage({
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestion / Bodega / Administrar Maestros"
-        title="Configurar catalogo"
+        eyebrow="Administración / Maestros por dominio / Bodega / Catálogos"
+        title="Catálogos"
         subtitle="Arbol operativo del catalogo de Bodega organizado en familias y subfamilias. Cada guardado crea una nueva version vigente y conserva trazabilidad SCD2 en db_camp.public."
         icon={<ClipboardList className="size-5" aria-hidden="true" />}
         actions={(

@@ -98,7 +98,7 @@ export function TthhDomainsAdminPage() {
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestión / Talento Humano / Administrar Maestros"
+        eyebrow="Administración / Maestros por dominio / Talento Humano / Dominios"
         title="Dominios TTHH"
         subtitle="Agrupa catálogos por formulario o proceso. Ejemplo: Seguimiento Trabajo Social."
         icon={<Blocks className="size-5" aria-hidden="true" />}

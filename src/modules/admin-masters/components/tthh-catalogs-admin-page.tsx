@@ -131,7 +131,7 @@ export function TthhCatalogsAdminPage() {
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestión / Talento Humano / Administrar Maestros"
+        eyebrow="Administración / Maestros por dominio / Talento Humano / Catálogos"
         title="Catálogos TTHH"
         subtitle="Administra catálogos y opciones por dominio. Para Seguimiento Trabajo Social, cada pregunta mantiene sus opciones gobernadas aquí."
         icon={<DatabaseZap className="size-5" aria-hidden="true" />}

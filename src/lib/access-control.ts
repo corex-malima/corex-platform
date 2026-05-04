@@ -26,13 +26,14 @@ export type ApiAccessRule = {
 };
 
 function buildAccessLabel(eyebrow: string, title: string) {
-  const parts = eyebrow.split(" / ").slice(2);
+  const parts = eyebrow.split(" / ").slice(1);
   const prefix = parts.join(" / ");
   if (!prefix) {
     return title;
   }
 
-  return prefix.toLowerCase() === title.toLowerCase() ? prefix : `${prefix} / ${title}`;
+  const lastPart = parts[parts.length - 1];
+  return lastPart?.toLowerCase() === title.toLowerCase() ? prefix : `${prefix} / ${title}`;
 }
 
 /**

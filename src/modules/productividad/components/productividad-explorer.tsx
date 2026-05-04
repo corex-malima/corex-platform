@@ -696,7 +696,7 @@ export function ProductividadExplorer({ initialData }: { initialData: Productivi
   return (
     <div className="min-w-0 space-y-4">
       <SectionPageShell
-        eyebrow="Dashboard / Indicadores / Campo"
+        eyebrow="Analítica / Campo / Indicadores & KPI"
         title="Productividad"
         subtitle="Productividad de mano de obra por ciclo y etapa operativa. Haz clic en un ciclo para abrir su ficha completa. Expande para ver el detalle por persona."
         icon={<Clock className="size-6" aria-hidden="true" />}

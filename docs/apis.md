@@ -213,7 +213,7 @@ Referencia completa de todos los endpoints REST de CoreX v4. Reemplaza el archiv
 
 ---
 
-## Mortandades
+## Mortalidad
 
 **Policy:** `resource-bound` → requiere `/dashboard/mortality`
 
@@ -409,7 +409,7 @@ Corrige, anula o reactiva una respuesta existente.
 
 ---
 
-## Talento Humano — Administrar Maestros
+## Talento Humano — Maestros por dominio
 
 **Política:** `resource-bound` → requiere acceso a `/dashboard/talento-humano/administrar-maestros/catalogos` o `/dominios`.  
 **Prefijo:** `/api/talento-humano/catalogos`  

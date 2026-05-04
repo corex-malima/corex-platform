@@ -10,7 +10,7 @@ import { Breadcrumb, type BreadcrumbItem } from "@/shared/navigation/breadcrumb"
  * páginas de gestión, formularios largos).
  *
  * IMPORTANTE: NO reemplaza a `SectionPageShell`. Los explorers (campo, fenograma,
- * mortandades, productividad, balanzas, etc.) siguen usando `SectionPageShell`,
+ * mortalidad, productividad, balanzas, etc.) siguen usando `SectionPageShell`,
  * que es el shell completo con eyebrow + filtros + KPIs.
  *
  * `PageHeader` es solo el header (con breadcrumb opcional y acciones), pensado

@@ -10,6 +10,7 @@ import {
   Settings,
   Beaker,
   Sprout,
+  Target,
   TrendingUp,
   UserCircle2,
   Users,
@@ -32,6 +33,7 @@ export type NavGroup = {
 
 const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   Indicadores: TrendingUp,
+  "Indicadores & KPI": TrendingUp,
   Bodega: DatabaseZap,
   Campo: Sprout,
   Laboratorio: Beaker,
@@ -42,11 +44,28 @@ const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   "Planificación": CalendarDays,
   Registros: ClipboardList,
   Personal: UserCircle2,
-  "Administrar Maestros": DatabaseZap,
-  "Administración Maestros": DatabaseZap,
-  "Administracion Maestros": DatabaseZap,
+  "Maestros globales": Settings,
+  "Maestros por dominio": DatabaseZap,
+  Métricas: Target,
   Solver: Settings,
   Seguridad: Lock,
+};
+
+const ORDER_BY_LABEL: Record<string, number> = {
+  Inicio: 0,
+  Campo: 10,
+  Postcosecha: 20,
+  Calidad: 30,
+  Bodega: 35,
+  Laboratorio: 40,
+  "Talento Humano": 50,
+  "Indicadores & KPI": 10,
+  Planificación: 10,
+  Registros: 20,
+  Solver: 30,
+  "Maestros globales": 10,
+  "Maestros por dominio": 20,
+  Seguridad: 30,
 };
 
 function getOrCreateBranch(items: NavItem[], label: string) {
@@ -89,12 +108,17 @@ function buildGroupItems(groupTitle: "Dashboard" | "Gestion" | "Administracion")
 function sortNavItems(items: NavItem[]): NavItem[] {
   return [...items]
     .map((item) => item.items ? { ...item, items: sortNavItems(item.items) } : item)
-    .sort((left, right) => left.label.localeCompare(right.label, "es", { sensitivity: "base" }));
+    .sort((left, right) => {
+      const leftOrder = ORDER_BY_LABEL[left.label] ?? 1000;
+      const rightOrder = ORDER_BY_LABEL[right.label] ?? 1000;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      return left.label.localeCompare(right.label, "es", { sensitivity: "base" });
+    });
 }
 
 export const sidebarGroups: NavGroup[] = [
   {
-    title: "Principal",
+    title: "CoreX",
     items: [
       { label: "Inicio", href: "/dashboard", icon: Home },
     ],
@@ -103,7 +127,7 @@ export const sidebarGroups: NavGroup[] = [
   // match con `module-catalog.navigationGroup`. Los TÍTULOS visibles se traducen
   // a su forma con tilde acá.
   ...([
-    { key: "Dashboard", title: "Dashboard" },
+    { key: "Dashboard", title: "Analítica" },
     { key: "Gestion", title: "Gestión" },
     { key: "Administracion", title: "Administración" },
   ] as const)

@@ -12,7 +12,7 @@ export default async function MortalityPageRoute() {
   });
 
   if (!data) {
-    return <DashboardRouteError title="No se pudo cargar el dashboard de mortandades" error={error} />;
+    return <DashboardRouteError title="No se pudo cargar el dashboard de mortalidad" error={error} />;
   }
 
   return <MortalityPage initialData={data} />;

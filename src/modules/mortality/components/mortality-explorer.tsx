@@ -27,7 +27,7 @@ import type {
 } from "@/lib/mortality";
 
 const mortalityDashboardFetcher = (url: string) =>
-  fetchJson<MortalityDashboardData>(url, "No se pudo cargar el dashboard de mortandades.");
+  fetchJson<MortalityDashboardData>(url, "No se pudo cargar el dashboard de mortalidad.");
 
 const mortalityCurveFetcher = (url: string) =>
   fetchJson<MortalityCurvePayload>(url, "No se pudo cargar la curva de mortandad.");
@@ -104,8 +104,8 @@ export function MortalityExplorer({ initialData }: { initialData: MortalityDashb
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Indicadores / Producción / Campo"
-        title="Mortandades"
+        eyebrow="Analítica / Campo / Indicadores & KPI"
+        title="Mortalidad"
         subtitle="Curva agregada ponderada por filtros y tabla de ciclos con apertura al historial completo del bloque."
         icon={<Activity className="size-6" aria-hidden="true" />}
         actions={
@@ -136,7 +136,7 @@ export function MortalityExplorer({ initialData }: { initialData: MortalityDashb
           {isValidating ? (
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
-              Actualizando dashboard de mortandades.
+              Actualizando dashboard de mortalidad.
             </div>
           ) : null}
           {dashboardError ? (
@@ -153,7 +153,7 @@ export function MortalityExplorer({ initialData }: { initialData: MortalityDashb
       ) : (
         <>
           <ChartSection>
-            <ChartSurface title="Curva de mortandades" subtitle="Promedio ponderado diario y acumulado segun los filtros activos.">
+            <ChartSurface title="Curva de mortalidad" subtitle="Promedio ponderado diario y acumulado segun los filtros activos.">
               <KpiGrid columns={5}>
                 <MetricTile label="Ciclos visibles" value={`${data.summary.totalCycles}`} />
                 <MetricTile label="Mortandad acumulada actual" value={curveData ? formatPercent(curveData.summary.lastCumulativeMortalityPct) : "-"} />

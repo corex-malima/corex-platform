@@ -79,8 +79,8 @@ export function TalentoDemografiaPage({ initialData }: { initialData: TalentoAct
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Dashboard / Indicadores / Talento Humano"
-        title="Demografía personal"
+        eyebrow="Analítica / Talento Humano / Indicadores & KPI"
+        title="Demografía del personal"
         subtitle="Distribución del personal activo por género, tipo de contrato, ciudad y otras dimensiones demográficas."
         icon={<UserCircle2 className="size-6" aria-hidden="true" />}
       >

@@ -378,7 +378,7 @@ export function ComparisonExplorer({ initialData }: { initialData: ComparisonDas
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Indicadores / Producción / Campo"
+        eyebrow="Analítica / Campo / Indicadores & KPI"
         title="Comparación"
         subtitle="Selecciona un ciclo por cada lado para enfrentarlos métrica a métrica y visualizar sus diferencias operativas."
         icon={<Swords className="size-6" aria-hidden="true" />}

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return handleApiError(error, "No se pudo cargar el dashboard de mortandades.");
+    return handleApiError(error, "No se pudo cargar el dashboard de mortalidad.");
   }
 }
 

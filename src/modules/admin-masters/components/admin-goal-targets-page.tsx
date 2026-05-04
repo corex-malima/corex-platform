@@ -551,8 +551,8 @@ export function AdminGoalTargetsPage() {
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Administración / Administración Maestros / Metas & Objetivos"
-        title="Metas & Objetivos"
+        eyebrow="Administración / Maestros globales / Metas y objetivos"
+        title="Metas y objetivos"
         subtitle="Una meta = métrica + dominio + grain_code. Cada grain agrupa todas sus variantes de alcance (por variedad, semana, origen, etc.)."
         icon={<Target className="size-5" aria-hidden="true" />}
         actions={(

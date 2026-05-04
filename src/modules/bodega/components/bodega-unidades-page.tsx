@@ -210,7 +210,7 @@ export function BodegaUnidadesPage({
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestion / Bodega / Administrar Maestros"
+        eyebrow="Administración / Maestros por dominio / Bodega / Unidades"
         title="Unidades"
         subtitle="Maestro operativo de unidades para Bodega. Cada guardado crea una nueva version vigente y conserva trazabilidad SCD2 en db_camp.public."
         icon={<Scale className="size-5" aria-hidden="true" />}

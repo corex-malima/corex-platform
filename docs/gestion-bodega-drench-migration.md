@@ -5,7 +5,7 @@ Este documento consolida los cambios tecnicos aplicados sobre la rama `codex/bod
 
 - maestros de `Storageroom` antes llamados `Bodega`
 - maestros de `Laboratory`
-- maestro de `Programacion Drench`
+- maestro de `Programación Drench`
 - calendarizacion semanal de Drench para consumo de `Gestion / Bodega / Planificacion / Programaciones`
 - exportacion PDF semanal de programaciones Drench
 
@@ -27,7 +27,7 @@ La arquitectura final separa origenes asi:
 - `db_laboratory`
   - maestros de productos de laboratorio, categorias, actividades aplicables y lineas de receta
 - `db_camp`
-  - maestro de Programacion Drench
+  - maestro de Programación Drench
   - lineas de Drench
   - calendario semanal resuelto por vista de lectura
 
@@ -477,8 +477,8 @@ Antes de desplegar o migrar otra vez, ejecutar esta secuencia:
 3. recrear `slv.camp_v_drench_week_calendar_cur`
 4. validar catalogos vigentes
 5. abrir:
-   - `Programacion Drench`
-   - `Receta de productos`
+    - `Programación Drench`
+    - `Recetas de productos`
    - `Bodega / Planificacion / Programaciones`
 6. probar exportacion PDF con una semana conocida, por ejemplo `2619`
 

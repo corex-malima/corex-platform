@@ -124,7 +124,7 @@ export function FenogramaExplorer({ initialData }: { initialData: FenogramaDashb
   return (
     <div className="min-w-0 space-y-4">
       <SectionPageShell
-        eyebrow="Dashboard / Indicadores / Campo"
+        eyebrow="Analítica / Campo / Indicadores & KPI"
         title="Fenograma"
         subtitle="Pivot semanal por dimensiones con rango manual, estados operativos y apertura a la ficha completa del ciclo."
         icon={<Sprout className="size-6" aria-hidden="true" />}

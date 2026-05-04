@@ -11,6 +11,6 @@ export default async function DemografiaPersonalPage() {
     fallbackMessage: "No se pudo cargar el modulo de demografia personal.",
   });
 
-  if (!data) return <DashboardRouteError title="Demografia personal" error={error} />;
+  if (!data) return <DashboardRouteError title="Demografía del personal" error={error} />;
   return <TalentoDemografiaPage initialData={data} />;
 }

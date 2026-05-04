@@ -89,7 +89,7 @@ export function TalentoRotacionPage({ initialData }: { initialData: TalentoRotac
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Dashboard / Indicadores / Talento Humano"
+        eyebrow="Analítica / Talento Humano / Indicadores & KPI"
         title="Rotación laboral"
         subtitle="Evolución semanal de ingresos, salidas y base activa para el rango seleccionado."
         icon={<TrendingDown className="size-6" aria-hidden="true" />}

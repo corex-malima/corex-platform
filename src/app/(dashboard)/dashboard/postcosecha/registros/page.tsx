@@ -14,7 +14,7 @@ export default async function PoscosechaRegistrosPage() {
       highlights={[
         "La navegacion ya replica el nuevo nivel de desglose solicitado dentro de Gestion.",
         "Este punto servira para capturas operativas futuras sin mezclar maestros ni planificacion.",
-        "El primer entregable real de esta rama es Administrar SKU's, que ya queda persistido en PostgreSQL.",
+        "El primer entregable real de esta rama es SKU's, que ya queda persistido en PostgreSQL.",
         "Cuando se active este modulo, podra compartir catalogos y trazabilidad con Planificacion y Solver.",
       ]}
     />

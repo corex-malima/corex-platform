@@ -79,7 +79,7 @@ export function TalentoComposicionPage({ initialData }: { initialData: TalentoAc
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Dashboard / Indicadores / Talento Humano"
+        eyebrow="Analítica / Talento Humano / Indicadores & KPI"
         title="Composición laboral"
         subtitle="Distribución del personal activo por área, cargo, clasificación y otras dimensiones laborales."
         icon={<PieChart className="size-6" aria-hidden="true" />}

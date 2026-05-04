@@ -4,7 +4,7 @@ import { PersonProfileDialog } from "@/shared/overlays/person-profile-dialog";
 
 /**
  * Wrapper canónico para abrir la ficha del personal desde Talento Humano
- * (composición laboral, demografía personal, rotación laboral). Delega a
+ * (composición laboral, demografía del personal, rotación laboral). Delega a
  * `PersonProfileDialog` con `sourceContext.module = "talento"` — sin contexto
  * de ciclo, la tab "Rendimiento" muestra empty state. Tab "Información" usa
  * los datos canónicos de RH; tab "Ficha médica" funciona vía endpoint propio.

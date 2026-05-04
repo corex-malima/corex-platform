@@ -195,8 +195,8 @@ export function LaboratorioTiposPage({ initialData, initialError }: LaboratorioT
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Gestion / Laboratorio / Administrar Maestros"
-        title="Tipos de elaboracion"
+        eyebrow="Administración / Maestros por dominio / Laboratorio / Tipos de elaboración"
+        title="Tipos de elaboración"
         subtitle="Maestro simple de categorias para productos de Laboratorio. Cada cambio conserva trazabilidad SCD2 en db_laboratory."
         icon={<Beaker className="size-5" aria-hidden="true" />}
         actions={(
@@ -314,7 +314,7 @@ export function LaboratorioTiposPage({ initialData, initialError }: LaboratorioT
                 </div>
                 <div>
                   <CardTitle className="text-lg">{selectedRecord ? selectedRecord.categoryCode : "Registrar tipo"}</CardTitle>
-                  <CardDescription>Este maestro alimenta el campo Tipo dentro de Receta de productos.</CardDescription>
+                  <CardDescription>Este maestro alimenta el campo Tipo dentro de Recetas de productos.</CardDescription>
                 </div>
               </div>
               <div className="rounded-full bg-slate-900/10 p-3 text-slate-700 dark:bg-slate-900/20 dark:text-white">

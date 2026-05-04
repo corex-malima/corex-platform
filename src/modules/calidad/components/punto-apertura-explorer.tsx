@@ -96,7 +96,7 @@ export function PuntoAperturaExplorer({ initialData }: { initialData: PuntoApert
   return (
     <div className="min-w-0 space-y-4">
       <SectionPageShell
-        eyebrow="Dashboard / Indicadores / Calidad"
+        eyebrow="Analítica / Calidad / Indicadores & KPI"
         title="Punto de apertura"
         subtitle="Carta de control por registro para medir homogeneidad de apertura."
         icon={<Activity className="size-6" aria-hidden="true" />}

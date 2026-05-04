@@ -132,7 +132,7 @@ export function AdminCatalogsPage() {
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Administración / Administración Maestros / Catálogos"
+        eyebrow="Administración / Maestros globales / Catálogos"
         title="Catálogos"
         subtitle="Listas de opciones reutilizables: tipos de meta, operadores, direcciones de métricas, etc."
         icon={<DatabaseZap className="size-5" aria-hidden="true" />}
