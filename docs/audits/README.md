@@ -34,6 +34,7 @@ Cada AUD documenta:
 | 15 | [`AUD-15-react-doctor-round-4.md`](./AUD-15-react-doctor-round-4.md) | React Doctor Round 4 — 5 useEffect-toast → SWR onError + 3 imports useEffect unused | ✅ cerrado | 2026-04-26 | check holístico verde, 79/79 tests | NO |
 | 16 | [`AUD-16-pre-prod-readiness-2026-05.md`](./AUD-16-pre-prod-readiness-2026-05.md) | Pre-producción readiness — 100% mv_, 84/84 RBAC, 38/38 pages, canon limpio, 6 env vars críticas pendientes | ✅ cerrado | 2026-05-02 | check holístico verde, 107/107 tests | NO* |
 | 17 | [`AUD-17-mega-audit-final-2026-05.md`](./AUD-17-mega-audit-final-2026-05.md) | Mega-auditoría final — 11 dimensiones evaluadas, calificación 9.0/10, tips ROI-ordenados, GO-LIVE | ✅ cerrado | 2026-05-02 | check holístico verde, 107/107 tests | **GO** |
+| 18 | [`AUD-18-final-hardening-2026-05.md`](./AUD-18-final-hardening-2026-05.md) | Final hardening — zod en 7 mutaciones críticas, rate limits admin, +58 tests, logEvent estructurado, calificación 9.5/10 | ✅ cerrado | 2026-05-03 | check holístico verde, 165/165 tests | **GO** |
 
 ---
 

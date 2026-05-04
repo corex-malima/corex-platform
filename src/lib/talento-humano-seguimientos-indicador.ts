@@ -1,5 +1,6 @@
 import { query } from "@/lib/db";
 import { queryHumanTalent } from "@/lib/human-talent-db";
+import { logEvent } from "@/lib/logger";
 import { decodeMultiSelectValue } from "@/lib/multi-select";
 import { deriveFollowupRoute } from "@/lib/talento-humano-seguimientos-person";
 
@@ -239,7 +240,9 @@ async function queryRegisteredCodes(uniqueCodes: string[]): Promise<Set<string>>
       registered.add(row.unique_follow_up_code);
     }
   } catch (error) {
-    console.warn("[TTHH-INDICADOR] No se pudo consultar db_human_talent.", error);
+    logEvent("warn", "tthh.indicador.human_talent_unavailable", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   return registered;

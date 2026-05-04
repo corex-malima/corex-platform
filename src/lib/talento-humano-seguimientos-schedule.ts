@@ -1,5 +1,6 @@
 import { query } from "@/lib/db";
 import { queryHumanTalent } from "@/lib/human-talent-db";
+import { logEvent } from "@/lib/logger";
 import { decodeMultiSelectValue } from "@/lib/multi-select";
 import { deriveFollowupRoute } from "@/lib/talento-humano-seguimientos-person";
 import type {
@@ -200,7 +201,9 @@ export async function loadScheduledFollowups(
       }
     }
   } catch (error) {
-    console.warn("[TTHH] No se pudo cruzar estado de seguimientos contra db_human_talent.", error);
+    logEvent("warn", "tthh.schedule.human_talent_unavailable", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   // ── 3. Merge y derivación de ruta/estado ─────────────────────────────────

@@ -9,6 +9,7 @@ import {
   formatFlexibleNumber,
   formatInteger,
   formatIsoWeekLabel,
+  formatMonthNumeric,
   parseDateOnly,
   formatPercent,
   formatRatio,
@@ -123,6 +124,29 @@ describe("shared formatters", () => {
       expect(formatIsoWeekLabel(null)).toBe("-");
       expect(formatIsoWeekLabel("")).toBe("-");
       expect(formatIsoWeekLabel("abc")).toBe("abc");
+    });
+  });
+
+  describe("formatMonthNumeric — canon Mes filter", () => {
+    it("converts '1' through '12' to full Spanish month names", () => {
+      expect(formatMonthNumeric("1")).toBe("Enero");
+      expect(formatMonthNumeric("2")).toBe("Febrero");
+      expect(formatMonthNumeric("3")).toBe("Marzo");
+      expect(formatMonthNumeric("4")).toBe("Abril");
+      expect(formatMonthNumeric("5")).toBe("Mayo");
+      expect(formatMonthNumeric("6")).toBe("Junio");
+      expect(formatMonthNumeric("7")).toBe("Julio");
+      expect(formatMonthNumeric("8")).toBe("Agosto");
+      expect(formatMonthNumeric("9")).toBe("Septiembre");
+      expect(formatMonthNumeric("10")).toBe("Octubre");
+      expect(formatMonthNumeric("11")).toBe("Noviembre");
+      expect(formatMonthNumeric("12")).toBe("Diciembre");
+    });
+
+    it("falls back to the input when value is not 1-12", () => {
+      expect(formatMonthNumeric("0")).toBe("0");
+      expect(formatMonthNumeric("13")).toBe("13");
+      expect(formatMonthNumeric("abc")).toBe("abc");
     });
   });
 });

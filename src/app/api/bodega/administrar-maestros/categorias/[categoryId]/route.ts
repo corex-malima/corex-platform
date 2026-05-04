@@ -3,7 +3,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/api-auth";
 import { handleApiError } from "@/lib/api-error";
 import { getSession } from "@/lib/auth";
-import type { BodegaCategoryInput, BodegaCategoryPayload } from "@/lib/bodega-master-types";
+import { bodegaCategoryInputSchema } from "@/lib/bodega-schemas";
+import { formatZodIssue } from "@/lib/admin-masters-schemas";
+import type { BodegaCategoryPayload } from "@/lib/bodega-master-types";
 import { updateBodegaCategory } from "@/lib/bodega-masters";
 
 export const dynamic = "force-dynamic";
@@ -21,9 +23,13 @@ export async function PATCH(
 
   try {
     const { categoryId } = await context.params;
-    const payload = (await request.json()) as BodegaCategoryInput;
+    const raw = await request.json().catch(() => null);
+    const parsed = bodegaCategoryInputSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonError(formatZodIssue(parsed.error.issues), 400);
+    }
     const actorId = (await getSession()) ?? "corex_bodega_ui";
-    const data = await updateBodegaCategory(decodeURIComponent(categoryId), payload, actorId);
+    const data = await updateBodegaCategory(decodeURIComponent(categoryId), parsed.data, actorId);
 
     return NextResponse.json<BodegaCategoryPayload>(
       { data: data! },

@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  adminUnitPatchSchema,
+  adminUnitUpsertSchema,
+} from "@/lib/admin-masters-schemas";
+import { enforceAdminMaestrosRateLimit, parseAndValidate } from "@/lib/admin-mutation-guard";
 import { requireAuth, getCurrentUserAccess } from "@/lib/api-auth";
 import { apiJsonError, handleApiError } from "@/lib/api-error";
 import { getRequestId } from "@/lib/request-id";
@@ -45,19 +50,21 @@ export async function POST(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "unidades", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
+
+  const { data, errorResponse } = await parseAndValidate(request, adminUnitUpsertSchema, requestId);
+  if (errorResponse) return errorResponse;
+
   try {
-    const body = await request.json();
-    if (!body.unitCode || !body.unitName) {
-      return apiJsonError("unitCode y unitName son obligatorios.", 400, requestId);
-    }
     await createUnit({
-      unitCode: String(body.unitCode),
-      unitName: String(body.unitName),
-      unitSymbol: body.unitSymbol ?? null,
-      unitCategoryCode: body.unitCategoryCode ?? null,
-      notesText: body.notesText ?? null,
+      unitCode: data!.unitCode,
+      unitName: data!.unitName,
+      unitSymbol: data!.unitSymbol ?? null,
+      unitCategoryCode: data!.unitCategoryCode ?? null,
+      notesText: data!.notesText ?? null,
       actorId: access.username,
-      changeReason: body.changeReason ? String(body.changeReason) : "manual_create",
+      changeReason: data!.changeReason ?? "manual_create",
     });
     const units = await listActiveUnits();
     return NextResponse.json({ units }, { status: 201, headers: { "Cache-Control": "no-store" } });
@@ -73,35 +80,30 @@ export async function PATCH(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
-  try {
-    const body = await request.json();
-    const action = String(body.action ?? "update");
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "unidades", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
 
-    if (action === "set-validity") {
-      if (!body.unitCode || typeof body.isValid !== "boolean") {
-        return apiJsonError("unitCode e isValid son obligatorios.", 400, requestId);
-      }
+  const { data, errorResponse } = await parseAndValidate(request, adminUnitPatchSchema, requestId);
+  if (errorResponse) return errorResponse;
+
+  try {
+    if (data!.action === "set-validity") {
       await setUnitValidity(
-        String(body.unitCode),
-        Boolean(body.isValid),
+        data!.unitCode,
+        data!.isValid,
         access.username,
-        body.changeReason ? String(body.changeReason) : "manual_update",
+        data!.changeReason ?? "manual_update",
       );
-    } else if (action === "update") {
-      if (!body.unitCode || !body.unitName) {
-        return apiJsonError("unitCode y unitName son obligatorios.", 400, requestId);
-      }
-      await updateUnit({
-        unitCode: String(body.unitCode),
-        unitName: String(body.unitName),
-        unitSymbol: body.unitSymbol ?? null,
-        unitCategoryCode: body.unitCategoryCode ?? null,
-        notesText: body.notesText ?? null,
-        actorId: access.username,
-        changeReason: body.changeReason ? String(body.changeReason) : "manual_update",
-      });
     } else {
-      return apiJsonError("action debe ser 'update' o 'set-validity'.", 400, requestId);
+      await updateUnit({
+        unitCode: data!.unitCode,
+        unitName: data!.unitName,
+        unitSymbol: data!.unitSymbol ?? null,
+        unitCategoryCode: data!.unitCategoryCode ?? null,
+        notesText: data!.notesText ?? null,
+        actorId: access.username,
+        changeReason: data!.changeReason ?? "manual_update",
+      });
     }
 
     const units = await listActiveUnits();

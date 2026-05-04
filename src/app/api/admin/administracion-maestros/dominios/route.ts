@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  adminDomainUpsertSchema,
+  adminDomainValidityPatchSchema,
+} from "@/lib/admin-masters-schemas";
+import { enforceAdminMaestrosRateLimit, parseAndValidate } from "@/lib/admin-mutation-guard";
 import { requireAuth, getCurrentUserAccess } from "@/lib/api-auth";
 import { apiJsonError, handleApiError } from "@/lib/api-error";
 import { getRequestId } from "@/lib/request-id";
@@ -31,22 +36,24 @@ export async function POST(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "dominios", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
+
+  const { data, errorResponse } = await parseAndValidate(request, adminDomainUpsertSchema, requestId);
+  if (errorResponse) return errorResponse;
+
   try {
-    const body = await request.json();
-    if (!body.domainCode || !body.domainName) {
-      return apiJsonError("Codigo y nombre son obligatorios.", 400, requestId);
-    }
     await upsertAdminDomain({
-      domainCode: String(body.domainCode),
-      domainName: String(body.domainName),
-      domainDescription: body.domainDescription ?? null,
-      displayOrder: body.displayOrder !== undefined ? Number(body.displayOrder) : 0,
-      isValid: body.isValid !== false,
+      domainCode: data!.domainCode,
+      domainName: data!.domainName,
+      domainDescription: data!.domainDescription ?? null,
+      displayOrder: data!.displayOrder,
+      isValid: data!.isValid,
       actorId: access.username,
-      changeReason: body.changeReason ? String(body.changeReason) : "manual_update",
+      changeReason: data!.changeReason ?? "manual_update",
     });
-    const data = await loadAdminCatalogs();
-    return NextResponse.json({ domains: data.domains }, { headers: { "Cache-Control": "no-store" } });
+    const refreshed = await loadAdminCatalogs();
+    return NextResponse.json({ domains: refreshed.domains }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return handleApiError(error, "No se pudo guardar el dominio.", requestId);
   }
@@ -59,19 +66,21 @@ export async function PATCH(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "dominios", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
+
+  const { data, errorResponse } = await parseAndValidate(request, adminDomainValidityPatchSchema, requestId);
+  if (errorResponse) return errorResponse;
+
   try {
-    const body = await request.json();
-    if (!body.domainCode || typeof body.isValid !== "boolean") {
-      return apiJsonError("domainCode e isValid son obligatorios.", 400, requestId);
-    }
     await setAdminDomainValidity(
-      String(body.domainCode),
-      Boolean(body.isValid),
+      data!.domainCode,
+      data!.isValid,
       access.username,
-      body.changeReason ? String(body.changeReason) : "manual_update",
+      data!.changeReason ?? "manual_update",
     );
-    const data = await loadAdminCatalogs();
-    return NextResponse.json({ domains: data.domains }, { headers: { "Cache-Control": "no-store" } });
+    const refreshed = await loadAdminCatalogs();
+    return NextResponse.json({ domains: refreshed.domains }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return handleApiError(error, "No se pudo cambiar la validez del dominio.", requestId);
   }

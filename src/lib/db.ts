@@ -1,5 +1,7 @@
 import { Pool, types, type PoolConfig, type QueryResultRow } from "pg";
 
+import { logEvent } from "@/lib/logger";
+
 // DATE (OID 1082) → string "YYYY-MM-DD" — evita off-by-one en servidores UTC
 types.setTypeParser(1082, (val: string) => val);
 
@@ -144,7 +146,11 @@ export async function query<T extends QueryResultRow>(text: string, values: unkn
   const elapsed = Date.now() - start;
 
   if (elapsed > SLOW_QUERY_MS) {
-    console.warn(`[DB] Slow query (${elapsed}ms): ${text.slice(0, 120)}`);
+    logEvent("warn", "db.slow_query", {
+      elapsedMs: elapsed,
+      thresholdMs: SLOW_QUERY_MS,
+      sqlPreview: text.slice(0, 120),
+    });
   }
 
   return result;

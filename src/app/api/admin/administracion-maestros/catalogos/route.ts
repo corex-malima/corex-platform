@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  adminCatalogUpsertSchema,
+  adminCatalogValidityPatchSchema,
+} from "@/lib/admin-masters-schemas";
+import { enforceAdminMaestrosRateLimit, parseAndValidate } from "@/lib/admin-mutation-guard";
 import { requireAuth, getCurrentUserAccess } from "@/lib/api-auth";
 import { apiJsonError, handleApiError } from "@/lib/api-error";
 import { getRequestId } from "@/lib/request-id";
@@ -33,43 +38,40 @@ export async function POST(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
-  try {
-    const body = await request.json();
-    const kind = String(body.kind ?? "");
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "catalogos", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
 
-    if (kind === "group") {
-      if (!body.catalogCode || !body.catalogName || !body.domainCode) {
-        return apiJsonError("Codigo, nombre y dominio son obligatorios.", 400, requestId);
-      }
+  const { data, errorResponse } = await parseAndValidate(request, adminCatalogUpsertSchema, requestId);
+  if (errorResponse) return errorResponse;
+
+  try {
+    const reason = data!.changeReason ?? "manual_update";
+
+    if (data!.kind === "group") {
       await upsertAdminCatalogGroup({
-        catalogCode: String(body.catalogCode),
-        catalogName: String(body.catalogName),
-        catalogDescription: body.catalogDescription ?? null,
-        domainCode: String(body.domainCode),
-        isSystemCatalog: Boolean(body.isSystemCatalog),
+        catalogCode: data!.catalogCode,
+        catalogName: data!.catalogName,
+        catalogDescription: data!.catalogDescription ?? null,
+        domainCode: data!.domainCode,
+        isSystemCatalog: data!.isSystemCatalog,
         actorId: access.username,
-        changeReason: body.changeReason ? String(body.changeReason) : "manual_update",
-      });
-    } else if (kind === "item") {
-      if (!body.catalogCode || !body.itemCode || !body.itemLabelEs) {
-        return apiJsonError("Catalogo, codigo y etiqueta son obligatorios.", 400, requestId);
-      }
-      await upsertAdminCatalogItem({
-        catalogCode: String(body.catalogCode),
-        itemCode: String(body.itemCode),
-        itemLabelEs: String(body.itemLabelEs),
-        itemLabelEn: body.itemLabelEn ?? null,
-        itemDescription: body.itemDescription ?? null,
-        displayOrder: body.displayOrder !== undefined ? Number(body.displayOrder) : 0,
-        actorId: access.username,
-        changeReason: body.changeReason ? String(body.changeReason) : "manual_update",
+        changeReason: reason,
       });
     } else {
-      return apiJsonError("kind debe ser 'group' o 'item'.", 400, requestId);
+      await upsertAdminCatalogItem({
+        catalogCode: data!.catalogCode,
+        itemCode: data!.itemCode,
+        itemLabelEs: data!.itemLabelEs,
+        itemLabelEn: data!.itemLabelEn ?? null,
+        itemDescription: data!.itemDescription ?? null,
+        displayOrder: data!.displayOrder,
+        actorId: access.username,
+        changeReason: reason,
+      });
     }
 
-    const data = await loadAdminCatalogs();
-    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
+    const refreshed = await loadAdminCatalogs();
+    return NextResponse.json(refreshed, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return handleApiError(error, "No se pudo guardar el catalogo.", requestId);
   }
@@ -82,34 +84,29 @@ export async function PATCH(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
-  try {
-    const body = await request.json();
-    const kind = String(body.kind ?? "");
-    if (typeof body.isValid !== "boolean") {
-      return apiJsonError("isValid es obligatorio (boolean).", 400, requestId);
-    }
-    const reason = body.changeReason ? String(body.changeReason) : "manual_update";
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "catalogos", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
 
-    if (kind === "group") {
-      if (!body.catalogCode) return apiJsonError("catalogCode es obligatorio.", 400, requestId);
-      await setAdminCatalogGroupValidity(String(body.catalogCode), body.isValid, access.username, reason);
-    } else if (kind === "item") {
-      if (!body.catalogCode || !body.itemCode) {
-        return apiJsonError("catalogCode e itemCode son obligatorios.", 400, requestId);
-      }
+  const { data, errorResponse } = await parseAndValidate(request, adminCatalogValidityPatchSchema, requestId);
+  if (errorResponse) return errorResponse;
+
+  try {
+    const reason = data!.changeReason ?? "manual_update";
+
+    if (data!.kind === "group") {
+      await setAdminCatalogGroupValidity(data!.catalogCode, data!.isValid, access.username, reason);
+    } else {
       await setAdminCatalogItemValidity(
-        String(body.catalogCode),
-        String(body.itemCode),
-        body.isValid,
+        data!.catalogCode,
+        data!.itemCode,
+        data!.isValid,
         access.username,
         reason,
       );
-    } else {
-      return apiJsonError("kind debe ser 'group' o 'item'.", 400, requestId);
     }
 
-    const data = await loadAdminCatalogs();
-    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
+    const refreshed = await loadAdminCatalogs();
+    return NextResponse.json(refreshed, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return handleApiError(error, "No se pudo cambiar la validez.", requestId);
   }

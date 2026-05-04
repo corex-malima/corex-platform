@@ -4,7 +4,9 @@ import { requireAuth } from "@/lib/api-auth";
 import { handleApiError } from "@/lib/api-error";
 import { getSession } from "@/lib/auth";
 import { checkRateLimit } from "@/server/security/rate-limit";
-import type { BodegaCategoryInput, BodegaCategoryPayload } from "@/lib/bodega-master-types";
+import { bodegaCategoryInputSchema } from "@/lib/bodega-schemas";
+import { formatZodIssue } from "@/lib/admin-masters-schemas";
+import type { BodegaCategoryPayload } from "@/lib/bodega-master-types";
 import { createBodegaCategory, listCurrentBodegaCategories } from "@/lib/bodega-masters";
 
 export const dynamic = "force-dynamic";
@@ -47,9 +49,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const payload = (await request.json()) as BodegaCategoryInput;
+    const raw = await request.json().catch(() => null);
+    const parsed = bodegaCategoryInputSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonError(formatZodIssue(parsed.error.issues), 400);
+    }
     const actorId = (await getSession()) ?? "corex_bodega_ui";
-    const data = await createBodegaCategory(payload, actorId);
+    const data = await createBodegaCategory(parsed.data, actorId);
 
     return NextResponse.json<BodegaCategoryPayload>(
       { data: data! },

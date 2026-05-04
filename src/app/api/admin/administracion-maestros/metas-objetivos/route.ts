@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  adminGoalTargetPatchSchema,
+  adminGoalTargetUpsertSchema,
+} from "@/lib/admin-masters-schemas";
+import { enforceAdminMaestrosRateLimit, parseAndValidate } from "@/lib/admin-mutation-guard";
 import { requireAuth, getCurrentUserAccess } from "@/lib/api-auth";
 import { apiJsonError, handleApiError } from "@/lib/api-error";
 import { getRequestId } from "@/lib/request-id";
@@ -14,19 +19,6 @@ import { listActiveMetrics } from "@/lib/admin-masters-metrics";
 import { loadAdminCatalogs } from "@/lib/admin-masters-catalogs";
 
 export const dynamic = "force-dynamic";
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === "string" && v.length > 0);
-}
-
-function asNumberOrNull(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
 
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request);
@@ -65,31 +57,29 @@ export async function POST(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
-  try {
-    const body = await request.json();
-    if (!body.targetCode || !body.validFromDate) {
-      return apiJsonError("targetCode y validFromDate son obligatorios.", 400, requestId);
-    }
-    if (!ISO_DATE_RE.test(String(body.validFromDate))) {
-      return apiJsonError("validFromDate debe ser YYYY-MM-DD.", 400, requestId);
-    }
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "metas", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
 
+  const { data, errorResponse } = await parseAndValidate(request, adminGoalTargetUpsertSchema, requestId);
+  if (errorResponse) return errorResponse;
+
+  try {
     await createGoalTarget({
-      targetCode: String(body.targetCode),
-      targetName: String(body.targetName ?? body.targetCode),
-      targetDescription: body.targetDescription ?? null,
-      metricCode: body.metricCode ?? null,
-      operatorCode: body.operatorCode ?? null,
-      valueMin: asNumberOrNull(body.valueMin),
-      valueMax: asNumberOrNull(body.valueMax),
-      valueText: body.valueText ?? null,
-      notesText: body.notesText ?? null,
-      domainCodes: asStringArray(body.domainCodes),
-      typeItemCodes: asStringArray(body.typeItemCodes),
-      validFromDate: String(body.validFromDate),
+      targetCode: data!.targetCode,
+      targetName: data!.targetName ?? data!.targetCode,
+      targetDescription: data!.targetDescription ?? null,
+      metricCode: data!.metricCode ?? null,
+      operatorCode: data!.operatorCode ?? null,
+      valueMin: data!.valueMin ?? null,
+      valueMax: data!.valueMax ?? null,
+      valueText: data!.valueText ?? null,
+      notesText: data!.notesText ?? null,
+      domainCodes: data!.domainCodes ?? [],
+      typeItemCodes: data!.typeItemCodes ?? [],
+      validFromDate: data!.validFromDate,
       actorId: access.username,
-      changeReason: body.changeReason ? String(body.changeReason) : "manual_create",
-      targetScopeJsonb: body.targetScopeJsonb ?? null,
+      changeReason: data!.changeReason ?? "manual_create",
+      targetScopeJsonb: data!.targetScopeJsonb ?? null,
     });
 
     const targets = await listActiveGoalTargets();
@@ -106,46 +96,38 @@ export async function PATCH(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
-  try {
-    const body = await request.json();
-    const action = String(body.action ?? "update");
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "metas", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
 
-    if (action === "set-validity") {
-      if (!body.targetCode || typeof body.isValid !== "boolean") {
-        return apiJsonError("targetCode e isValid son obligatorios.", 400, requestId);
-      }
+  const { data, errorResponse } = await parseAndValidate(request, adminGoalTargetPatchSchema, requestId);
+  if (errorResponse) return errorResponse;
+
+  try {
+    if (data!.action === "set-validity") {
       await setGoalTargetValidity(
-        String(body.targetCode),
-        Boolean(body.isValid),
+        data!.targetCode,
+        data!.isValid,
         access.username,
-        body.changeReason ? String(body.changeReason) : "manual_update",
+        data!.changeReason ?? "manual_update",
       );
-    } else if (action === "update") {
-      if (!body.targetCode || !body.validFromDate) {
-        return apiJsonError("targetCode y validFromDate son obligatorios.", 400, requestId);
-      }
-      if (!ISO_DATE_RE.test(String(body.validFromDate))) {
-        return apiJsonError("validFromDate debe ser YYYY-MM-DD.", 400, requestId);
-      }
-      await updateGoalTarget({
-        targetCode: String(body.targetCode),
-        targetName: String(body.targetName ?? body.targetCode),
-        targetDescription: body.targetDescription ?? null,
-        metricCode: body.metricCode ?? null,
-        operatorCode: body.operatorCode ?? null,
-        valueMin: asNumberOrNull(body.valueMin),
-        valueMax: asNumberOrNull(body.valueMax),
-        valueText: body.valueText ?? null,
-        notesText: body.notesText ?? null,
-        domainCodes: asStringArray(body.domainCodes),
-        typeItemCodes: asStringArray(body.typeItemCodes),
-        validFromDate: String(body.validFromDate),
-        actorId: access.username,
-        changeReason: body.changeReason ? String(body.changeReason) : "manual_update",
-        targetScopeJsonb: body.targetScopeJsonb ?? null,
-      });
     } else {
-      return apiJsonError("action debe ser 'update' o 'set-validity'.", 400, requestId);
+      await updateGoalTarget({
+        targetCode: data!.targetCode,
+        targetName: data!.targetName ?? data!.targetCode,
+        targetDescription: data!.targetDescription ?? null,
+        metricCode: data!.metricCode ?? null,
+        operatorCode: data!.operatorCode ?? null,
+        valueMin: data!.valueMin ?? null,
+        valueMax: data!.valueMax ?? null,
+        valueText: data!.valueText ?? null,
+        notesText: data!.notesText ?? null,
+        domainCodes: data!.domainCodes ?? [],
+        typeItemCodes: data!.typeItemCodes ?? [],
+        validFromDate: data!.validFromDate,
+        actorId: access.username,
+        changeReason: data!.changeReason ?? "manual_update",
+        targetScopeJsonb: data!.targetScopeJsonb ?? null,
+      });
     }
 
     const targets = await listActiveGoalTargets();

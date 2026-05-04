@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { requireAuth } from "@/lib/api-auth";
 import { handleApiError } from "@/lib/api-error";
+import { formatZodIssue } from "@/lib/admin-masters-schemas";
+import { solverRunInputSchema } from "@/lib/postcosecha-clasificacion-schemas";
 import type {
   PoscosechaClasificacionBootData,
   PoscosechaClasificacionRunInput,
@@ -41,8 +43,12 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   try {
-    const payload = (await request.json()) as PoscosechaClasificacionRunInput;
-    const { runs } = await runClasificacionEnBlancoSolver(payload);
+    const raw = await request.json().catch(() => null);
+    const parsed = solverRunInputSchema.safeParse(raw);
+    if (!parsed.success) {
+      return jsonError(formatZodIssue(parsed.error.issues), 400);
+    }
+    const { runs } = await runClasificacionEnBlancoSolver(parsed.data as unknown as PoscosechaClasificacionRunInput);
 
     return NextResponse.json<PoscosechaClasificacionRunPayload>(
       { data: runs },

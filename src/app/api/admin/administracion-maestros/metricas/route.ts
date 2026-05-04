@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import {
+  adminMetricPatchSchema,
+  adminMetricUpsertSchema,
+} from "@/lib/admin-masters-schemas";
+import { enforceAdminMaestrosRateLimit, parseAndValidate } from "@/lib/admin-mutation-guard";
 import { requireAuth, getCurrentUserAccess } from "@/lib/api-auth";
 import { apiJsonError, handleApiError } from "@/lib/api-error";
 import { getRequestId } from "@/lib/request-id";
@@ -52,21 +57,23 @@ export async function POST(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "metricas", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
+
+  const { data, errorResponse } = await parseAndValidate(request, adminMetricUpsertSchema, requestId);
+  if (errorResponse) return errorResponse;
+
   try {
-    const body = await request.json();
-    if (!body.metricCode || !body.metricName || !body.dataTypeCode || !body.directionCode) {
-      return apiJsonError("metricCode, metricName, dataTypeCode y directionCode son obligatorios.", 400, requestId);
-    }
     await createMetric({
-      metricCode: String(body.metricCode),
-      metricName: String(body.metricName),
-      metricDescription: body.metricDescription ?? null,
-      dataTypeCode: String(body.dataTypeCode),
-      directionCode: String(body.directionCode),
-      unitCode: body.unitCode ?? null,
-      notesText: body.notesText ?? null,
+      metricCode: data!.metricCode,
+      metricName: data!.metricName,
+      metricDescription: data!.metricDescription ?? null,
+      dataTypeCode: data!.dataTypeCode,
+      directionCode: data!.directionCode,
+      unitCode: data!.unitCode ?? null,
+      notesText: data!.notesText ?? null,
       actorId: access.username,
-      changeReason: body.changeReason ? String(body.changeReason) : "manual_create",
+      changeReason: data!.changeReason ?? "manual_create",
     });
     const metrics = await listActiveMetrics();
     return NextResponse.json({ metrics }, { status: 201, headers: { "Cache-Control": "no-store" } });
@@ -82,37 +89,32 @@ export async function PATCH(request: NextRequest) {
   const access = await getCurrentUserAccess();
   if (!access) return apiJsonError("No autenticado.", 401, requestId);
 
-  try {
-    const body = await request.json();
-    const action = String(body.action ?? "update");
+  const rateLimitError = enforceAdminMaestrosRateLimit(request, "metricas", requestId, access.username);
+  if (rateLimitError) return rateLimitError;
 
-    if (action === "set-validity") {
-      if (!body.metricCode || typeof body.isValid !== "boolean") {
-        return apiJsonError("metricCode e isValid son obligatorios.", 400, requestId);
-      }
+  const { data, errorResponse } = await parseAndValidate(request, adminMetricPatchSchema, requestId);
+  if (errorResponse) return errorResponse;
+
+  try {
+    if (data!.action === "set-validity") {
       await setMetricValidity(
-        String(body.metricCode),
-        Boolean(body.isValid),
+        data!.metricCode,
+        data!.isValid,
         access.username,
-        body.changeReason ? String(body.changeReason) : "manual_update",
+        data!.changeReason ?? "manual_update",
       );
-    } else if (action === "update") {
-      if (!body.metricCode || !body.metricName || !body.dataTypeCode || !body.directionCode) {
-        return apiJsonError("Campos obligatorios faltantes.", 400, requestId);
-      }
-      await updateMetric({
-        metricCode: String(body.metricCode),
-        metricName: String(body.metricName),
-        metricDescription: body.metricDescription ?? null,
-        dataTypeCode: String(body.dataTypeCode),
-        directionCode: String(body.directionCode),
-        unitCode: body.unitCode ?? null,
-        notesText: body.notesText ?? null,
-        actorId: access.username,
-        changeReason: body.changeReason ? String(body.changeReason) : "manual_update",
-      });
     } else {
-      return apiJsonError("action debe ser 'update' o 'set-validity'.", 400, requestId);
+      await updateMetric({
+        metricCode: data!.metricCode,
+        metricName: data!.metricName,
+        metricDescription: data!.metricDescription ?? null,
+        dataTypeCode: data!.dataTypeCode,
+        directionCode: data!.directionCode,
+        unitCode: data!.unitCode ?? null,
+        notesText: data!.notesText ?? null,
+        actorId: access.username,
+        changeReason: data!.changeReason ?? "manual_update",
+      });
     }
 
     const metrics = await listActiveMetrics();

@@ -48,6 +48,14 @@ El build puede emitir un warning de Turbopack/NFT relacionado con rutas dinamica
 - `src/modules/talento-humano/components/talento-charts.tsx` -> dueno esperado: Talento, seguir dividiendo charts si aparece nueva complejidad
 - `src/modules/talento-humano/seguimientos/components/seguimientos-indicador-explorer.tsx` -> dueno esperado: Talento Humano, considerar split de charts si vuelve a crecer
 
+## Estado de hardening (post-AUD-18, 2026-05-03)
+
+- **Tests:** 23 archivos, **165/165 passing**.
+- **zod en mutaciones críticas:** 7 endpoints (admin × 5 + bodega categorías + solver) con `parseAndValidate()` y schemas centralizados en `src/lib/admin-masters-schemas.ts`, `src/lib/bodega-schemas.ts`, `src/lib/postcosecha-clasificacion-schemas.ts`.
+- **Rate limit admin:** `ADMIN_MAESTROS_RATE_LIMIT` (default 20/60s) defensa en profundidad sobre RBAC superadmin.
+- **Logging estructurado:** `console.warn` críticos migrados a `logEvent` (db slow query, tthh fallbacks).
+- **Pendiente para sprint post-go-live:** ~22 mutaciones TTHH/admin-users/chat sin zod aún, 7 `console.error` en error handlers pueden migrarse a `logEvent`, vista `mv_audit_log_recent` para diagnóstico SCD2.
+
 ## React Doctor — deuda aceptada
 
 Reglas conocidas que NO se aplican (decision documentada):
