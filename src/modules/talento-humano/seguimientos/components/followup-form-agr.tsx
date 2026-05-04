@@ -73,6 +73,23 @@ export function FollowupFormAgr({ state, setField, asOfDate, ...opts }: Props) {
 
   const s = state;
   const sf = <K extends keyof AgrFormState>(k: K) => (v: AgrFormState[K]) => setField(k, v);
+  const setRetentionIntention = (value: string) => {
+    setField("retentionIntention", value);
+    if (!["less_than_3_months", "between_3_and_6_months", "between_6_months_and_1_year"].includes(value)) {
+      setField("shortRetentionEncoded", "");
+      setField("shortRetentionOther", "");
+    }
+  };
+  const setHasInconvenience = (value: string) => {
+    setField("hasInconvenience", value);
+    if (value !== "yes") {
+      setField("inconvenienceDate", "");
+      setField("inconvenienceActivity", "");
+      setField("inconvenienceActivityOther", "");
+      setField("inconvenienceType", "");
+      setField("inconvenienceTypeOther", "");
+    }
+  };
 
   return (
     <div className="grid gap-6 2xl:grid-cols-2">
@@ -100,7 +117,7 @@ export function FollowupFormAgr({ state, setField, asOfDate, ...opts }: Props) {
       </FormSection>
 
       <FormSection title="Permanencia laboral">
-        <SingleSelectField id="retention-intention" label="¿Por cuanto tiempo mas le gustaria seguir trabajando en la empresa? *" value={s.retentionIntention} options={opts.retentionOpts} displayValue={opts.retentionDV} onChange={sf("retentionIntention")} />
+        <SingleSelectField id="retention-intention" label="¿Por cuanto tiempo mas le gustaria seguir trabajando en la empresa? *" value={s.retentionIntention} options={opts.retentionOpts} displayValue={opts.retentionDV} onChange={setRetentionIntention} />
         {shortRetentionVisible ? (
           <>
             <MultiSelectField id="short-retention" label="Si la respuesta es menos de 1 año, ¿cual es la razon principal? *" value={s.shortRetentionEncoded} options={opts.shortRetentionOpts} displayValue={opts.shortRetentionDV} onChange={sf("shortRetentionEncoded")} />
@@ -119,10 +136,10 @@ export function FollowupFormAgr({ state, setField, asOfDate, ...opts }: Props) {
 
       <FormSection title="Actividades desarrolladas">
         <TextareaField id="developed-activities-description" label="Descripción (opcional)" value={s.developedActivitiesDescription} onChange={sf("developedActivitiesDescription")} rows={2} placeholder="Describa brevemente las actividades desarrolladas" />
-        <SingleSelectField id="has-inconvenience" label="Inconvenientes *" value={s.hasInconvenience} options={opts.yesNoOpts} displayValue={opts.yesNoDV} onChange={sf("hasInconvenience")} />
+        <SingleSelectField id="has-inconvenience" label="Inconvenientes *" value={s.hasInconvenience} options={opts.yesNoOpts} displayValue={opts.yesNoDV} onChange={setHasInconvenience} />
         {s.hasInconvenience === "yes" ? (
           <>
-            <DateField label="Ingrese la fecha del inconveniente *" helperText="Día, mes, año" value={s.inconvenienceDate} onChange={sf("inconvenienceDate")} />
+            <DateField id="inconvenience-date" label="Ingrese la fecha del inconveniente *" helperText="Día, mes, año" value={s.inconvenienceDate} onChange={sf("inconvenienceDate")} />
             <SingleSelectField id="inconvenience-activity" label="En qué actividad tuvo inconvenientes *" value={s.inconvenienceActivity} options={opts.activityOpts} displayValue={opts.activityDV} onChange={sf("inconvenienceActivity")} />
             {s.inconvenienceActivity === "other" ? <TextInputField id="inconvenience-activity-other" label="Otro *" value={s.inconvenienceActivityOther} onChange={sf("inconvenienceActivityOther")} /> : null}
             <SingleSelectField id="inconvenience-type" label="Señale el inconveniente presentado *" value={s.inconvenienceType} options={opts.inconvTypeOpts} displayValue={opts.inconvTypeDV} onChange={sf("inconvenienceType")} />

@@ -47,6 +47,12 @@ type Props = {
 const detailFetcher = (url: string) =>
   fetchJson<EmployeeFollowupResponseDetail>(url, "No se pudo cargar la respuesta registrada.");
 
+const SHORT_RETENTION_CODES = [
+  "less_than_3_months",
+  "between_3_and_6_months",
+  "between_6_months_and_1_year",
+];
+
 export function FollowupRegistrationPanel({ followup, catalogs, permissions, asOfDate, onSaved, onClose }: Props) {
   const route = followup.derivedRoute;
   const [submitting, setSubmitting] = useState(false);
@@ -90,13 +96,16 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
 
   function validateBeforeSubmit() {
     if (route === "AGR") {
+      const hasInconvenience = agrState.hasInconvenience === "yes";
+      const shortRetentionVisible = SHORT_RETENTION_CODES.includes(agrState.retentionIntention);
       const missingAgr = !decodeMultiSelectValue(agrState.workDiffEncoded).length
         || !agrState.coworkerRating || !agrState.supervisorRating || !agrState.areaManagerRating
         || !decodeMultiSelectValue(agrState.workLikeMostEncoded).length
         || !decodeMultiSelectValue(agrState.improvOppEncoded).length
         || !agrState.retentionIntention || !agrState.hrSupportNeed
         || !agrState.familyPregnancyRelation || !agrState.hasInconvenience
-        || !agrState.inconvenienceDate || !agrState.inconvenienceActivity || !agrState.inconvenienceType;
+        || (shortRetentionVisible && !decodeMultiSelectValue(agrState.shortRetentionEncoded).length)
+        || (hasInconvenience && (!agrState.inconvenienceDate || !agrState.inconvenienceActivity || !agrState.inconvenienceType));
       if (missingAgr) return "Complete las preguntas obligatorias marcadas con *.";
     }
 
@@ -119,7 +128,9 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
     addSelections(agrState.workDiffEncoded, "work_difficulty", "work_difficulty", agrState.workDiffOther);
     addSelections(agrState.workLikeMostEncoded, "work_like_most", "work_like_most", agrState.workLikeMostOther);
     addSelections(agrState.improvOppEncoded, "improvement_opportunity", "improvement_opportunity", agrState.improvOppOther);
-    addSelections(agrState.shortRetentionEncoded, "short_retention_reason", "short_retention_reason", agrState.shortRetentionOther);
+    if (SHORT_RETENTION_CODES.includes(agrState.retentionIntention)) {
+      addSelections(agrState.shortRetentionEncoded, "short_retention_reason", "short_retention_reason", agrState.shortRetentionOther);
+    }
     return selections;
   }
 
@@ -236,6 +247,7 @@ export function FollowupRegistrationPanel({ followup, catalogs, permissions, asO
 }
 
 function buildAgrPayload(state: AgrFormState) {
+  const hasInconvenience = state.hasInconvenience === "yes";
   return {
     workDifficultyObservation: state.workDifficultyObs || null,
     coworkerTreatmentRatingCode: state.coworkerRating || null,
@@ -254,11 +266,11 @@ function buildAgrPayload(state: AgrFormState) {
     familyPregnancyObservation: state.familyPregnancyObs || null,
     developedActivitiesDescription: state.developedActivitiesDescription || null,
     hasInconvenienceCode: state.hasInconvenience || null,
-    inconvenienceDate: state.inconvenienceDate || null,
-    inconvenienceActivityCode: state.inconvenienceActivity || null,
-    inconvenienceActivityOtherDetail: state.inconvenienceActivityOther || null,
-    inconvenienceTypeCode: state.inconvenienceType || null,
-    inconvenienceTypeOtherDetail: state.inconvenienceTypeOther || null,
+    inconvenienceDate: hasInconvenience ? state.inconvenienceDate || null : null,
+    inconvenienceActivityCode: hasInconvenience ? state.inconvenienceActivity || null : null,
+    inconvenienceActivityOtherDetail: hasInconvenience && state.inconvenienceActivity === "other" ? state.inconvenienceActivityOther || null : null,
+    inconvenienceTypeCode: hasInconvenience ? state.inconvenienceType || null : null,
+    inconvenienceTypeOtherDetail: hasInconvenience && state.inconvenienceType === "other" ? state.inconvenienceTypeOther || null : null,
   };
 }
 
