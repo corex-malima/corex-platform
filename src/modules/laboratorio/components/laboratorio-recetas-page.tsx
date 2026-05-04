@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
+import { makeClientId } from "@/shared/lib/client-id";
 import { formatDateTime } from "@/shared/lib/format";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -75,8 +76,8 @@ function makeEmptyFormValues(): LaboratoryProductInput {
     categoryId: "",
     baseUnitId: "",
     isActive: true,
-    assignments: [{ _formKey: crypto.randomUUID(), activityId: "", branchOrder: 1 }],
-    recipeLines: [{ ...EMPTY_RECIPE_LINE, _formKey: crypto.randomUUID() }],
+    assignments: [{ _formKey: makeClientId("laboratory_assignment"), activityId: "", branchOrder: 1 }],
+    recipeLines: [{ ...EMPTY_RECIPE_LINE, _formKey: makeClientId("laboratory_recipe_line") }],
     changeReason: "",
   };
 }
@@ -145,12 +146,12 @@ function mapRecordToFormValues(record: LaboratoryProductRecord): LaboratoryProdu
     baseUnitId: record.baseUnitId,
     isActive: record.isActive,
     assignments: record.assignments.map((assignment) => ({
-      _formKey: crypto.randomUUID(),
+      _formKey: makeClientId("laboratory_assignment"),
       activityId: assignment.activityId,
       branchOrder: assignment.branchOrder,
     })),
     recipeLines: record.recipeLines.map((line) => ({
-      _formKey: crypto.randomUUID(),
+      _formKey: makeClientId("laboratory_recipe_line"),
       lineOrder: line.lineOrder,
       ingredientProductId: line.ingredientProductId,
       ingredientQuantityValue: line.ingredientQuantityValue,
@@ -379,7 +380,7 @@ export function LaboratorioRecetasPage({
 
     setFormValues((current) => ({
       ...current,
-      assignments: [...current.assignments, { _formKey: crypto.randomUUID(), activityId: "", branchOrder: current.assignments.length + 1 }],
+      assignments: [...current.assignments, { _formKey: makeClientId("laboratory_assignment"), activityId: "", branchOrder: current.assignments.length + 1 }],
     }));
     setActivitySearchValues((current) => [...current, ""]);
   }
@@ -438,14 +439,14 @@ export function LaboratorioRecetasPage({
   function addRecipeLine() {
     setFormValues((current) => ({
       ...current,
-      recipeLines: [...current.recipeLines, { ...EMPTY_RECIPE_LINE, _formKey: crypto.randomUUID() }],
+      recipeLines: [...current.recipeLines, { ...EMPTY_RECIPE_LINE, _formKey: makeClientId("laboratory_recipe_line") }],
     }));
     setIngredientSearchValues((current) => [...current, ""]);
   }
 
   function removeRecipeLine(index: number) {
     if (formValues.recipeLines.length === 1) {
-      setFormValues((current) => ({ ...current, recipeLines: [{ ...EMPTY_RECIPE_LINE, _formKey: crypto.randomUUID() }] }));
+      setFormValues((current) => ({ ...current, recipeLines: [{ ...EMPTY_RECIPE_LINE, _formKey: makeClientId("laboratory_recipe_line") }] }));
       setIngredientSearchValues([""]);
       return;
     }

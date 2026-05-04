@@ -31,6 +31,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/sha
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
+import { makeClientId } from "@/shared/lib/client-id";
 import { formatDateTime } from "@/shared/lib/format";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -61,7 +62,7 @@ function makeEmptyFormValues(): BodegaProductInput {
     activeComponentMode: "na",
     activeComponentName: "",
     isActive: true,
-    assignments: [{ _formKey: crypto.randomUUID(), activityId: "", branchOrder: 1 }],
+    assignments: [{ _formKey: makeClientId("bodega_product_assignment"), activityId: "", branchOrder: 1 }],
     changeReason: "",
   };
 }
@@ -127,7 +128,7 @@ function mapRecordToFormValues(record: BodegaProductRecord): BodegaProductInput 
     activeComponentName: record.activeComponentName ?? "",
     isActive: record.isActive,
     assignments: record.assignments.map((assignment) => ({
-      _formKey: crypto.randomUUID(),
+      _formKey: makeClientId("bodega_product_assignment"),
       activityId: assignment.activityId,
       branchOrder: assignment.branchOrder,
     })),
@@ -360,7 +361,7 @@ export function BodegaProductosPage({
         ...current,
         assignments: [
           ...current.assignments,
-          { _formKey: crypto.randomUUID(), activityId: "", branchOrder: current.assignments.length + 1 },
+          { _formKey: makeClientId("bodega_product_assignment"), activityId: "", branchOrder: current.assignments.length + 1 },
         ],
       };
     });

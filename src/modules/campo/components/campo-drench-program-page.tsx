@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
+import { makeClientId } from "@/shared/lib/client-id";
 import { formatDateTime } from "@/shared/lib/format";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -103,7 +104,7 @@ function makeEmptyFormValues(): DrenchProgramRuleInput {
     activityId: DRENCH_PROGRAM_ACTIVITY_ID,
     isActive: true,
     notes: "",
-    lines: [{ ...EMPTY_LINE, _formKey: crypto.randomUUID() }],
+    lines: [{ ...EMPTY_LINE, _formKey: makeClientId("drench_line") }],
     changeReason: "",
   };
 }
@@ -247,7 +248,7 @@ function mapRecordToFormValues(record: DrenchProgramRuleRecord): DrenchProgramRu
     isActive: record.isActive,
     notes: record.notes ?? "",
     lines: record.lines.map((line) => ({
-      _formKey: crypto.randomUUID(),
+      _formKey: makeClientId("drench_line"),
       lineOrder: line.lineOrder,
       applicationMethod: line.applicationMethod ?? "",
       litersPerBed: line.litersPerBed,
@@ -709,7 +710,7 @@ export function CampoDrenchProgramPage({
         ...current.lines,
         {
           ...EMPTY_LINE,
-          _formKey: crypto.randomUUID(),
+          _formKey: makeClientId("drench_line"),
           lineOrder: current.lines.length + 1,
           litersPerBed: current.lines[0]?.litersPerBed ?? 50,
           dosageBasis: current.lines[0]?.dosageBasis ?? "PER_LITER",

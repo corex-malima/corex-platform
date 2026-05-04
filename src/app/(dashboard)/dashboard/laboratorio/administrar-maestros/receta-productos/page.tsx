@@ -10,6 +10,8 @@ import {
 import { LaboratorioRecetasPage } from "@/modules/laboratorio/components/laboratorio-recetas-page";
 import { loadProtectedPageData } from "@/modules/core/server-page";
 
+export const dynamic = "force-dynamic";
+
 export default async function LaboratorioRecetasMasterPage() {
   const { data, error } = await loadProtectedPageData({
     resourceKey: "/dashboard/laboratorio/administrar-maestros/receta-productos",
