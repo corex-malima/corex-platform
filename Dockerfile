@@ -1,8 +1,6 @@
-FROM node:20-alpine AS base
+FROM node:20-slim AS base
 
 ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
 
@@ -27,10 +25,9 @@ COPY . .
 RUN mkdir -p public
 RUN npm run build
 
-# El runner usa Debian (glibc) en lugar de Alpine (musl).
-# PuLP bundlea un binario CBC compilado para glibc; en Alpine/musl falla con
-# "Error while trying to execute .../cbc/linux/i64/cbc". Debian lo ejecuta sin problemas.
-# Los stages de build (base/deps/builder) siguen en Alpine para mayor velocidad.
+# Todos los stages usan Debian/glibc para evitar mezclar node_modules compilados
+# en Alpine/musl con runtime Debian. Esto reduce fallos intermitentes con binarios
+# nativos como sharp, SWC/Next y dependencias Python/solver.
 FROM node:20-slim AS runner
 
 ENV NODE_ENV=production
