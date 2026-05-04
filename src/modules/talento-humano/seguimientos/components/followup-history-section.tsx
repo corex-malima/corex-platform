@@ -8,9 +8,14 @@ import { fetchJson } from "@/lib/fetch-json";
 import { cn } from "@/lib/utils";
 import { formatDate } from "@/shared/lib/format";
 import { Badge } from "@/shared/ui/badge";
+import {
+  buildHistoryGroups,
+  cleanValue,
+  type HistoryAnswer,
+} from "@/modules/talento-humano/seguimientos/components/followup-history-groups";
 import type {
   EmployeeFollowupCatalogMap,
-  EmployeeFollowupCatalogOption,
+  EmployeeFollowupPersonDetail,
   EmployeeFollowupResponseDetail,
   EmployeeFollowupResponseSummary,
 } from "@/modules/talento-humano/seguimientos/server/types";
@@ -27,22 +32,40 @@ const historyFetcher = (url: string) =>
 const detailFetcher = (url: string) =>
   fetchJson<EmployeeFollowupResponseDetail>(url, "No se pudo cargar el detalle.");
 
-function buildLookup(catalogs: EmployeeFollowupCatalogMap) {
-  const map = new Map<string, string>();
-  for (const [code, items] of Object.entries(catalogs)) {
-    for (const item of items as EmployeeFollowupCatalogOption[]) {
-      map.set(`${code}::${item.itemCode}`, item.itemLabelEs);
-    }
-  }
-  return map;
-}
+const personFetcher = (url: string) =>
+  fetchJson<EmployeeFollowupPersonDetail>(url, "No se pudo cargar la persona.");
 
-function KV({ label, value, wide }: { label: string; value: string | null | undefined; wide?: boolean }) {
+function AnswerCard({ answer }: { answer: HistoryAnswer }) {
+  const value = cleanValue(answer.value);
+  const personUrl = answer.personLookup && value
+    ? `/api/talento-humano/seguimientos/person/${encodeURIComponent(value)}?asOfDate=${encodeURIComponent(answer.personLookupAsOfDate?.slice(0, 10) ?? "")}`
+    : null;
+  const { data: person } = useSWR(personUrl, personFetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+
   if (!value) return null;
+  const displayValue = person?.personName ? `${person.personName} · ${value}` : value;
+
   return (
-    <div className={cn("rounded-[12px] border border-border/50 bg-background/60 px-2.5 py-1.5", wide && "col-span-2")}>
-      <p className="text-[9px] font-medium uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate text-xs font-medium text-foreground">{value}</p>
+    <div
+      className={cn(
+        "rounded-[14px] border border-border/60 bg-background/70 px-3 py-2 shadow-sm",
+        (answer.wide || answer.text) && "sm:col-span-2",
+      )}
+    >
+      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {answer.label}
+      </p>
+      <p
+        className={cn(
+          "mt-1 whitespace-pre-wrap break-words text-xs font-medium leading-relaxed text-foreground",
+          !answer.text && "max-w-full",
+        )}
+      >
+        {displayValue}
+      </p>
     </div>
   );
 }
@@ -53,6 +76,7 @@ function HistoryItemDetail({ eventId, catalogs }: { eventId: string; catalogs: E
     detailFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
 
   if (isLoading) {
     return <p className="mt-2 text-center text-xs text-muted-foreground">Cargando...</p>;
@@ -62,46 +86,61 @@ function HistoryItemDetail({ eventId, catalogs }: { eventId: string; catalogs: E
   }
   if (!data) return null;
 
-  const lk = buildLookup(catalogs);
-  const label = (cat: string, v: string | null | undefined) =>
-    v ? (lk.get(`${cat}::${v}`) ?? v) : null;
+  const groups = buildHistoryGroups(data, catalogs);
+  if (groups.length === 0) {
+    return (
+      <div className="mt-2 rounded-[16px] border border-dashed border-border/70 bg-background/50 px-3 py-4 text-center text-xs text-muted-foreground">
+        Sin respuestas registradas para este seguimiento.
+      </div>
+    );
+  }
 
-  const selOf = (group: string) =>
-    data.selections.reduce<string[]>((acc, s) => {
-      if (s.selectionGroupCode === group) {
-        const base = label(s.catalogCode, s.itemCode) ?? s.itemCode;
-        acc.push(s.otherDetail ? `${base}: ${s.otherDetail}` : base);
-      }
-      return acc;
-    }, []).join(", ") || null;
+  const selectedGroup = groups.find((group) => group.key === selectedGroupKey) ?? groups[0];
+  const visibleAnswers = selectedGroup.answers.filter((answer) => cleanValue(answer.value));
 
   return (
-    <div className="mt-2 grid grid-cols-2 gap-1.5">
-      {data.followupRouteCode === "AGR" ? (
-        <>
-          <KV label="Dificultades" value={selOf("work_difficulty")} wide />
-          <KV label="Trato supervisor" value={label("treatment_rating", data.supervisorTreatmentRatingCode)} />
-          <KV label="Trato compañeros" value={label("treatment_rating", data.coworkerTreatmentRatingCode)} />
-          <KV label="Le gusta" value={selOf("work_like_most")} wide />
-          <KV label="Permanencia" value={label("retention_intention", data.retentionIntentionCode)} />
-          <KV label="Apoyo RRHH" value={label("hr_support_need", data.hrSupportNeedCode)} />
-          <KV label="Hubo novedad" value={label("yes_no", data.hasInconvenienceCode)} />
-          {data.inconvenienceActivityCode ? (
-            <KV label="Actividad novedad" value={label("inconvenience_activity", data.inconvenienceActivityCode)} />
-          ) : null}
-        </>
-      ) : null}
-      {data.followupRouteCode === "ADM" ? (
-        <>
-          <KV label="Inducción suficiente" value={label("adaptation_response", data.inductionSufficientCode)} />
-          <KV label="Bienvenida equipo" value={label("adaptation_response", data.teamWelcomeCode)} />
-          <KV label="Ambiente laboral" value={label("satisfaction_level", data.workEnvironmentSatisfactionCode)} />
-          <KV label="Claridad funciones" value={label("satisfaction_level", data.roleClaritySatisfactionCode)} />
-          <KV label="Permanencia final" value={label("retention_intention", data.finalRetentionIntentionCode)} />
-          <KV label="Aspecto a mejorar" value={label("work_aspect_to_improve", data.workAspectToImproveCode)} />
-        </>
-      ) : null}
-      {data.actorId ? <KV label="Registrado por" value={data.actorId} wide /> : null}
+    <div className="mt-3 space-y-3">
+      <div className="flex min-w-0 flex-wrap gap-1.5">
+        {groups.map((group) => {
+          const active = group.key === selectedGroup.key;
+          return (
+            <button
+              key={group.key}
+              type="button"
+              title={group.title}
+              className={cn(
+                "max-w-full rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors sm:max-w-[210px]",
+                active
+                  ? "border-foreground bg-foreground text-background shadow-sm"
+                  : "border-border/70 bg-background/70 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}
+              onClick={() => setSelectedGroupKey(group.key)}
+            >
+              <span className="block truncate">{group.title}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="rounded-[18px] border border-border/60 bg-muted/20 p-3">
+        <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-foreground">{selectedGroup.title}</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              {selectedGroup.description}
+            </p>
+          </div>
+          <Badge variant="secondary" className="text-[10px]">
+            {visibleAnswers.length} respuesta{visibleAnswers.length === 1 ? "" : "s"}
+          </Badge>
+        </div>
+
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {visibleAnswers.map((answer) => (
+            <AnswerCard key={`${selectedGroup.key}-${answer.label}`} answer={answer} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -117,7 +156,7 @@ export function FollowupHistorySection({ personId, currentUniqueFollowUpCode, ca
   );
 
   const responses = (data?.responses ?? []).filter(
-    (r) => r.uniqueFollowUpCode !== currentUniqueFollowUpCode,
+    (response) => response.uniqueFollowUpCode !== currentUniqueFollowUpCode,
   );
 
   return (
@@ -125,7 +164,7 @@ export function FollowupHistorySection({ personId, currentUniqueFollowUpCode, ca
       <button
         type="button"
         className="flex w-full items-center justify-between rounded-[20px] px-4 py-3 text-sm font-medium transition-colors hover:bg-muted/40"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen((value) => !value)}
       >
         <div className="flex items-center gap-2 text-muted-foreground">
           <History className="size-4" />
@@ -149,22 +188,22 @@ export function FollowupHistorySection({ personId, currentUniqueFollowUpCode, ca
             <p className="text-center text-xs text-muted-foreground">Sin seguimientos previos registrados.</p>
           ) : (
             <div className="space-y-2">
-              {responses.map((r) => {
-                const isExpanded = expandedId === r.eventId;
+              {responses.map((response) => {
+                const isExpanded = expandedId === response.eventId;
                 return (
-                  <div key={r.eventId} className="rounded-[16px] border border-border/50 bg-card/60 px-3 py-2.5">
+                  <div key={response.eventId} className="rounded-[16px] border border-border/50 bg-card/60 px-3 py-2.5">
                     <button
                       type="button"
                       className="flex w-full items-center justify-between"
-                      onClick={() => setExpandedId(isExpanded ? null : r.eventId)}
+                      onClick={() => setExpandedId(isExpanded ? null : response.eventId)}
                     >
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-xs font-medium text-foreground">
-                          {formatDate(r.followUpDate.slice(0, 10))}
+                          {formatDate(response.followUpDate.slice(0, 10))}
                         </span>
-                        <Badge variant="outline" className="text-[10px]">{r.followupRouteCode}</Badge>
-                        {r.responseVersion > 1
-                          ? <Badge variant="secondary" className="text-[10px]">v{r.responseVersion}</Badge>
+                        <Badge variant="outline" className="text-[10px]">{response.followupRouteCode}</Badge>
+                        {response.responseVersion > 1
+                          ? <Badge variant="secondary" className="text-[10px]">v{response.responseVersion}</Badge>
                           : null}
                       </div>
                       {isExpanded
@@ -172,7 +211,7 @@ export function FollowupHistorySection({ personId, currentUniqueFollowUpCode, ca
                         : <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />}
                     </button>
                     {isExpanded ? (
-                      <HistoryItemDetail eventId={r.eventId} catalogs={catalogs} />
+                      <HistoryItemDetail eventId={response.eventId} catalogs={catalogs} />
                     ) : null}
                   </div>
                 );
