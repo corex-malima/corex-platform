@@ -82,7 +82,7 @@ type PendingValveNav = {
   bedId?: string;
 };
 
-type MapViewKey = "campo" | "sjp";
+type MapViewKey = "campo" | "sjp" | "riego";
 
 type MapViewModel = {
   key: MapViewKey;
@@ -210,6 +210,18 @@ export function CampoExplorer({ initialData }: { initialData: CampoDashboardData
       shouldRetryOnError: false,
     },
   );
+  const {
+    data: riegoGeoData,
+    error: riegoGeoError,
+    isLoading: riegoGeoLoading,
+  } = useSWRImmutable(
+    "/data/riego-geo.json",
+    (url: string) => loadGeoCollection(url, "No se pudo cargar el mapa de riego."),
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    },
+  );
 
   const blockModal = useBlockProfileModal(selectedFeature?.row ?? null);
   const featureByBlock = useMemo(
@@ -242,6 +254,11 @@ export function CampoExplorer({ initialData }: { initialData: CampoDashboardData
     : sjpGeoError
       ? "No se pudo cargar el mapa SJP."
       : null;
+  const riegoGeoErrorMessage = riegoGeoError instanceof Error
+    ? riegoGeoError.message
+    : riegoGeoError
+      ? "No se pudo cargar el mapa de riego."
+      : null;
 
   const campoGeoData = mapAssets?.geoData ?? null;
   const rasterBounds = mapAssets?.rasterBounds ?? {};
@@ -267,6 +284,16 @@ export function CampoExplorer({ initialData }: { initialData: CampoDashboardData
         error: sjpGeoErrorMessage ?? mapAssetsErrorMessage,
         secondaryActionLabel: "Mapa de camas",
       },
+      riego: {
+        key: "riego",
+        title: "Mapa de riego",
+        description: "Vista tecnica del sistema de riego por diametro.",
+        actionLabel: "Cambiar a riego",
+        geoData: riegoGeoData ?? null,
+        loading: riegoGeoLoading,
+        error: riegoGeoErrorMessage,
+        secondaryActionLabel: "Ver diametro",
+      },
     }),
     [
       campoGeoData,
@@ -275,10 +302,16 @@ export function CampoExplorer({ initialData }: { initialData: CampoDashboardData
       sjpGeoData,
       sjpGeoErrorMessage,
       sjpGeoLoading,
+      riegoGeoData,
+      riegoGeoErrorMessage,
+      riegoGeoLoading,
     ],
   );
   const activeViewModel = viewModels[activeMapView];
-  const previewViewModel = viewModels[activeMapView === "campo" ? "sjp" : "campo"];
+  const mapViewOrder: MapViewKey[] = ["campo", "sjp", "riego"];
+  const previewViewModel = viewModels[
+    mapViewOrder[(mapViewOrder.indexOf(activeMapView) + 1) % mapViewOrder.length]
+  ];
 
   useEffect(() => {
     if (!pendingValveNav || !selectedFeature) {
@@ -322,6 +355,10 @@ export function CampoExplorer({ initialData }: { initialData: CampoDashboardData
   }
 
   function handleMapSecondaryAction(bloquePad: string) {
+    if (activeMapView === "riego") {
+      return;
+    }
+
     if (activeMapView === "sjp") {
       handleSjpBeds(bloquePad);
       return;
@@ -416,14 +453,35 @@ export function CampoExplorer({ initialData }: { initialData: CampoDashboardData
                 onChange={setActiveLayer}
                 onOpacityChange={setRasterOpacity}
               />
-              <div className="space-y-1 text-right">
+              <div className="space-y-2 text-right">
+                <div className="flex flex-wrap justify-end gap-2">
+                  {mapViewOrder.map((viewKey) => (
+                    <button
+                      key={viewKey}
+                      type="button"
+                      onClick={() => {
+                        setSubMap(null);
+                        setActiveMapView(viewKey);
+                      }}
+                      className={
+                        activeMapView === viewKey
+                          ? "rounded-full border border-slate-900 bg-slate-900 px-3 py-1 text-xs font-semibold text-white"
+                          : "rounded-full border border-border/70 bg-background/72 px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      }
+                    >
+                      {viewModels[viewKey].title}
+                    </button>
+                  ))}
+                </div>
                 <p className="text-xs font-medium text-foreground">
                   {activeLayer === "none"
                     ? `Vista activa · ${activeViewModel.title}`
                     : `Modo agronomico · ${activeLayer.toUpperCase()} · ${activeViewModel.title}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {activeMapView === "campo"
+                  {activeMapView === "riego"
+                    ? "Click en una linea de riego para ver su diametro."
+                    : activeMapView === "campo"
                     ? "Click en un bloque -> ficha o mapa de valvulas. En submapa: valvula -> ficha o mapa de camas."
                     : "Click en un bloque SJP -> ficha o mapa de camas. En submapa: cama -> selector de ciclo y detalle."}
                 </p>

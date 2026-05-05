@@ -35,10 +35,11 @@ export type RasterBounds = Partial<
 >;
 
 type ClickState = { latlng: L.LatLng; bloquePad: string };
+type IrrigationClickState = { latlng: L.LatLng; diameter: string };
 type BlockCentroid = { bloquePad: string; area: string; lat: number; lng: number };
 
 type Props = {
-  viewKey: "campo" | "sjp";
+  viewKey: "campo" | "sjp" | "riego";
   geoData: FeatureCollection | null;
   rasterBounds: RasterBounds;
   assetsLoading: boolean;
@@ -186,6 +187,11 @@ function getBlockStyle({
 
 function getFeatureBlock(feature: Feature | undefined) {
   return feature?.properties?.bloquePad as string | undefined;
+}
+
+function getFeatureDiameter(feature: Feature | undefined) {
+  const value = feature?.properties?.diameterMm;
+  return value === null || value === undefined || value === "" ? "" : String(value);
 }
 
 function getFeatureCollectionBounds(data: FeatureCollection | null) {
@@ -713,13 +719,27 @@ function getBlockEntry(blockDataMap: Record<string, BlockDataEntry>, bloquePad: 
   return blockDataMap[bloquePad] ?? blockDataMap[String(Number(bloquePad))];
 }
 
+function getIrrigationStyle(feature: Feature | undefined, selectedDiameter: string | null): L.PathOptions {
+  const diameter = getFeatureDiameter(feature);
+  const numericDiameter = Number(diameter);
+  const isSelected = Boolean(diameter && diameter === selectedDiameter);
+
+  return {
+    color: isSelected ? "#0f172a" : "#0284c7",
+    opacity: isSelected ? 0.96 : 0.78,
+    weight: isSelected ? 5 : Number.isFinite(numericDiameter) && numericDiameter >= 140 ? 3.5 : 2.6,
+    lineCap: "round",
+    lineJoin: "round",
+  };
+}
+
 export function CampoInteractionHint({
   activeLayer,
   mode = "campo",
   className,
 }: {
   activeLayer: ActiveLayer;
-  mode?: "campo" | "sjp";
+  mode?: "campo" | "sjp" | "riego";
   className?: string;
 }) {
   return (
@@ -733,12 +753,16 @@ export function CampoInteractionHint({
         {activeLayer === "none" ? "Modo operativo" : "Modo agronomico"}
       </p>
       <p className="mt-1 text-xs text-foreground">
-        {mode === "sjp"
+        {mode === "riego"
+          ? <>Linea de riego {"->"} detalle.</>
+          : mode === "sjp"
           ? <>Bloque {"->"} ficha o mapa de camas.</>
           : <>Bloque {"->"} ficha o mapa de valvulas.</>}
       </p>
       <p className="text-[11px] text-muted-foreground">
-        {mode === "sjp"
+        {mode === "riego"
+          ? <>Vista tecnica del sistema de riego.</>
+          : mode === "sjp"
           ? <>En submapa: cama {"->"} selector de ciclo y detalle.</>
           : <>En submapa: valvula {"->"} ficha o mapa de camas.</>}
       </p>
@@ -763,6 +787,7 @@ export function CampoLeafletMap({
   className,
 }: Props) {
   const [clickState, setClickState] = useState<ClickState | null>(null);
+  const [irrigationClickState, setIrrigationClickState] = useState<IrrigationClickState | null>(null);
   const [hoveredBlock, setHoveredBlock] = useState<string | null>(null);
   const geoJsonRef = useRef<L.GeoJSON | null>(null);
 
@@ -774,12 +799,21 @@ export function CampoLeafletMap({
 
   // Memoize popup event handlers to prevent infinite loops in react-leaflet
   const popupEventHandlers = useMemo(
-    () => ({ remove: () => setClickState(null) }),
+    () => ({
+      remove: () => {
+        setClickState(null);
+        setIrrigationClickState(null);
+      },
+    }),
     [],
   );
 
   const styleFeature = useCallback(
     (feature: Feature | undefined) => {
+      if (viewKey === "riego") {
+        return getIrrigationStyle(feature, irrigationClickState?.diameter ?? null);
+      }
+
       const bloquePad = getFeatureBlock(feature);
 
       return getBlockStyle({
@@ -790,7 +824,7 @@ export function CampoLeafletMap({
         isSelected: false,
       });
     },
-    [activeLayer, blockDataMap],
+    [activeLayer, blockDataMap, irrigationClickState, viewKey],
   );
 
   const onEachFeature = useCallback(
@@ -800,6 +834,14 @@ export function CampoLeafletMap({
           const bloquePad = getFeatureBlock(feature);
 
           if (!bloquePad) {
+            if (viewKey === "riego") {
+              L.DomEvent.stopPropagation(event);
+              setClickState(null);
+              setIrrigationClickState({
+                latlng: event.latlng,
+                diameter: getFeatureDiameter(feature) || "Sin dato",
+              });
+            }
             return;
           }
 
@@ -820,7 +862,7 @@ export function CampoLeafletMap({
         },
       });
     },
-    [],
+    [viewKey],
   );
 
   if (assetsLoading) {
@@ -887,7 +929,7 @@ export function CampoLeafletMap({
           selectedBlock={clickState?.bloquePad ?? null}
         />
 
-        {clickState && (
+        {clickState && viewKey !== "riego" && (
           <Popup
             position={clickState.latlng}
             keepInView
@@ -928,6 +970,29 @@ export function CampoLeafletMap({
               >
                 {secondaryActionLabel}
               </button>
+            </div>
+          </Popup>
+        )}
+
+        {irrigationClickState && viewKey === "riego" && (
+          <Popup
+            position={irrigationClickState.latlng}
+            keepInView
+            autoPan
+            offset={[0, -14]}
+            autoPanPaddingTopLeft={[24, 24]}
+            autoPanPaddingBottomRight={[32, 220]}
+            minWidth={210}
+            maxWidth={238}
+            eventHandlers={popupEventHandlers}
+          >
+            <div className="min-w-[190px] space-y-2 p-1">
+              <p className="text-[13px] font-bold text-slate-900 dark:text-white">
+                Sistema de riego
+              </p>
+              <p className="text-[11px] leading-relaxed text-slate-500 dark:text-white">
+                Diametro: {irrigationClickState.diameter} mm
+              </p>
             </div>
           </Popup>
         )}

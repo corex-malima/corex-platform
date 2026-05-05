@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type Props = {
-  viewKey: "campo" | "sjp";
+  viewKey: "campo" | "sjp" | "riego";
   title: string;
   description: string;
   actionLabel: string;
@@ -113,7 +113,7 @@ export function CampoMapInset({
 }: Props) {
   const center = useMemo(() => (geoData ? buildCenter(geoData) : null), [geoData]);
   const navigationBounds = useMemo(() => getFeatureCollectionBounds(geoData), [geoData]);
-  const label = viewKey === "sjp" ? "SJP" : "MH";
+  const label = viewKey === "riego" ? "Riego" : viewKey === "sjp" ? "SJP" : "MH";
 
   return (
     <div
