@@ -797,17 +797,6 @@ export function CampoLeafletMap({
   );
   const navigationBounds = useMemo(() => getFeatureCollectionBounds(geoData), [geoData]);
 
-  // Memoize popup event handlers to prevent infinite loops in react-leaflet
-  const popupEventHandlers = useMemo(
-    () => ({
-      remove: () => {
-        setClickState(null);
-        setIrrigationClickState(null);
-      },
-    }),
-    [],
-  );
-
   const styleFeature = useCallback(
     (feature: Feature | undefined) => {
       if (viewKey === "riego") {
@@ -939,12 +928,21 @@ export function CampoLeafletMap({
             autoPanPaddingBottomRight={[32, 220]}
             minWidth={232}
             maxWidth={248}
-            eventHandlers={popupEventHandlers}
+            closeButton={false}
           >
             <div className="min-w-[210px] space-y-2.5 p-1">
-              <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-                Bloque {clickState.bloquePad}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[13px] font-bold text-slate-900 dark:text-white">
+                  Bloque {clickState.bloquePad}
+                </p>
+                <button
+                  type="button"
+                  className="rounded-full px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-white/70 dark:hover:bg-slate-800 dark:hover:text-white"
+                  onClick={() => setClickState(null)}
+                >
+                  Cerrar
+                </button>
+              </div>
               <p className="text-[11px] leading-relaxed text-slate-500 dark:text-white">
                 {activeLayer === "none"
                   ? `Vista ${viewKey === "sjp" ? "SJP" : "operativa"} del bloque.`
@@ -984,12 +982,21 @@ export function CampoLeafletMap({
             autoPanPaddingBottomRight={[32, 220]}
             minWidth={210}
             maxWidth={238}
-            eventHandlers={popupEventHandlers}
+            closeButton={false}
           >
             <div className="min-w-[190px] space-y-2 p-1">
-              <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-                Sistema de riego
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[13px] font-bold text-slate-900 dark:text-white">
+                  Sistema de riego
+                </p>
+                <button
+                  type="button"
+                  className="rounded-full px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-white/70 dark:hover:bg-slate-800 dark:hover:text-white"
+                  onClick={() => setIrrigationClickState(null)}
+                >
+                  Cerrar
+                </button>
+              </div>
               <p className="text-[11px] leading-relaxed text-slate-500 dark:text-white">
                 Diametro: {irrigationClickState.diameter} mm
               </p>
