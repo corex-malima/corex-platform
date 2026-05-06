@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import { formatDateSlash, formatInteger, formatPercent } from "@/shared/lib/format";
 import { DialogShell } from "@/shared/overlays/dialog-shell";
+import { ClickableTableRow } from "@/shared/tables/clickable-table-row";
+import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
+import { StandardTable, StandardTd, StandardTh } from "@/shared/tables/standard-table";
 import { Input } from "@/shared/ui/input";
 import { PersonInfoOverlay } from "@/modules/talento-humano/components/person-info-overlay";
 
@@ -52,6 +55,8 @@ export function ExitPeopleModal({
         row.exitReason,
         row.resignationReason,
         row.resignationCategory,
+        row.resignationClassification,
+        row.associatedWorkerName,
         row.observations,
       ]
         .filter(Boolean)
@@ -78,39 +83,45 @@ export function ExitPeopleModal({
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nombre, ID, cedula, motivo u observacion..." className="pl-8" />
           </div>
           {filteredRows.length ? (
-            <div className="max-h-[68vh] space-y-3 overflow-auto pr-2">
-              {filteredRows.map((row) => (
-                <button
-                  key={`${row.personId}-${row.entryDate}-${row.exitDate}-${row.resignationCategory ?? "na"}`}
-                  type="button"
-                  onClick={() => setSelectedPerson(row)}
-                  className="w-full rounded-[20px] border border-border/70 bg-background/80 p-4 text-left transition hover:border-primary/30 hover:bg-muted/40"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{row.personName}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        ID {row.personId} · Salida {formatDateSlash(row.exitDate ?? row.lastExitDate)}
-                      </p>
-                    </div>
-                    <span className={cn("rounded-full bg-muted px-3 py-1 text-xs font-semibold tabular-nums", toneClass(getComplianceTone(row.cumplimiento)))}>
-                      {formatPercent(row.cumplimiento, { input: "ratio" })}
-                    </span>
-                  </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <InfoBlock label="Motivo" value={textOrDash(row.exitReason ?? row.resignationReason)} />
-                    <InfoBlock label="Categoria" value={textOrDash(row.resignationCategory)} />
-                    <InfoBlock label="Clasificacion" value={textOrDash(row.resignationClassification)} />
-                  </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <InfoBlock label="Area" value={textOrDash(row.areaName)} />
-                    <InfoBlock label="Cargo" value={textOrDash(row.jobTitle)} />
-                    <InfoBlock label="TS" value={textOrDash(row.associatedWorkerName)} />
-                  </div>
-                  <InfoBlock className="mt-3" label="Observacion" value={textOrDash(row.observations)} />
-                </button>
-              ))}
-            </div>
+            <ScrollFadeTable topScrollbar>
+              <StandardTable>
+                <thead className="border-b border-border/70">
+                  <tr>
+                    <StandardTh>Nombre</StandardTh>
+                    <StandardTh>Cod</StandardTh>
+                    <StandardTh>Motivo</StandardTh>
+                    <StandardTh>Categoria</StandardTh>
+                    <StandardTh>Clasificacion</StandardTh>
+                    <StandardTh>TS</StandardTh>
+                    <StandardTh>Observacion</StandardTh>
+                    <StandardTh>Cumplimiento</StandardTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map((row) => (
+                    <ClickableTableRow
+                      key={`${row.personId}-${row.entryDate}-${row.exitDate}-${row.resignationCategory ?? "na"}`}
+                      onSelect={() => setSelectedPerson(row)}
+                      className="border-b border-border/50 align-top last:border-0"
+                    >
+                      <StandardTd className="min-w-[220px] whitespace-normal py-3 align-top">
+                        <div className="text-xs font-medium leading-snug">{row.personName}</div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">Salida {formatDateSlash(row.exitDate ?? row.lastExitDate)}</div>
+                      </StandardTd>
+                      <StandardTd className="py-3 align-top text-xs text-muted-foreground">{row.personId}</StandardTd>
+                      <StandardTd className="min-w-[160px] whitespace-normal py-3 align-top text-xs text-muted-foreground">{textOrDash(row.exitReason)}</StandardTd>
+                      <StandardTd className="min-w-[150px] whitespace-normal py-3 align-top text-xs text-muted-foreground">{textOrDash(row.resignationCategory)}</StandardTd>
+                      <StandardTd className="min-w-[150px] whitespace-normal py-3 align-top text-xs text-muted-foreground">{textOrDash(row.resignationClassification)}</StandardTd>
+                      <StandardTd className="min-w-[140px] whitespace-normal py-3 align-top text-xs text-muted-foreground">{textOrDash(row.associatedWorkerName)}</StandardTd>
+                      <StandardTd className="min-w-[280px] max-w-[460px] whitespace-normal break-words py-3 align-top text-xs leading-relaxed text-muted-foreground">{textOrDash(row.observations)}</StandardTd>
+                      <StandardTd className={cn("py-3 align-top text-xs font-semibold tabular-nums", toneClass(getComplianceTone(row.cumplimiento)))}>
+                        {formatPercent(row.cumplimiento, { input: "ratio" })}
+                      </StandardTd>
+                    </ClickableTableRow>
+                  ))}
+                </tbody>
+              </StandardTable>
+            </ScrollFadeTable>
           ) : (
             <EmptyState label="Sin resultados." />
           )}
@@ -118,14 +129,5 @@ export function ExitPeopleModal({
       </DialogShell>
       {selectedPerson ? <PersonInfoOverlay personId={selectedPerson.personId} personName={selectedPerson.personName} onClose={() => setSelectedPerson(null)} /> : null}
     </>
-  );
-}
-
-function InfoBlock({ label, value, className }: { label: string; value: string; className?: string }) {
-  return (
-    <div className={cn("rounded-[14px] border border-border/60 bg-card/70 px-3 py-2", className)}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-1 whitespace-normal break-words text-xs leading-relaxed text-foreground">{value}</p>
-    </div>
   );
 }

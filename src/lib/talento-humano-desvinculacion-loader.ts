@@ -152,7 +152,8 @@ function average(values: Array<number | null>) {
 
 function matchesFilters(row: TalentoExitRecord, filters: TalentoExitFilters) {
   return (
-    matchesMultiSelectValue(filters.associatedWorker, row.associatedWorkerName ?? "Sin dato")
+    Boolean(row.associatedWorkerName?.trim())
+    && matchesMultiSelectValue(filters.associatedWorker, row.associatedWorkerName ?? "Sin dato")
     && matchesMultiSelectValue(filters.areaGeneral, row.areaGeneral || "Sin dato")
     && matchesMultiSelectValue(filters.area, row.areaName || "Sin dato")
     && matchesMultiSelectValue(filters.jobTitle, row.jobTitle ?? "Sin dato")
@@ -174,7 +175,7 @@ function buildOptions(rows: TalentoExitRecord[], yearMonths: YearMonthRow[]): Ta
     areas: uniq(rows.map((row) => row.areaName || "Sin dato")),
     jobTitles: uniq(rows.map((row) => row.jobTitle ?? "Sin dato")),
     jobClassifications: uniq(rows.map((row) => row.jobClassificationCode ?? "Sin dato")),
-    associatedWorkers: uniq(rows.map((row) => row.associatedWorkerName ?? "Sin dato")),
+    associatedWorkers: uniq(rows.map((row) => row.associatedWorkerName).filter((value): value is string => Boolean(value?.trim()))),
     exitReasons: uniq(rows.map((row) => row.exitReason ?? "Sin dato")),
     resignationReasons: uniq(rows.map((row) => row.resignationReason ?? "Sin dato")),
     resignationCategories: uniq(rows.map((row) => row.resignationCategory ?? "Sin dato")),
@@ -191,13 +192,13 @@ function buildSourceQuery(filters: TalentoExitFilters) {
   const years = decodeMultiSelectValue(filters.year);
   if (years.length) {
     values.push(years);
-    wheres.push(`EXTRACT(YEAR FROM e.last_exit_date)::text = ANY($${values.length}::text[])`);
+    wheres.push(`EXTRACT(YEAR FROM e.exit_date)::text = ANY($${values.length}::text[])`);
   }
 
   const months = decodeMultiSelectValue(filters.month);
   if (months.length) {
     values.push(months);
-    wheres.push(`EXTRACT(MONTH FROM e.last_exit_date)::int::text = ANY($${values.length}::text[])`);
+    wheres.push(`EXTRACT(MONTH FROM e.exit_date)::int::text = ANY($${values.length}::text[])`);
   }
 
   const whereClause = wheres.length ? `WHERE ${wheres.join(" AND ")}` : "";
@@ -251,7 +252,7 @@ function buildSourceQuery(filters: TalentoExitFilters) {
       LEFT JOIN assignments a ON a.person_id = e.person_id
       LEFT JOIN areas ar ON ar.area_id = a.area_id
       ${whereClause}
-      ORDER BY e.last_exit_date DESC NULLS LAST, e.person_name
+      ORDER BY e.exit_date DESC NULLS LAST, e.person_name
     `,
   };
 }
@@ -264,10 +265,10 @@ export async function getDesvinculacionData(filters: TalentoExitFilters): Promis
       query<ExitQueryRow>(sourceQuery.text, sourceQuery.values),
       query<YearMonthRow>(
         `SELECT DISTINCT
-           EXTRACT(YEAR FROM last_exit_date)::int::text AS year,
-           EXTRACT(MONTH FROM last_exit_date)::int::text AS month
+           EXTRACT(YEAR FROM exit_date)::int::text AS year,
+           EXTRACT(MONTH FROM exit_date)::int::text AS month
          FROM ${EXIT_SOURCE}
-         WHERE last_exit_date IS NOT NULL
+         WHERE exit_date IS NOT NULL
          ORDER BY year DESC, month DESC`,
       ),
     ]);

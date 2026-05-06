@@ -16,10 +16,11 @@ import { formatDecimal, formatInteger, formatPercent } from "@/shared/lib/format
 import { Button } from "@/shared/ui/button";
 import {
   BarListCard,
-  CategoryChipCloud,
-  ComplianceMatrixCard,
+  ContingencyTableCard,
   DonutBreakdownCard,
   getComplianceTone,
+  SocialWorkerContingencyCard,
+  type CrossGroup,
   type ExitGroup,
 } from "@/modules/talento-humano/components/desvinculacion-charts";
 import { ExitPeopleModal } from "@/modules/talento-humano/components/desvinculacion-people-modal";
@@ -67,6 +68,44 @@ function groupRows(
     .slice(0, limit);
 }
 
+function buildBuckets(
+  rows: TalentoExitRecord[],
+  getLabel: (row: TalentoExitRecord) => string | null | undefined,
+) {
+  const total = rows.length || 1;
+  return groupRows(rows, getLabel, 999).map((group) => ({
+    label: group.label,
+    count: group.count,
+    rows: group.rows,
+    ratio: group.count / total,
+  }));
+}
+
+function buildCrossGroups(
+  rows: TalentoExitRecord[],
+  getPrimary: (row: TalentoExitRecord) => string | null | undefined,
+  getSecondary: (row: TalentoExitRecord) => string | null | undefined,
+  limit = 8,
+): CrossGroup[] {
+  return groupRows(rows, getPrimary, limit).map((group) => ({
+    ...group,
+    buckets: buildBuckets(group.rows, getSecondary),
+  }));
+}
+
+function buildSocialWorkerGroups(rows: TalentoExitRecord[]) {
+  return groupRows(
+    rows.filter((row) => Boolean(row.associatedWorkerName?.trim())),
+    (row) => row.associatedWorkerName,
+    9,
+  ).map((group) => ({
+    ...group,
+    buckets: buildBuckets(group.rows, (row) => row.exitReason),
+    complianceBuckets: buildBuckets(group.rows, (row) => row.complianceBucket),
+    tenureBuckets: buildBuckets(group.rows, (row) => row.tenureBucket),
+  }));
+}
+
 function Filter({ id, label, value, options, onChange, displayValue }: {
   id: string;
   label: string;
@@ -112,6 +151,10 @@ export function TalentoDesvinculacionPage({ initialData }: { initialData: Talent
     resignationClassification: groupRows(rows, (row) => row.resignationClassification, 12),
     compliance: groupRows(rows, (row) => row.complianceBucket, 8),
     tenure: groupRows(rows, (row) => row.tenureBucket, 8),
+    reasonCompliance: buildCrossGroups(rows, (row) => row.exitReason, (row) => row.complianceBucket),
+    reasonTenure: buildCrossGroups(rows, (row) => row.exitReason, (row) => row.tenureBucket),
+    tenureCompliance: buildCrossGroups(rows, (row) => row.tenureBucket, (row) => row.complianceBucket, 8),
+    socialWorker: buildSocialWorkerGroups(rows),
   }), [rows]);
 
   function setFilter<K extends keyof TalentoExitFilters>(key: K, value: TalentoExitFilters[K]) {
@@ -123,31 +166,31 @@ export function TalentoDesvinculacionPage({ initialData }: { initialData: Talent
   }
 
   const complianceTone = getComplianceTone(current.summary.avgCompliance);
+  const topReason = groups.exitReason.find((group) => group.label !== "Sin dato") ?? groups.exitReason[0] ?? null;
 
   return (
     <div className="space-y-4">
       <SectionPageShell
-        eyebrow="Analitica / Talento Humano / Indicadores & KPI"
-        title="Desvinculacion personal"
-        subtitle="Motivos de salida, antiguedad del evento, rendimiento y senales de cumplimiento antes de la desvinculacion."
+        eyebrow="Analítica / Talento Humano / Indicadores & KPI"
+        title="Desvinculación personal"
+        subtitle="Motivos de salida, antigüedad del evento, rendimiento y señales de cumplimiento antes de la desvinculación."
         icon={<UserX className="size-6" aria-hidden="true" />}
       >
         <FilterPanel>
           <div className="space-y-4 overflow-visible">
             <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6">
-              <Filter id="exit-filter-year" label="Anio" value={filters.year} options={options.years} onChange={(value) => setFilter("year", value)} />
+              <Filter id="exit-filter-year" label="Año" value={filters.year} options={options.years} onChange={(value) => setFilter("year", value)} />
               <Filter id="exit-filter-month" label="Mes" value={filters.month} options={options.months} onChange={(value) => setFilter("month", value)} displayValue={(value) => MONTH_LABELS[value] ?? value} />
-              <Filter id="exit-filter-area-general" label="Area general" value={filters.areaGeneral} options={options.areaGenerals} onChange={(value) => setFilter("areaGeneral", value)} />
-              <Filter id="exit-filter-area" label="Area" value={filters.area} options={options.areas} onChange={(value) => setFilter("area", value)} />
+              <Filter id="exit-filter-area-general" label="Área general" value={filters.areaGeneral} options={options.areaGenerals} onChange={(value) => setFilter("areaGeneral", value)} />
+              <Filter id="exit-filter-area" label="Área" value={filters.area} options={options.areas} onChange={(value) => setFilter("area", value)} />
               <Filter id="exit-filter-job-title" label="Cargo" value={filters.jobTitle} options={options.jobTitles} onChange={(value) => setFilter("jobTitle", value)} />
-              <Filter id="exit-filter-job-classification" label="Clasificacion" value={filters.jobClassification} options={options.jobClassifications} onChange={(value) => setFilter("jobClassification", value)} />
+              <Filter id="exit-filter-job-classification" label="Clasificación" value={filters.jobClassification} options={options.jobClassifications} onChange={(value) => setFilter("jobClassification", value)} />
               <Filter id="exit-filter-ts" label="Trabajadora social" value={filters.associatedWorker} options={options.associatedWorkers} onChange={(value) => setFilter("associatedWorker", value)} />
               <Filter id="exit-filter-exit-reason" label="Motivo de salida" value={filters.exitReason} options={options.exitReasons} onChange={(value) => setFilter("exitReason", value)} />
               <Filter id="exit-filter-resignation-reason" label="Motivo renuncia" value={filters.resignationReason} options={options.resignationReasons} onChange={(value) => setFilter("resignationReason", value)} />
-              <Filter id="exit-filter-category" label="Categoria" value={filters.resignationCategory} options={options.resignationCategories} onChange={(value) => setFilter("resignationCategory", value)} />
-              <Filter id="exit-filter-classification" label="Clasificacion renuncia" value={filters.resignationClassification} options={options.resignationClassifications} onChange={(value) => setFilter("resignationClassification", value)} />
+              <Filter id="exit-filter-category" label="Categoría" value={filters.resignationCategory} options={options.resignationCategories} onChange={(value) => setFilter("resignationCategory", value)} />
+              <Filter id="exit-filter-classification" label="Clasificación renuncia" value={filters.resignationClassification} options={options.resignationClassifications} onChange={(value) => setFilter("resignationClassification", value)} />
               <Filter id="exit-filter-compliance" label="Cumplimiento" value={filters.complianceBucket} options={options.complianceBuckets} onChange={(value) => setFilter("complianceBucket", value)} />
-              <Filter id="exit-filter-tenure" label="Antiguedad evento" value={filters.tenureBucket} options={options.tenureBuckets} onChange={(value) => setFilter("tenureBucket", value)} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setFilters(initialData.filters)}>Restablecer</Button>
@@ -156,17 +199,15 @@ export function TalentoDesvinculacionPage({ initialData }: { initialData: Talent
               </Button>
             </div>
           </div>
-          <KpiGrid className="sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <KpiGrid className="grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
             <MetricTile label="Total salidas" value={formatInteger(current.summary.totalExits)} />
             <MetricTile
-              label="Salidas con motivo"
-              value={formatInteger(current.summary.exitsWithReason)}
-              hint={`${formatInteger(Math.max(0, current.summary.totalExits - current.summary.exitsWithReason))} sin motivo registrado`}
+              label="Motivo top"
+              value={topReason ? formatInteger(topReason.count) : "-"}
+              hint={topReason?.label ?? "Sin datos"}
             />
-            <MetricTile label="Categorias detectadas" value={formatInteger(current.summary.categoriesDetected)} />
-            <MetricTile label="TS responsables" value={formatInteger(current.summary.socialWorkers)} />
-            <MetricTile label="Cumplimiento promedio" value={formatPercent(current.summary.avgCompliance, { input: "ratio" })} hint="Rendimiento / minimo" accent={complianceTone === "danger" ? "danger" : complianceTone === "warning" ? "warning" : "success"} />
-            <MetricTile label="Antiguedad promedio" value={formatDecimal(current.summary.avgActiveMonths, 1)} hint="meses al evento" />
+            <MetricTile label="Cumplimiento promedio" value={formatPercent(current.summary.avgCompliance, { input: "ratio" })} hint="Rendimiento / mínimo" accent={complianceTone === "danger" ? "danger" : complianceTone === "warning" ? "warning" : "success"} />
+            <MetricTile label="Antigüedad promedio" value={formatDecimal(current.summary.avgActiveMonths, 1)} hint="meses al evento" />
           </KpiGrid>
         </FilterPanel>
       </SectionPageShell>
@@ -175,19 +216,25 @@ export function TalentoDesvinculacionPage({ initialData }: { initialData: Talent
         <ChartSection>
           <KpiGrid className="sm:grid-cols-2 xl:grid-cols-4">
             <MetricTile label="Rendimiento promedio" value={formatPercent(current.summary.avgRendimiento, { input: "ratio" })} />
-            <MetricTile label="Rendimiento minimo" value={formatPercent(current.summary.avgRendimientoMin, { input: "ratio" })} />
+            <MetricTile label="Rendimiento mínimo" value={formatPercent(current.summary.avgRendimientoMin, { input: "ratio" })} />
             <MetricTile label="% horas rendimiento" value={formatPercent(current.summary.avgPctActualHoursRend)} />
             <MetricTile label="% absentismo total" value={formatPercent(current.summary.avgPctAbsTotal)} />
           </KpiGrid>
-          <div className="grid gap-5 xl:grid-cols-2">
-            <BarListCard title="Top motivos de salida" groups={groups.exitReason} onSelect={(group) => selectGroup("Motivo de salida", group)} />
-            <BarListCard title="Motivos de renuncia" groups={groups.resignationReason} onSelect={(group) => selectGroup("Motivo renuncia", group)} />
-            <DonutBreakdownCard title="Categorias de renuncia" groups={groups.resignationCategory} onSelect={(group) => selectGroup("Categoria", group)} />
-            <CategoryChipCloud title="Clasificacion de renuncia" groups={groups.resignationClassification} onSelect={(group) => selectGroup("Clasificacion", group)} />
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(420px,1fr))] gap-5">
+            <DonutBreakdownCard title="Motivo de salida" groups={groups.exitReason} onSelect={(group) => selectGroup("Motivo de salida", group)} />
+            <DonutBreakdownCard title="Motivo de renuncia" groups={groups.resignationReason} onSelect={(group) => selectGroup("Motivo renuncia", group)} />
+            <DonutBreakdownCard title="Categorías de renuncia" groups={groups.resignationCategory} onSelect={(group) => selectGroup("Categoría", group)} />
+            <DonutBreakdownCard title="Clasificación de renuncia" groups={groups.resignationClassification} onSelect={(group) => selectGroup("Clasificación", group)} />
           </div>
-          <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-            <BarListCard title="Cumplimiento al salir" subtitle="Segmentacion por desempeno frente al rendimiento minimo." groups={groups.compliance} onSelect={(group) => selectGroup("Cumplimiento", group)} showCompliance />
-            <ComplianceMatrixCard groups={groups.tenure} onSelect={(group) => selectGroup("Antiguedad", group)} />
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(460px,1fr))] gap-5">
+            <BarListCard title="Cumplimiento al salir" subtitle="Segmentación por desempeño frente al rendimiento mínimo." groups={groups.compliance} onSelect={(group) => selectGroup("Cumplimiento", group)} showCompliance />
+            <BarListCard title="Antigüedad al salir" subtitle="Rango de experiencia al momento de salida." groups={groups.tenure} onSelect={(group) => selectGroup("Antigüedad", group)} showCompliance />
+            <ContingencyTableCard title="Antigüedad vs cumplimiento" subtitle="Tabla de contingencia: filas por antigüedad, columnas por cumplimiento." groups={groups.tenureCompliance} onSelect={(group) => selectGroup("Antigüedad", group)} />
+            <ContingencyTableCard title="Motivo salida vs cumplimiento" subtitle="Tabla de contingencia: filas por motivo, columnas por cumplimiento." groups={groups.reasonCompliance} onSelect={(group) => selectGroup("Motivo de salida", group)} />
+            <ContingencyTableCard title="Motivo salida vs antigüedad" subtitle="Tabla de contingencia: filas por motivo, columnas por antigüedad." groups={groups.reasonTenure} onSelect={(group) => selectGroup("Motivo de salida", group)} />
+            <div className="col-span-full">
+              <SocialWorkerContingencyCard groups={groups.socialWorker} onSelect={(group) => selectGroup("Trabajadora social", group)} />
+            </div>
           </div>
         </ChartSection>
       ) : (

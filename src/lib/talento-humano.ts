@@ -281,11 +281,11 @@ export const defaultTalentoSnapshotFilters: TalentoFilters = {
 
 export const defaultTalentoExitFilters: TalentoExitFilters = {
   year: String(new Date().getFullYear()),
-  month: "all",
+  month: String(new Date().getMonth() + 1),
   areaGeneral: "all",
   area: "all",
   jobTitle: "all",
-  jobClassification: "all",
+  jobClassification: "AGRICOLA",
   associatedWorker: "all",
   exitReason: "all",
   resignationReason: "all",
