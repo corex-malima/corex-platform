@@ -9,10 +9,41 @@ import type {
 } from "@/lib/talento-humano";
 
 const PROD_HOURS_SOURCE = "gld.mv_prod_hours_cycle_person_cur";
+const PROD_HOURS_VARIOS_SPLIT_SOURCE = "gld.mv_prod_hours_varios_split_cycle_person_cur";
+const PROD_HOURS_APPEND_SOURCE = `
+  (
+    select
+      event_date,
+      cycle_key,
+      person_id,
+      activity_id,
+      activity_name,
+      activity_type,
+      unit_of_measure,
+      actual_hours,
+      effective_hours,
+      units_produced
+    from ${PROD_HOURS_SOURCE}
+    union all
+    select
+      event_date,
+      cycle_key,
+      person_id,
+      activity_id,
+      activity_name,
+      activity_type,
+      unit_of_measure,
+      actual_hours,
+      effective_hours,
+      units_produced
+    from ${PROD_HOURS_VARIOS_SPLIT_SOURCE}
+  )
+`;
 const PERSON_RENDIMIENTO_DEFAULT_CYCLE_LIMIT = 8;
 const PERSON_RENDIMIENTO_TTL_MS = 5 * 60 * 1000;
 
 type PersonRendimientoQueryRow = {
+  event_date: string | null;
   cycle_key: string | null;
   activity_id: string | null;
   activity_name: string | null;
@@ -60,13 +91,14 @@ export async function getPersonRendimiento(
 ): Promise<TalentoPersonRendimientoPayload> {
   const normalizedPersonId = personId.trim();
   const cap = Math.max(1, Math.min(cycleLimit, 50));
-  const cacheKey = `talento:rendimiento:v1:${normalizedPersonId}:${cap}`;
+  const cacheKey = `talento:rendimiento:v2:${normalizedPersonId}:${cap}`;
 
   return cachedAsync(cacheKey, PERSON_RENDIMIENTO_TTL_MS, async () => {
     const result = await query<PersonRendimientoQueryRow>(
       `
         with person_hours as (
           select
+            to_char(event_date, 'YYYY-MM-DD') as event_date,
             cycle_key,
             coalesce(nullif(trim(activity_id::text), ''), 'Sin actividad') as activity_id,
             coalesce(
@@ -78,7 +110,7 @@ export async function getPersonRendimiento(
             coalesce(actual_hours, 0) as actual_hours,
             coalesce(effective_hours, 0) as effective_hours,
             coalesce(units_produced, 0) as units_produced
-          from ${PROD_HOURS_SOURCE}
+          from ${PROD_HOURS_APPEND_SOURCE}
           where trim(person_id::text) = $1
             and cycle_key is not null
         ),
@@ -91,6 +123,7 @@ export async function getPersonRendimiento(
         )
         select
           ph.cycle_key,
+          ph.event_date,
           ph.activity_id,
           ph.activity_name,
           ph.activity_type,
@@ -100,8 +133,8 @@ export async function getPersonRendimiento(
           sum(ph.units_produced) as units_produced
         from person_hours ph
         join recent_cycles rc on rc.cycle_key = ph.cycle_key
-        group by 1, 2, 3, 4, 5
-        order by ph.cycle_key desc, ph.activity_name asc
+        group by 1, 2, 3, 4, 5, 6
+        order by ph.cycle_key desc, ph.event_date desc nulls last, ph.activity_name asc
       `,
       [normalizedPersonId, cap],
     );
@@ -121,6 +154,7 @@ export async function getPersonRendimiento(
       const unitsProduced = toNum(row.units_produced) ?? 0;
 
       const activity: TalentoPersonRendimientoActivity = {
+        eventDate: toStr(row.event_date),
         activityId: toStr(row.activity_id) ?? "Sin actividad",
         activityName: toStr(row.activity_name) ?? "Sin actividad",
         activityType: toStr(row.activity_type) ?? "Sin tipo",

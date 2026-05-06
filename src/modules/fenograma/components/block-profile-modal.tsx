@@ -86,6 +86,7 @@ function HoursCamaOverlay({
   const [expandedCostAreas, setExpandedCostAreas] = useState<string[]>([]);
   const [expandedSubCostCenters, setExpandedSubCostCenters] = useState<string[]>([]);
   const [expandedActivities, setExpandedActivities] = useState<string[]>([]);
+  const [expandedPeople, setExpandedPeople] = useState<string[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const totalEffectiveHours = data?.summary.totalEffectiveHours ?? cycle.effectiveHours;
   const totalActualHours = data?.summary.totalActualHours ?? cycle.actualHours;
@@ -110,6 +111,14 @@ function HoursCamaOverlay({
       current.includes(activityKey)
         ? current.filter((value) => value !== activityKey)
         : [...current, activityKey]
+    ));
+  }
+
+  function togglePerson(key: string) {
+    setExpandedPeople((current) => (
+      current.includes(key)
+        ? current.filter((value) => value !== key)
+        : [...current, key]
     ));
   }
 
@@ -272,15 +281,20 @@ function HoursCamaOverlay({
                                             <td className="border-b px-2.5 py-1.5 text-right tabular-nums">{formatPercent(activity.rendimientoPct)}</td>
                                           </tr>
 
-                                          {activityExpanded ? activity.people.map((person) => (
-                                            <HoursCamaPersonRow
-                                              key={`person-${activityKey}-${person.personId}`}
-                                              person={person}
-                                              camas30={camas30}
-                                              isSelected={selectedPersonId === person.personId}
-                                              onOpenPerson={setSelectedPersonId}
-                                            />
-                                          )) : null}
+                                          {activityExpanded ? activity.people.map((person) => {
+                                            const personKey = `${activityKey}|${person.personId}`;
+                                            return (
+                                              <HoursCamaPersonRow
+                                                key={`person-${personKey}`}
+                                                person={person}
+                                                camas30={camas30}
+                                                isExpanded={expandedPeople.includes(personKey)}
+                                                isSelected={selectedPersonId === person.personId}
+                                                onToggle={() => togglePerson(personKey)}
+                                                onOpenPerson={setSelectedPersonId}
+                                              />
+                                            );
+                                          }) : null}
                                         </Fragment>
                                       );
                                     })
@@ -326,51 +340,80 @@ function HoursCamaOverlay({
 function HoursCamaPersonRow({
   person,
   camas30,
+  isExpanded,
   isSelected,
+  onToggle,
   onOpenPerson,
 }: {
   person: CycleLaborPersonSummary;
   camas30: number;
+  isExpanded?: boolean;
   isSelected?: boolean;
+  onToggle?: () => void;
   onOpenPerson?: (personId: string) => void;
 }) {
   return (
-    <tr className={cn("bg-muted/10 hover:bg-muted/25 transition-colors", isSelected && "bg-slate-900/8 dark:bg-slate-900/12")}>
-      {/* L5: Persona — affordance unificado con CycleDetailRows (Audit #3 Bloque B):
-            mismo InteractiveCell variant="link" para que el usuario vea la misma
-            ficha desde cualquier tabla jerárquica. */}
-      <td className="border-b border-r border-border/30 px-3 py-1.5 pl-20">
-        {onOpenPerson ? (
-          <InteractiveCell
-            variant="link"
-            label={
-              <span className="inline-flex items-center gap-1.5">
-                <span className="text-foreground leading-snug">{person.personName ?? "Sin nombre"}</span>
-                <span className="text-[10px] text-muted-foreground/45">[{person.personId}]</span>
+    <Fragment>
+      <tr className={cn("bg-muted/10 hover:bg-muted/25 transition-colors", isSelected && "bg-slate-900/8 dark:bg-slate-900/12")}>
+        <td className="border-b border-r border-border/30 px-3 py-1.5 pl-20">
+          <span className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"
+              onClick={onToggle}
+              aria-label={`${isExpanded ? "Ocultar" : "Mostrar"} fechas de ${person.personName ?? person.personId}`}
+            >
+              {isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+            </button>
+            {onOpenPerson ? (
+              <InteractiveCell
+                variant="link"
+                label={
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="text-foreground leading-snug">{person.personName ?? "Sin nombre"}</span>
+                    <span className="text-[10px] text-muted-foreground/45">[{person.personId}]</span>
+                  </span>
+                }
+                ariaLabel={`Abrir ficha del personal ${person.personName ?? person.personId}`}
+                onActivate={() => onOpenPerson(person.personId)}
+                tooltip="Abrir ficha del personal"
+              />
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <span className="text-foreground leading-snug">{person.personName ?? <span className="italic text-muted-foreground">Sin nombre</span>}</span>
+                <span className="text-[11px] text-muted-foreground">{person.personId}</span>
               </span>
-            }
-            ariaLabel={`Abrir ficha del personal ${person.personName ?? person.personId}`}
-            onActivate={() => onOpenPerson(person.personId)}
-            tooltip="Abrir ficha del personal"
-          />
-        ) : (
-          <span className="inline-flex items-center gap-2">
-            <span className="text-foreground leading-snug">{person.personName ?? <span className="italic text-muted-foreground">Sin nombre</span>}</span>
-            <span className="text-[11px] text-muted-foreground">{person.personId}</span>
+            )}
           </span>
-        )}
-      </td>
-      <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-muted-foreground">{person.unitOfMeasure || "—"}</td>
-      <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.unitsProduced)}</td>
-      <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.actualHours)}</td>
-      <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.effectiveHours)}</td>
-      <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.effectiveHours / (camas30))}</td>
-      <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.productivity)}</td>
-      <td className="border-b px-2.5 py-1.5 text-right tabular-nums">{formatPercent(person.rendimientoPct)}</td>
-    </tr>
+        </td>
+        <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-muted-foreground">{person.unitOfMeasure || "-"}</td>
+        <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.unitsProduced)}</td>
+        <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.actualHours)}</td>
+        <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.effectiveHours)}</td>
+        <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.effectiveHours / camas30)}</td>
+        <td className="border-b border-r border-border/30 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(person.productivity)}</td>
+        <td className="border-b px-2.5 py-1.5 text-right tabular-nums">{formatPercent(person.rendimientoPct)}</td>
+      </tr>
+      {isExpanded ? person.eventDates.map((event) => (
+        <tr key={`${person.personId}-${event.eventDate}`} className="bg-background/70 text-muted-foreground hover:bg-muted/20">
+          <td className="border-b border-r border-border/25 px-3 py-1.5 pl-28">
+            <span className="inline-flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-muted text-muted-foreground rounded px-1.5 py-0.5">Fecha</span>
+              <span className="text-foreground">{formatDate(event.eventDate)}</span>
+            </span>
+          </td>
+          <td className="border-b border-r border-border/25 px-2.5 py-1.5">{event.unitOfMeasure || "-"}</td>
+          <td className="border-b border-r border-border/25 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(event.unitsProduced)}</td>
+          <td className="border-b border-r border-border/25 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(event.actualHours)}</td>
+          <td className="border-b border-r border-border/25 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(event.effectiveHours)}</td>
+          <td className="border-b border-r border-border/25 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(event.effectiveHours / camas30)}</td>
+          <td className="border-b border-r border-border/25 px-2.5 py-1.5 text-right tabular-nums">{formatNumber(event.productivity)}</td>
+          <td className="border-b px-2.5 py-1.5 text-right tabular-nums">{formatPercent(event.rendimientoPct)}</td>
+        </tr>
+      )) : null}
+    </Fragment>
   );
 }
-
 function BedsTable({
   beds,
   selectedValveId,

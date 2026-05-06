@@ -108,6 +108,7 @@ export type TalentoRotacionData = {
 };
 
 export type TalentoPersonRendimientoActivity = {
+  eventDate: string | null;
   activityId: string;
   activityName: string;
   activityType: string;

@@ -247,6 +247,7 @@ type HarvestCurveQueryRow = {
 };
 
 type CycleLaborHoursQueryRow = {
+  event_date: string | null;
   cost_area: string | null;
   sub_cost_center: string | null;
   cycle_key: string;
@@ -362,6 +363,40 @@ const BED_PLANTS_SOURCE = "gld.mv_camp_kardex_bed_plants_cur";
 const CYCLE_PLANTS_SOURCE = "gld.mv_camp_kardex_cycle_plants_cur";
 const VALVE_PLANTS_SOURCE = "gld.mv_camp_kardex_valve_plants_cur";
 const PROD_HOURS_SOURCE = "gld.mv_prod_hours_cycle_person_cur";
+const PROD_HOURS_VARIOS_SPLIT_SOURCE = "gld.mv_prod_hours_varios_split_cycle_person_cur";
+const PROD_HOURS_APPEND_SOURCE = `
+  (
+    select
+      event_date,
+      cycle_key,
+      person_id,
+      activity_id,
+      activity_name,
+      activity_type,
+      unit_of_measure,
+      cost_area,
+      sub_cost_center,
+      actual_hours,
+      effective_hours,
+      units_produced
+    from ${PROD_HOURS_SOURCE}
+    union all
+    select
+      event_date,
+      cycle_key,
+      person_id,
+      activity_id,
+      activity_name,
+      activity_type,
+      unit_of_measure,
+      cost_area,
+      sub_cost_center,
+      actual_hours,
+      effective_hours,
+      units_produced
+    from ${PROD_HOURS_VARIOS_SPLIT_SOURCE}
+  )
+`;
 
 const FENOGRAMA_OPTIONS_QUERY = `
   select
@@ -1330,8 +1365,8 @@ export async function getCycleProfilesByBlock(
   const normalizedBlock = parentBlock.trim();
   const normalizedCycleKey = cleanText(options.cycleKey ?? null) || null;
   const cacheKey = normalizedCycleKey
-    ? `fenograma:block:${normalizedBlock}:cycle:${normalizedCycleKey}`
-    : `fenograma:block:${normalizedBlock}`;
+    ? `fenograma:block:v2:${normalizedBlock}:cycle:${normalizedCycleKey}`
+    : `fenograma:block:v2:${normalizedBlock}`;
 
   return cachedAsync(cacheKey, FENOGRAMA_BLOCK_TTL_MS, async () => {
     const result = await query<CycleProfileQueryRow>(
@@ -1440,7 +1475,7 @@ export async function getCycleProfilesByBlock(
             sum(actual_hours) as actual_hours,
             sum(effective_hours) as effective_hours,
             sum(units_produced) as units_produced
-          from ${PROD_HOURS_SOURCE}
+          from ${PROD_HOURS_APPEND_SOURCE}
           where cycle_key = cp.cycle_key
         ) labor on true
         where cp.parent_block = $1
@@ -1515,10 +1550,11 @@ export async function getCycleLaborHoursByCycleKey(
 ): Promise<CycleLaborHoursPayload> {
   const normalizedCycleKey = cycleKey.trim();
 
-  return cachedAsync(`fenograma:hours:${normalizedCycleKey}`, FENOGRAMA_HOURS_TTL_MS, async () => {
+  return cachedAsync(`fenograma:hours:v2:${normalizedCycleKey}`, FENOGRAMA_HOURS_TTL_MS, async () => {
     const result = await query<CycleLaborHoursQueryRow>(
       `
         select
+          to_char(event_date, 'YYYY-MM-DD') as event_date,
           cycle_key,
           cost_area,
           sub_cost_center,
@@ -1530,9 +1566,10 @@ export async function getCycleLaborHoursByCycleKey(
           actual_hours,
           effective_hours,
           units_produced
-        from ${PROD_HOURS_SOURCE}
+        from ${PROD_HOURS_APPEND_SOURCE}
         where cycle_key = $1
         order by
+          coalesce(event_date, date '9999-12-31') asc,
           coalesce(cost_area, '') asc,
           coalesce(sub_cost_center, '') asc,
           coalesce(activity_type, '') asc,
@@ -1570,7 +1607,15 @@ export async function getCycleLaborHoursByCycleKey(
             actualHours: number;
             effectiveHours: number;
             unitsProduced: number;
-            people: Map<string, CycleLaborPersonSummary>;
+            people: Map<string, CycleLaborPersonSummary & {
+              eventDatesMap: Map<string, {
+                eventDate: string;
+                unitOfMeasure: string;
+                actualHours: number;
+                effectiveHours: number;
+                unitsProduced: number;
+              }>;
+            }>;
           }>;
         }>;
       }>;
@@ -1588,6 +1633,7 @@ export async function getCycleLaborHoursByCycleKey(
       const activityName = cleanText(row.activity_name) || activityId;
       const unitOfMeasure = cleanText(row.unit_of_measure);
       const personId = cleanText(row.person_id === null ? null : String(row.person_id)) || "Sin ID";
+      const eventDate = cleanText(row.event_date) || "Sin fecha";
       const actualHours = toNumber(row.actual_hours) ?? 0;
       const effectiveHours = toNumber(row.effective_hours) ?? 0;
       const unitsProduced = toNumber(row.units_produced) ?? 0;
@@ -1638,10 +1684,23 @@ export async function getCycleLaborHoursByCycleKey(
         personName: personNameMap.get(personId) ?? null,
         unitOfMeasure,
         actualHours: 0, effectiveHours: 0, unitsProduced: 0, productivity: null, rendimientoPct: null,
+        eventDates: [],
+        eventDatesMap: new Map(),
       };
       personEntry.actualHours += actualHours;
       personEntry.effectiveHours += effectiveHours;
       personEntry.unitsProduced += unitsProduced;
+      const dateEntry = personEntry.eventDatesMap.get(eventDate) ?? {
+        eventDate,
+        unitOfMeasure,
+        actualHours: 0,
+        effectiveHours: 0,
+        unitsProduced: 0,
+      };
+      dateEntry.actualHours += actualHours;
+      dateEntry.effectiveHours += effectiveHours;
+      dateEntry.unitsProduced += unitsProduced;
+      personEntry.eventDatesMap.set(eventDate, dateEntry);
       activityEntry.people.set(personId, personEntry);
     }
 
@@ -1664,14 +1723,30 @@ export async function getCycleLaborHoursByCycleKey(
                   .map((actEntry) => {
                     const people = Array.from(actEntry.people.values())
                       .sort((a, b) => sortLocale(a.personId, b.personId))
-                      .map((pe) => ({
-                        ...pe,
-                        actualHours: roundValue(pe.actualHours),
-                        effectiveHours: roundValue(pe.effectiveHours),
-                        unitsProduced: roundValue(pe.unitsProduced),
-                        productivity: toRatio(pe.unitsProduced, pe.actualHours),
-                        rendimientoPct: toPercentFromNumbers(pe.effectiveHours, pe.actualHours),
-                      }));
+                      .map((pe) => {
+                        const eventDates = Array.from(pe.eventDatesMap.values())
+                          .sort((a, b) => sortLocale(a.eventDate, b.eventDate))
+                          .map((dateEntry) => ({
+                            eventDate: dateEntry.eventDate,
+                            unitOfMeasure: dateEntry.unitOfMeasure,
+                            actualHours: roundValue(dateEntry.actualHours),
+                            effectiveHours: roundValue(dateEntry.effectiveHours),
+                            unitsProduced: roundValue(dateEntry.unitsProduced),
+                            productivity: toRatio(dateEntry.unitsProduced, dateEntry.actualHours),
+                            rendimientoPct: toPercentFromNumbers(dateEntry.effectiveHours, dateEntry.actualHours),
+                          }));
+                        return {
+                          personId: pe.personId,
+                          personName: pe.personName,
+                          unitOfMeasure: pe.unitOfMeasure,
+                          actualHours: roundValue(pe.actualHours),
+                          effectiveHours: roundValue(pe.effectiveHours),
+                          unitsProduced: roundValue(pe.unitsProduced),
+                          productivity: toRatio(pe.unitsProduced, pe.actualHours),
+                          rendimientoPct: toPercentFromNumbers(pe.effectiveHours, pe.actualHours),
+                          eventDates,
+                        };
+                      });
                     return {
                       activityId: actEntry.activityId,
                       activityName: actEntry.activityName,
@@ -1747,7 +1822,7 @@ export async function getCycleLaborPersonDetailByCycleKey(
   const normalizedPersonId = personId.trim();
 
   return cachedAsync(
-    `fenograma:hours:${normalizedCycleKey}:person:${normalizedPersonId}`,
+    `fenograma:hours:v2:${normalizedCycleKey}:person:${normalizedPersonId}`,
     FENOGRAMA_HOURS_TTL_MS,
     async () => {
       const [profileResult, activitiesResult] = await Promise.all([
@@ -1836,7 +1911,7 @@ export async function getCycleLaborPersonDetailByCycleKey(
                 coalesce(actual_hours, 0) as actual_hours,
                 coalesce(effective_hours, 0) as effective_hours,
                 coalesce(units_produced, 0) as units_produced
-              from ${PROD_HOURS_SOURCE}
+              from ${PROD_HOURS_APPEND_SOURCE}
             ),
             person_cycle_activities as (
               select
@@ -2282,7 +2357,7 @@ export async function getHarvestCurveByCycleKey(
     const totalGreenWeightKg = roundValue(Number(greenResult.rows[0]?.total ?? 0));
     const totalPostWeightKg = roundValue(Number(postResult.rows[0]?.total ?? 0));
 
-    // Build a map date → daily green kg (same approach as stems from fenograma_day)
+    // Build a map date to daily green kg (same approach as stems from fenograma_day)
     const greenKgByDate = new Map<string, number>();
     for (const row of greenDailyResult.rows) {
       if (row.event_date) {
@@ -2344,3 +2419,4 @@ export async function getHarvestCurveByCycleKey(
     };
   });
 }
+

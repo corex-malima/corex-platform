@@ -329,6 +329,17 @@ export type CycleLaborPersonSummary = {
   unitsProduced: number;
   productivity: number | null;
   rendimientoPct: number | null;
+  eventDates: CycleLaborEventDateSummary[];
+};
+
+export type CycleLaborEventDateSummary = {
+  eventDate: string;
+  unitOfMeasure: string;
+  actualHours: number;
+  effectiveHours: number;
+  unitsProduced: number;
+  productivity: number | null;
+  rendimientoPct: number | null;
 };
 
 export type CycleLaborActivitySummary = {

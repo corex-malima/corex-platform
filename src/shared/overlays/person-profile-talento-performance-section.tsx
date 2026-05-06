@@ -6,7 +6,7 @@ import useSWRImmutable from "swr/immutable";
 import { fetchJson } from "@/lib/fetch-json";
 import type { TalentoPersonRendimientoPayload } from "@/lib/talento-humano";
 import { MetricTile } from "@/shared/data-display/metric-tile";
-import { formatFlexibleNumber as formatNumber, formatPercent } from "@/shared/lib/format";
+import { formatDateSlash, formatFlexibleNumber as formatNumber, formatPercent } from "@/shared/lib/format";
 
 /**
  * Tab "Rendimiento" de PersonProfileDialog cuando `sourceContext.module === "talento"`.
@@ -108,6 +108,7 @@ function CycleSection({ cycle }: { cycle: TalentoPersonRendimientoPayload["cycle
           <thead className="bg-muted/40 text-[10px] uppercase tracking-widest text-muted-foreground/80">
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Actividad</th>
+              <th className="px-3 py-2 text-left font-semibold">Fecha</th>
               <th className="px-3 py-2 text-left font-semibold">Tipo</th>
               <th className="px-3 py-2 text-right font-semibold">H. presenciales</th>
               <th className="px-3 py-2 text-right font-semibold">H. trabajadas</th>
@@ -117,8 +118,9 @@ function CycleSection({ cycle }: { cycle: TalentoPersonRendimientoPayload["cycle
           </thead>
           <tbody>
             {cycle.activities.map((activity) => (
-              <tr key={`${activity.activityId}-${activity.activityType}`} className="border-t border-border/40">
+              <tr key={`${activity.eventDate ?? "sin-fecha"}-${activity.activityId}-${activity.activityType}`} className="border-t border-border/40">
                 <td className="px-3 py-2 font-medium">{activity.activityName}</td>
+                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{formatDateSlash(activity.eventDate)}</td>
                 <td className="px-3 py-2 text-muted-foreground">{activity.activityType}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatNumber(activity.actualHours)}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatNumber(activity.effectiveHours)}</td>
