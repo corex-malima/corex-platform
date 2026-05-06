@@ -15,6 +15,10 @@ export async function GET(request: NextRequest) {
     const filters = normalizeTalentoExitFilters({
       year: searchParams.get("year") ?? undefined,
       month: searchParams.get("month") ?? undefined,
+      areaGeneral: searchParams.get("areaGeneral") ?? undefined,
+      area: searchParams.get("area") ?? undefined,
+      jobTitle: searchParams.get("jobTitle") ?? undefined,
+      jobClassification: searchParams.get("jobClassification") ?? undefined,
       associatedWorker: searchParams.get("associatedWorker") ?? undefined,
       exitReason: searchParams.get("exitReason") ?? undefined,
       resignationReason: searchParams.get("resignationReason") ?? undefined,

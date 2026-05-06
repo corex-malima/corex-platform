@@ -44,7 +44,7 @@ function buildBlockRowsPayload(rows: Awaited<ReturnType<typeof listDrenchWeekCal
     isoWeekId: row.isoWeekId,
     phenologicalWeek: `${row.phenologicalWeek} · ${row.recipeRuleCode}`,
     bedCount: row.bedCount === null ? "-" : row.bedCount.toFixed(2),
-    recipe: row.recipeLines.length
+    recipeLines: row.recipeLines.length
       ? row.recipeLines
           .map((line) => {
             const qty =
@@ -54,8 +54,7 @@ function buildBlockRowsPayload(rows: Awaited<ReturnType<typeof listDrenchWeekCal
             const unit = line.unitCode ?? "";
             return `${line.productCode ?? "-"} ${line.productName ?? "Sin producto"} · ${qty} ${unit}`.trim();
           })
-          .join(" | ")
-      : "Sin receta homologada",
+      : ["Sin receta homologada"],
   }));
 }
 
@@ -177,10 +176,10 @@ ${detailRows}
   const tableRows =
     blockRows.length > 0
       ? blockRows
-          .map(
-            (r) =>
-              `  ${tex(r.cycleKey)} & ${tex(r.blockId)} & ${tex(r.isoWeekId)} & ${tex(r.phenologicalWeek)} & ${tex(r.bedCount)} & ${tex(r.recipe)} \\\\`,
-          )
+          .map((r) => {
+            const recipe = r.recipeLines.map((line) => tex(line)).join("\\newline ");
+            return `  ${tex(r.cycleKey)} & ${tex(r.blockId)} & ${tex(r.isoWeekId)} & ${tex(r.phenologicalWeek)} & ${tex(r.bedCount)} & ${recipe} \\\\`;
+          })
           .join("\n")
       : "  \\multicolumn{6}{c}{\\textit{Sin datos para los filtros seleccionados.}} \\\\";
 
@@ -191,7 +190,10 @@ ${detailRows}
 \\newcommand{\\DrenchBody}{%
   \\section*{Programaci\\'on Drench por Bloque -- ${weekLabel}}
   ${subtitleSnippet}
-  \\begin{longtable}{@{} p{4.2cm} p{1.8cm} p{1.6cm} p{3.2cm} p{2cm} p{11.6cm} @{}}
+  \\small
+  \\setlength{\\LTleft}{0pt}
+  \\setlength{\\LTright}{0pt}
+  \\begin{longtable}{@{} p{2.9cm} p{1.25cm} p{1.1cm} p{2.25cm} p{1.25cm} p{7.2cm} @{}}
     \\caption{Programaci\\'on semanal por bloque} \\\\
     \\toprule
     \\textbf{Cycle ID} & \\textbf{Bloque} & \\textbf{Sem.~ISO} & \\textbf{Cat.~Fenol\\'ogica} & \\textbf{Camas 30m\\textsuperscript{2}} & \\textbf{Receta por bloque} \\\\

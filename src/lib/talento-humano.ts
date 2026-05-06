@@ -110,6 +110,10 @@ export type TalentoRotacionData = {
 export type TalentoExitFilters = {
   year: string;
   month: string;
+  areaGeneral: string;
+  area: string;
+  jobTitle: string;
+  jobClassification: string;
   associatedWorker: string;
   exitReason: string;
   resignationReason: string;
@@ -122,6 +126,10 @@ export type TalentoExitFilters = {
 export type TalentoExitFilterOptions = {
   years: string[];
   months: string[];
+  areaGenerals: string[];
+  areas: string[];
+  jobTitles: string[];
+  jobClassifications: string[];
   associatedWorkers: string[];
   exitReasons: string[];
   resignationReasons: string[];
@@ -274,6 +282,10 @@ export const defaultTalentoSnapshotFilters: TalentoFilters = {
 export const defaultTalentoExitFilters: TalentoExitFilters = {
   year: String(new Date().getFullYear()),
   month: "all",
+  areaGeneral: "all",
+  area: "all",
+  jobTitle: "all",
+  jobClassification: "all",
   associatedWorker: "all",
   exitReason: "all",
   resignationReason: "all",
@@ -321,12 +333,18 @@ export function normalizeTalentoSnapshotFilters(raw: Record<string, string | und
 
 function normalizeYear(value: string | undefined, fallback: string) {
   const cleaned = value?.trim();
-  return cleaned === "all" || (cleaned && /^\d{4}$/.test(cleaned)) ? cleaned : fallback;
+  if (!cleaned || cleaned === "all") return cleaned === "all" ? "all" : fallback;
+  const years = cleaned.split(",").map((entry) => entry.trim()).filter(Boolean);
+  return years.length && years.every((entry) => /^\d{4}$/.test(entry)) ? years.join(",") : fallback;
 }
 
 function normalizeMonth(value: string | undefined, fallback: string) {
   const cleaned = value?.trim();
-  return cleaned === "all" || (cleaned && /^(0?[1-9]|1[0-2])$/.test(cleaned)) ? String(Number(cleaned)) : fallback;
+  if (!cleaned || cleaned === "all") return cleaned === "all" ? "all" : fallback;
+  const months = cleaned.split(",").map((entry) => entry.trim()).filter(Boolean);
+  return months.length && months.every((entry) => /^(0?[1-9]|1[0-2])$/.test(entry))
+    ? months.map((entry) => String(Number(entry))).join(",")
+    : fallback;
 }
 
 function normalizeMultiFilter(value: string | undefined, fallback = "all") {
@@ -338,6 +356,10 @@ export function normalizeTalentoExitFilters(raw: Record<string, string | undefin
   return {
     year: normalizeYear(raw.year, defaultTalentoExitFilters.year),
     month: normalizeMonth(raw.month, defaultTalentoExitFilters.month),
+    areaGeneral: normalizeMultiFilter(raw.areaGeneral),
+    area: normalizeMultiFilter(raw.area),
+    jobTitle: normalizeMultiFilter(raw.jobTitle),
+    jobClassification: normalizeMultiFilter(raw.jobClassification),
     associatedWorker: normalizeMultiFilter(raw.associatedWorker),
     exitReason: normalizeMultiFilter(raw.exitReason),
     resignationReason: normalizeMultiFilter(raw.resignationReason),
