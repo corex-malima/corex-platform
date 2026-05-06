@@ -1402,7 +1402,7 @@ export async function getCycleProfilesByBlock(
           plants.availability_vs_initial_pct,
           plants.mortality_pct,
           to_char(cp.harvest_start_date, 'YYYY-MM-DD') as harvest_start_date,
-          to_char(cp.harvest_end_date, 'YYYY-MM-DD') as harvest_end_date,
+          to_char(coalesce(feno_days.last_harvest_date, cp.harvest_end_date), 'YYYY-MM-DD') as harvest_end_date,
           feno.total_stems,
           green.green_weight_kg,
           post.post_weight_kg,
@@ -1453,6 +1453,11 @@ export async function getCycleProfilesByBlock(
           from ${FENOGRAMA_SOURCE}
           where cycle_key = cp.cycle_key
         ) feno on true
+        left join lateral (
+          select max(event_date) as last_harvest_date
+          from ${FENOGRAMA_DAY_SOURCE}
+          where cycle_key = cp.cycle_key
+        ) feno_days on true
         left join lateral (
           select coalesce(sum(green_weight_kg), 0) as green_weight_kg
           from gld.mv_prod_productivity_green_cur
