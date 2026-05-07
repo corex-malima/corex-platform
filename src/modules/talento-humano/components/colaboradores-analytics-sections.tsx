@@ -32,10 +32,6 @@ import { KpiGrid } from "@/shared/layout/filter-panel";
 import { formatDate, formatFlexibleNumber, formatPercent } from "@/shared/lib/format";
 import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import {
-  getComplianceTone,
-  toneClass,
-} from "@/modules/talento-humano/components/desvinculacion-charts";
 import { Activity, ChevronDown, ChevronRight } from "lucide-react";
 
 type PerformanceData = NonNullable<CollaboratorDetailPayload["performance"]>;
@@ -386,13 +382,7 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                       </span>
                       <NumCell value={flex(rollup.week.actualHoursHn + rollup.week.actualHoursRend)} />
                       <NumCell value={flex(rollup.week.actualHoursRend)} />
-                      <NumCell
-                        value={pct(rollup.week.rendimiento)}
-                        className={cn(
-                          "font-semibold",
-                          toneClass(getComplianceTone(rollup.week.rendimiento)),
-                        )}
-                      />
+                      <NumCell value={pct(rollup.week.rendimiento)} className="font-semibold" />
                       <NumCell value={pct(rollup.pctRend)} />
                       <NumCell value={pct(rollup.pctHoursOnly)} />
                     </button>
@@ -430,10 +420,7 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                                 <NumCell value={activity.hoursOnly ? "—" : flex(activity.effective)} />
                                 <NumCell
                                   value={activity.hoursOnly ? "—" : pct(rendimiento)}
-                                  className={cn(
-                                    !activity.hoursOnly && "font-semibold",
-                                    !activity.hoursOnly && toneClass(getComplianceTone(rendimiento)),
-                                  )}
+                                  className={cn(!activity.hoursOnly && "font-semibold")}
                                 />
                                 <NumCell value="—" muted />
                                 <NumCell value="—" muted />
@@ -539,39 +526,26 @@ function NumCell({
 // ─── Sección Ausentismo ──────────────────────────────────────────────────────
 
 /**
- * Etiqueta corta y tono canon por código de actividad de ausentismo.
- * Se filtra a `AJH`, `L`, `PTH` en el server (server-only).
+ * Etiqueta legible para una categoría de ausentismo. Prefiere el `activity_name`
+ * resuelto en server desde `slv.prod_dim_activity_profile_scd2`; si no hay match,
+ * cae al `activity_id` o "Sin actividad".
  */
-const ABSENCE_ACTIVITY_META: Record<string, { fallbackName: string; color: string }> = {
-  AJH: {
-    fallbackName: "Atrasos justificados",
-    color: "var(--color-chart-warning)",
-  },
-  L: {
-    fallbackName: "Faltas",
-    color: "var(--color-chart-danger)",
-  },
-  PTH: {
-    fallbackName: "Permisos con descuento",
-    color: "var(--color-chart-info-bold)",
-  },
-};
-
 function activityLabel(activityId: string | null, activityName: string | null): string {
-  const meta = activityId ? ABSENCE_ACTIVITY_META[activityId] : null;
-  return activityName ?? meta?.fallbackName ?? activityId ?? "Sin actividad";
+  return activityName ?? activityId ?? "Sin actividad";
 }
 
-function activityColor(activityId: string | null, fallbackIndex: number): string {
-  const meta = activityId ? ABSENCE_ACTIVITY_META[activityId] : null;
-  if (meta) return meta.color;
-  const palette = [
-    "var(--color-chart-info-bold)",
-    "var(--color-chart-warning)",
-    "var(--color-chart-danger)",
-    "var(--color-chart-success-bold)",
-  ];
-  return palette[fallbackIndex % palette.length]!;
+/** Paleta canon en orden estable para barras de ausentismo. */
+const ABSENCE_PALETTE = [
+  "var(--color-chart-info-bold)",
+  "var(--color-chart-warning)",
+  "var(--color-chart-danger)",
+  "var(--color-chart-success-bold)",
+  "var(--color-chart-info)",
+  "var(--color-chart-success)",
+];
+
+function activityColor(index: number): string {
+  return ABSENCE_PALETTE[index % ABSENCE_PALETTE.length]!;
 }
 
 export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
@@ -592,7 +566,7 @@ export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
       .map(([activityId, item], index) => ({
         activityId,
         ...item,
-        color: activityColor(activityId === "—" ? null : activityId, index),
+        color: activityColor(index),
       }))
       .sort((a, b) => b.hours - a.hours);
   }, [data.rows]);
@@ -602,51 +576,38 @@ export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
   const active = grouped.find((item) => item.activityId === selectedActivity) ?? grouped[0] ?? null;
   const totalHours = data.totalHours;
 
-  return (
-    <Card className="border-border/70 bg-card/84">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Activity className="size-4" aria-hidden="true" />
-          Ausentismo
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <KpiGrid className="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
-          <MetricTile
-            label="% Ausentismo"
-            value={pct(data.metrics?.pctAbsTotal)}
-            hint="AJH + L + PTH sobre el total trabajado"
-          />
-          <MetricTile label="% H. Normales" value={pct(data.metrics?.pctActualHoursHn)} />
-          <MetricTile label="% H. Rendimiento" value={pct(data.metrics?.pctActualHoursRend)} />
-          <MetricTile
-            label="Horas ausentes"
-            value={flex(totalHours)}
-            hint={`${grouped.length} categoría(s)`}
-          />
-        </KpiGrid>
+  if (grouped.length === 0) {
+    return (
+      <Card className="border-border/70 bg-card/84">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Activity className="size-4" aria-hidden="true" />
+            Ausentismo
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmptyState label="Sin registros de ausentismo en categorías productivas." />
+        </CardContent>
+      </Card>
+    );
+  }
 
-        {grouped.length === 0 ? (
-          <EmptyState label="Sin registros de ausentismo (AJH, L, PTH)." />
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-            <AbsenceBarChart
-              groups={grouped}
-              activeId={active?.activityId ?? null}
-              onSelect={setSelectedActivity}
-            />
-            <AbsenceDetailTable
-              activityId={active?.activityId ?? null}
-              activityName={active?.name ?? null}
-              color={active?.color ?? "var(--color-chart-info-bold)"}
-              rows={active?.rows ?? []}
-              totalHours={active?.hours ?? 0}
-              shareOfTotal={totalHours > 0 && active ? active.hours / totalHours : null}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+      <AbsenceBarChart
+        groups={grouped}
+        activeId={active?.activityId ?? null}
+        onSelect={setSelectedActivity}
+      />
+      <AbsenceDetailTable
+        activityId={active?.activityId ?? null}
+        activityName={active?.name ?? null}
+        color={active?.color ?? "var(--color-chart-info-bold)"}
+        rows={active?.rows ?? []}
+        totalHours={active?.hours ?? 0}
+        shareOfTotal={totalHours > 0 && active ? active.hours / totalHours : null}
+      />
+    </div>
   );
 }
 

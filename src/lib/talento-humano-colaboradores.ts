@@ -520,7 +520,7 @@ async function loadAbsenteeism(personId: string) {
       AND act.is_current = true
       AND act.is_valid = true
     WHERE a.person_id = $1
-      AND a.activity_id IN ('AJH', 'L', 'PTH')
+      AND (a.activity_id IS NULL OR a.activity_id NOT IN ('AJH', 'L', 'PTH'))
     GROUP BY a.event_date, a.work_date, a.activity_id
     ORDER BY COALESCE(a.work_date, a.event_date) DESC NULLS LAST
     LIMIT 500
