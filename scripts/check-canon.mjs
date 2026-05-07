@@ -71,6 +71,7 @@ const officialDocs = new Set([
   "docs/audits/AUD-16-pre-prod-readiness-2026-05.md",
   "docs/audits/AUD-17-mega-audit-final-2026-05.md",
   "docs/audits/AUD-18-final-hardening-2026-05.md",
+  "docs/audits/AUD-19-colaboradores-canon-cleanup-2026-05.md",
 ]);
 
 const legacyDocPrefix = "> LEGACY / reference only.";
@@ -254,6 +255,14 @@ const hugeFileAllowlist = new Set([
   "src/modules/laboratorio/components/laboratorio-tipos-page.tsx",
   "src/modules/postcosecha/components/__tests__/balanzas-table-metrics.test.ts",
   "src/modules/talento-humano/seguimientos/components/seguimientos-indicador-explorer.tsx",
+  // Colaboradores explorer (AUD-19): explorador integral con 6 tabs canon —
+  // page, sections y analytics-sections sobrepasan 350 líneas porque cada uno
+  // contiene su superficie completa (charts canon, tablas canon, header card,
+  // 6 secciones distintas con KPIs propios). No procede split por subdominios
+  // porque los 3 archivos comparten estado/contexto de la ficha.
+  "src/modules/talento-humano/components/colaboradores-page.tsx",
+  "src/modules/talento-humano/components/colaboradores-sections.tsx",
+  "src/modules/talento-humano/components/colaboradores-analytics-sections.tsx",
 ]);
 
 for (const file of tsFiles) {
