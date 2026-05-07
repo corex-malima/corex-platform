@@ -70,9 +70,9 @@ export function SolverInputsSection({
               <Button type="button" variant="outline" size="icon" onClick={onAddOrderSlot} aria-label="Agregar orden">
                 <Plus className="size-4" />
               </Button>
-              <Button type="button" variant="outline" className="min-w-0 sm:min-w-[116px]" onClick={onResetOrders}>
+              <Button type="button" variant="outline" className="min-w-0 sm:min-w-[132px]" onClick={onResetOrders}>
                 <RotateCcw className="size-4" />
-                Limpiar
+                Restablecer
               </Button>
             </div>
           </div>
@@ -164,7 +164,7 @@ export function SolverInputsSection({
               </Button>
               <Button type="button" variant="outline" className="min-w-0 sm:min-w-[132px]" onClick={onResetAvailability}>
                 <RotateCcw className="size-4" />
-                Restaurar
+                Restablecer
               </Button>
             </div>
           </div>

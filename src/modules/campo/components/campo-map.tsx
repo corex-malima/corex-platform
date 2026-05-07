@@ -525,6 +525,10 @@ function MapFloatingPopover({
 
   return (
     <div
+      role="dialog"
+      aria-modal="false"
+      aria-label="Detalles del bloque seleccionado en el mapa"
+      tabIndex={-1}
       className="pointer-events-auto absolute z-[760] max-w-[260px] rounded-[16px] border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-950"
       style={{
         left: position.x,
@@ -534,6 +538,7 @@ function MapFloatingPopover({
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
     >
       {children}
       <span className="absolute left-1/2 top-full size-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border-b border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950" />

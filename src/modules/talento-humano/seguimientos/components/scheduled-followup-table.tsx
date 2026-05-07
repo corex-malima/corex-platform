@@ -16,7 +16,8 @@ import type { EmployeeScheduledFollowupRow } from "@/modules/talento-humano/segu
 
 type SortKey = "personName" | "areaName" | "followUpDate" | "derivedRoute" | "status";
 type PdfSortKey = "areaId" | "personName" | "followUpDate" | "derivedRoute" | "status";
-type PdfSortRule = { key: PdfSortKey | ""; direction: "asc" | "desc" };
+type PdfSortSlotId = "primary" | "secondary" | "tertiary";
+type PdfSortRule = { slotId: PdfSortSlotId; key: PdfSortKey | ""; direction: "asc" | "desc" };
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pendiente",
@@ -49,10 +50,12 @@ export function ScheduledFollowupTable({ rows, selectedFollowup, onSelect, isLoa
   const [sortKey, setSortKey] = useState<SortKey>("followUpDate");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  // Slots posicionales canónicos (3 niveles de orden para el export PDF).
+  // Las keys se usan en JSX y son estables aunque el contenido del slot cambie.
   const [pdfSortRules, setPdfSortRules] = useState<PdfSortRule[]>([
-    { key: "", direction: "asc" },
-    { key: "", direction: "asc" },
-    { key: "", direction: "asc" },
+    { slotId: "primary", key: "", direction: "asc" },
+    { slotId: "secondary", key: "", direction: "asc" },
+    { slotId: "tertiary", key: "", direction: "asc" },
   ]);
 
   function handleSort(key: string) {
@@ -66,9 +69,10 @@ export function ScheduledFollowupTable({ rows, selectedFollowup, onSelect, isLoa
   }
 
   function appendSortRules(exportEndpoint: URL) {
-    pdfSortRules
-      .filter((rule): rule is { key: PdfSortKey; direction: "asc" | "desc" } => Boolean(rule.key))
-      .forEach((rule) => exportEndpoint.searchParams.append("sort", `${rule.key}:${rule.direction}`));
+    for (const rule of pdfSortRules) {
+      if (!rule.key) continue;
+      exportEndpoint.searchParams.append("sort", `${rule.key}:${rule.direction}`);
+    }
   }
 
   async function handleExportPdf() {
@@ -157,12 +161,12 @@ export function ScheduledFollowupTable({ rows, selectedFollowup, onSelect, isLoa
         </div>
         <div className="grid gap-2 rounded-[16px] border border-border/60 bg-background/70 p-2 sm:grid-cols-3">
           {pdfSortRules.map((rule, index) => (
-            <div key={index} className="grid min-w-0 grid-cols-[minmax(0,1fr)_88px] gap-2">
-              <label className="sr-only" htmlFor={`pdf-sort-key-${index}`}>
+            <div key={rule.slotId} className="grid min-w-0 grid-cols-[minmax(0,1fr)_88px] gap-2">
+              <label className="sr-only" htmlFor={`pdf-sort-key-${rule.slotId}`}>
                 Orden PDF {index + 1}
               </label>
               <select
-                id={`pdf-sort-key-${index}`}
+                id={`pdf-sort-key-${rule.slotId}`}
                 value={rule.key}
                 onChange={(event) => {
                   const key = event.target.value as PdfSortKey | "";

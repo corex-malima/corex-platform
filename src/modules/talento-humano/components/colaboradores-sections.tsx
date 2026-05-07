@@ -220,8 +220,11 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <HistoryCard title="Historial de área" headers={["Área", "Desde", "Hasta", "Actual"]}>
-          {areaHistory.slice(0, 12).map((event, index) => (
-            <tr key={`${event.validFrom}-${index}`} className="border-t border-border/40">
+          {areaHistory.slice(0, 12).map((event) => (
+            <tr
+              key={`area-${event.areaId ?? "x"}-${event.validFrom ?? "open"}-${event.validTo ?? "open"}`}
+              className="border-t border-border/40"
+            >
               <StandardTd>{event.areaName ?? event.areaId ?? "—"}</StandardTd>
               <StandardTd>{dateVal(event.validFrom)}</StandardTd>
               <StandardTd>{dateVal(event.validTo)}</StandardTd>
@@ -236,8 +239,11 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
           ))}
         </HistoryCard>
         <HistoryCard title="Ingresos y salidas" headers={["Desde", "Hasta", "Actual"]}>
-          {entryHistory.slice(0, 12).map((event, index) => (
-            <tr key={`${event.validFrom}-${index}`} className="border-t border-border/40">
+          {entryHistory.slice(0, 12).map((event) => (
+            <tr
+              key={`entry-${event.validFrom ?? "open"}-${event.validTo ?? "open"}`}
+              className="border-t border-border/40"
+            >
               <StandardTd>{dateVal(event.validFrom)}</StandardTd>
               <StandardTd>{dateVal(event.validTo)}</StandardTd>
               <StandardTd>
@@ -352,9 +358,9 @@ function ExitsSection({ rows }: { rows: NonNullable<CollaboratorDetailPayload["e
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
+              {rows.map((row) => (
                 <tr
-                  key={`${row.exitDate}-${index}`}
+                  key={`exit-${row.entryDate ?? "x"}-${row.exitDate ?? "open"}-${row.exitReason ?? "x"}`}
                   className="border-t border-border/40 align-top"
                 >
                   <StandardTd>{dateVal(row.entryDate)}</StandardTd>

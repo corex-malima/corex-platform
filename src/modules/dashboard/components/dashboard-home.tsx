@@ -17,7 +17,6 @@ import {
   buildDomainEntries,
   buildQuickAccessViews,
   buildSearchableText,
-  type DashboardView,
 } from "@/config/dashboard";
 import {
   ModuleCard,
@@ -78,12 +77,16 @@ export function DashboardHome({ allowedResources, isSuperadmin }: DashboardHomeP
   }, [allViews, normalizedQuery]);
 
   const recentViews = recentHrefs
-    .map((href) => viewByHref.get(href))
-    .filter((view): view is DashboardView => Boolean(view))
+    .flatMap((href) => {
+      const view = viewByHref.get(href);
+      return view ? [view] : [];
+    })
     .slice(0, 6);
   const favoriteViews = favoriteHrefs
-    .map((href) => viewByHref.get(href))
-    .filter((view): view is DashboardView => Boolean(view))
+    .flatMap((href) => {
+      const view = viewByHref.get(href);
+      return view ? [view] : [];
+    })
     .slice(0, 6);
 
   function rememberModule(href: string) {

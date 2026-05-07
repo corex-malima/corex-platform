@@ -561,31 +561,30 @@ const SCATTER_COMPLIANCE_THRESHOLD = 1; // ratio = 100%
 export function ExitScatterCard({ rows }: { rows: TalentoExitRecord[] }) {
   const points = useMemo(
     () =>
-      rows
-        .filter(
-          (row) =>
-            typeof row.activeMonths === "number"
-            && typeof row.cumplimiento === "number",
-        )
-        .map((row) => {
-          const cumplimiento = row.cumplimiento as number;
-          const tone = getComplianceTone(cumplimiento);
-          const color =
-            tone === "success"
-              ? "var(--color-chart-success-bold)"
-              : tone === "warning"
-                ? "var(--color-chart-warning)"
-                : tone === "danger"
-                  ? "var(--color-chart-danger)"
-                  : "var(--color-chart-neutral)";
-          return {
-            x: row.activeMonths as number,
+      rows.flatMap((row) => {
+        if (typeof row.activeMonths !== "number" || typeof row.cumplimiento !== "number") {
+          return [];
+        }
+        const cumplimiento = row.cumplimiento;
+        const tone = getComplianceTone(cumplimiento);
+        const color =
+          tone === "success"
+            ? "var(--color-chart-success-bold)"
+            : tone === "warning"
+              ? "var(--color-chart-warning)"
+              : tone === "danger"
+                ? "var(--color-chart-danger)"
+                : "var(--color-chart-neutral)";
+        return [
+          {
+            x: row.activeMonths,
             y: cumplimiento,
             personName: row.personName,
             exitReason: row.exitReason ?? "Sin dato",
             color,
-          };
-        }),
+          },
+        ];
+      }),
     [rows],
   );
 
@@ -757,8 +756,12 @@ export function ExitScatterCard({ rows }: { rows: TalentoExitRecord[] }) {
                   }
                 />
                 <Scatter data={points} isAnimationActive={false}>
-                  {points.map((point, index) => (
-                    <Cell key={index} fill={point.color} fillOpacity={0.78} />
+                  {points.map((point) => (
+                    <Cell
+                      key={`scatter-${point.personName}-${point.x}-${point.y}`}
+                      fill={point.color}
+                      fillOpacity={0.78}
+                    />
                   ))}
                 </Scatter>
               </ScatterChart>

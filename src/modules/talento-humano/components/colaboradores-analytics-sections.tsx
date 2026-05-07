@@ -199,18 +199,18 @@ export function PerformanceTrendCard({ data }: { data: PerformanceData }) {
               strokeWidth={2}
               fill="url(#cumplFill)"
               dot={(props) => {
-                const { cx, cy, payload, index } = props as {
+                const { cx, cy, payload } = props as {
                   cx: number;
                   cy: number;
-                  index: number;
-                  payload: { dotColor: string; value: number | null };
+                  payload: { week: string; dotColor: string; value: number | null };
                 };
+                const key = `dot-${payload?.week ?? "x"}`;
                 if (cx == null || cy == null || payload?.value == null) {
-                  return <g key={`dot-empty-${index}`} />;
+                  return <g key={key} />;
                 }
                 return (
                   <circle
-                    key={`dot-${index}`}
+                    key={key}
                     cx={cx}
                     cy={cy}
                     r={3.5}
@@ -221,16 +221,16 @@ export function PerformanceTrendCard({ data }: { data: PerformanceData }) {
                 );
               }}
               activeDot={(props) => {
-                const { cx, cy, payload, index } = props as {
+                const { cx, cy, payload } = props as {
                   cx: number;
                   cy: number;
-                  index: number;
-                  payload: { dotColor: string };
+                  payload: { week: string; dotColor: string };
                 };
-                if (cx == null || cy == null) return <g key={`adot-empty-${index}`} />;
+                const key = `adot-${payload?.week ?? "x"}`;
+                if (cx == null || cy == null) return <g key={key} />;
                 return (
                   <circle
-                    key={`adot-${index}`}
+                    key={key}
                     cx={cx}
                     cy={cy}
                     r={5}
@@ -805,9 +805,9 @@ function AbsenceDetailTable({
                 </td>
               </tr>
             ) : (
-              rows.map((row, index) => (
+              rows.map((row) => (
                 <tr
-                  key={`${row.eventDate}-${row.workDate}-${index}`}
+                  key={`abs-${row.activityId ?? "x"}-${row.eventDate ?? "x"}-${row.workDate ?? "x"}-${row.absenceHours}`}
                   className="border-t border-border/40"
                 >
                   <td className="px-4 py-3">{dateVal(row.workDate ?? row.eventDate)}</td>
