@@ -3,14 +3,13 @@
 import { useMemo, useState } from "react";
 import type React from "react";
 import {
-  Bar,
-  BarChart,
-  Cell,
+  CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
 } from "recharts";
 
 import { cn } from "@/lib/utils";
@@ -28,30 +27,69 @@ import { EmptyState } from "@/shared/data-display/empty-state";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { KpiGrid } from "@/shared/layout/filter-panel";
 import { formatDate, formatFlexibleNumber, formatPercent } from "@/shared/lib/format";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
-import { StandardTable, StandardTd, StandardTh } from "@/shared/tables/standard-table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import {
   getComplianceTone,
   toneClass,
 } from "@/modules/talento-humano/components/desvinculacion-charts";
-import { Activity } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight } from "lucide-react";
 
 type PerformanceData = NonNullable<CollaboratorDetailPayload["performance"]>;
 type AbsenteeismData = NonNullable<CollaboratorDetailPayload["absenteeism"]>;
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 function pct(value: number | null | undefined) {
   return value == null
-    ? "-"
+    ? "—"
     : formatPercent(value, { input: "ratio", minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
-function dateVal(value: string | null | undefined) {
-  return value ? formatDate(value) : "-";
+function flex(value: number | null | undefined) {
+  if (value == null) return "—";
+  return formatFlexibleNumber(value);
 }
 
-function ratio(numerator: number, denominator: number) {
+function dateVal(value: string | null | undefined) {
+  return value ? formatDate(value) : "—";
+}
+
+function ratioOrNull(numerator: number, denominator: number) {
   return denominator > 0 ? numerator / denominator : null;
+}
+
+function complianceColor(value: number | null | undefined) {
+  if (value == null) return "var(--color-chart-neutral)";
+  if (value >= 1) return "var(--color-chart-success-bold)";
+  if (value >= 0.9) return "var(--color-chart-warning)";
+  return "var(--color-chart-danger)";
+}
+
+/**
+ * Detecta si una unidad de medida es "H Normales" (presencia sin rendimiento
+ * medible). Acepta variantes con/sin tildes y casing. Las filas con unidad
+ * vacía o "—" deben filtrarse upstream.
+ */
+function isHoursOnlyUnit(unit: string | null | undefined): boolean {
+  if (!unit) return false;
+  const normalized = unit.trim().toLowerCase();
+  if (!normalized || normalized === "-" || normalized === "—") return false;
+  return (
+    normalized === "h normales"
+    || normalized === "h normal"
+    || normalized === "horas normales"
+    || normalized === "hn"
+  );
+}
+
+function complianceAccent(
+  value: number | null | undefined,
+): "default" | "success" | "warning" | "danger" {
+  if (value == null) return "default";
+  if (value >= 1) return "success";
+  if (value >= 0.9) return "warning";
+  return "danger";
 }
 
 function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, key: string) {
@@ -63,58 +101,17 @@ function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, ke
   });
 }
 
-/**
- * Tono canónico para cumplimiento (rendimiento / mínimo) en base a thresholds:
- * `>= 1.0` → success-bold, `>= 0.9` → warning, `< 0.9` → danger.
- */
-function complianceColor(value: number | null | undefined) {
-  if (value == null) return "var(--color-chart-neutral)";
-  if (value >= 1) return "var(--color-chart-success-bold)";
-  if (value >= 0.9) return "var(--color-chart-warning)";
-  return "var(--color-chart-danger)";
-}
+// ─── Cumplimiento semanal (line chart elegante) ──────────────────────────────
 
 /**
- * Gauge canónico de cumplimiento. Mantiene la visual conic-gradient pero
- * envuelve en `ChartSurface` y usa tokens de chart en lugar de `--primary`.
- */
-export function GaugeCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: number | null | undefined;
-  hint: string;
-}) {
-  const normalized = Math.max(0, Math.min(1.25, value ?? 0));
-  const degrees = (normalized / 1.25) * 360;
-  const color = complianceColor(value);
-
-  return (
-    <ChartSurface title={label} subtitle={hint}>
-      <div className="flex items-center gap-4">
-        <div
-          className="grid size-20 place-items-center rounded-full"
-          style={{
-            background: `conic-gradient(${color} ${degrees}deg, color-mix(in srgb, var(--color-muted-foreground) 18%, transparent) 0deg)`,
-          }}
-        >
-          <div className="grid size-14 place-items-center rounded-full bg-card text-sm font-semibold tabular-nums">
-            {pct(value)}
-          </div>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Compara el rendimiento real contra el mínimo. Sobre 100% indica desempeño bajo meta exigente.
-        </p>
-      </div>
-    </ChartSurface>
-  );
-}
-
-/**
- * Gráfico canónico semanal de cumplimiento. Reemplaza el patrón con `<div>` bars
- * por Recharts + RechartsTooltipAdapter + tokens chart.
+ * Tendencia de cumplimiento semanal como `LineChart`. Reemplaza el `BarChart`
+ * canónico con una visualización más estilizada porque el usuario pidió esta
+ * variante específica para Colaboradores. El resto del repo sigue usando bars
+ * para cumplimiento ponderado (Productividad, Mortalidad).
+ *
+ * - Stroke `var(--color-chart-success-bold)` + dots con tono por threshold
+ * - Línea horizontal de referencia al 100% (`--color-chart-success`)
+ * - Tooltip canon con semana + cumplimiento + rendimiento + horas
  */
 export function PerformanceTrendCard({ data }: { data: PerformanceData }) {
   const points = useMemo(
@@ -125,34 +122,57 @@ export function PerformanceTrendCard({ data }: { data: PerformanceData }) {
         .slice(-26)
         .map((week) => ({
           week: week.isoWeekId,
-          value: week.cumplimiento ?? 0,
+          value: week.cumplimiento,
           rendimiento: week.rendimiento,
           actualHours: week.actualHoursRend,
-          fill: complianceColor(week.cumplimiento),
+          dotColor: complianceColor(week.cumplimiento),
         })),
     [data.weekly],
   );
 
   if (!points.length) {
     return (
-      <ChartSurface title="Cumplimiento semanal" subtitle="Rendimiento / mínimo, últimas 26 semanas">
+      <ChartSurface
+        title="Cumplimiento semanal"
+        subtitle="Evolución de cumplimiento (rendimiento real / mínimo) en las últimas semanas"
+      >
         <EmptyState label="Sin datos de rendimiento para el periodo." />
       </ChartSurface>
     );
   }
 
   return (
-    <ChartSurface title="Cumplimiento semanal" subtitle="Rendimiento / mínimo, últimas 26 semanas">
-      <div className="h-[220px] w-full">
+    <ChartSurface
+      title="Cumplimiento semanal"
+      subtitle="Evolución de cumplimiento (rendimiento real / mínimo) en las últimas semanas"
+    >
+      <div className="h-[260px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+          <LineChart data={points} margin={{ top: 12, right: 16, left: 0, bottom: 8 }}>
+            <defs>
+              <linearGradient id="cumplFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--color-chart-success-bold)" stopOpacity={0.18} />
+                <stop offset="100%" stopColor="var(--color-chart-success-bold)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid {...gridConfig} />
-            <XAxis dataKey="week" {...axisConfig} tick={axisTickStyleCompact} interval="preserveStartEnd" />
+            <XAxis
+              dataKey="week"
+              {...axisConfig}
+              tick={axisTickStyleCompact}
+              interval="preserveStartEnd"
+              minTickGap={18}
+            />
             <YAxis
               {...axisConfig}
               tick={axisTickStyle}
+              domain={[0, "dataMax + 0.1"]}
               tickFormatter={(value: number) =>
-                formatPercent(value, { input: "ratio", minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                formatPercent(value, {
+                  input: "ratio",
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })
               }
             />
             <Tooltip
@@ -162,186 +182,358 @@ export function PerformanceTrendCard({ data }: { data: PerformanceData }) {
                   title={(label) => `Semana ${label}`}
                   mapPayload={(payload) => {
                     const row = payload[0]?.payload as
-                      | { value?: number; rendimiento?: number | null; actualHours?: number | null }
+                      | { value?: number | null; rendimiento?: number | null; actualHours?: number | null }
                       | undefined;
                     return [
-                      { label: "Cumplimiento", value: pct(row?.value) },
+                      { label: "Cumplimiento", value: pct(row?.value ?? null) },
                       { label: "Rendimiento", value: pct(row?.rendimiento ?? null) },
-                      { label: "Horas trab.", value: formatFlexibleNumber(row?.actualHours ?? null) },
+                      { label: "Horas trab.", value: flex(row?.actualHours ?? null) },
                     ];
                   }}
                 />
               }
             />
-            <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-              {points.map((point) => (
-                <Cell key={point.week} fill={point.fill} />
-              ))}
-            </Bar>
-          </BarChart>
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke="var(--color-chart-success-bold)"
+              strokeWidth={2}
+              fill="url(#cumplFill)"
+              dot={(props) => {
+                const { cx, cy, payload, index } = props as {
+                  cx: number;
+                  cy: number;
+                  index: number;
+                  payload: { dotColor: string; value: number | null };
+                };
+                if (cx == null || cy == null || payload?.value == null) {
+                  return <g key={`dot-empty-${index}`} />;
+                }
+                return (
+                  <circle
+                    key={`dot-${index}`}
+                    cx={cx}
+                    cy={cy}
+                    r={3.5}
+                    fill="var(--color-card)"
+                    stroke={payload.dotColor}
+                    strokeWidth={2}
+                  />
+                );
+              }}
+              activeDot={(props) => {
+                const { cx, cy, payload, index } = props as {
+                  cx: number;
+                  cy: number;
+                  index: number;
+                  payload: { dotColor: string };
+                };
+                if (cx == null || cy == null) return <g key={`adot-empty-${index}`} />;
+                return (
+                  <circle
+                    key={`adot-${index}`}
+                    cx={cx}
+                    cy={cy}
+                    r={5}
+                    fill={payload.dotColor}
+                    stroke="var(--color-card)"
+                    strokeWidth={2}
+                  />
+                );
+              }}
+              isAnimationActive={false}
+            />
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </ChartSurface>
   );
 }
 
-/**
- * Tarjeta de resumen de ausentismo, ahora envuelta en `ChartSurface` con
- * progress bar usando token chart-info-bold y sub-chips con `toneClass` canon.
- */
-export function AbsenceSummaryCard({ absenteeism }: { absenteeism: AbsenteeismData }) {
-  const absencePct = absenteeism.metrics?.pctAbsTotal ?? null;
-  const tone = absenceTone(absencePct);
+// ─── Sección Rendimientos ────────────────────────────────────────────────────
 
-  return (
-    <ChartSurface title="% Ausentismo" subtitle="Solo faltas, atrasos y permisos">
-      <div className="space-y-3">
-        <p className={cn("text-2xl font-semibold tabular-nums", tone)}>{pct(absencePct)}</p>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <MetricChip label="% Rend." value={pct(absenteeism.metrics?.pctActualHoursRend)} />
-          <MetricChip label="% HN" value={pct(absenteeism.metrics?.pctActualHoursHn)} />
-        </div>
-      </div>
-    </ChartSurface>
-  );
-}
+type ActivityGroup = {
+  name: string;
+  unitOfMeasure: string;
+  hoursOnly: boolean;
+  actual: number;
+  effective: number;
+  units: number;
+  rows: PerformanceData["detail"];
+};
 
-function absenceTone(value: number | null | undefined) {
-  if (value == null) return "text-muted-foreground";
-  if (value <= 0.05) return "text-[var(--color-chart-success-bold)]";
-  if (value <= 0.1) return "text-[var(--color-chart-warning)]";
-  return "text-[var(--color-chart-danger)]";
-}
+type WeeklyRollup = {
+  week: PerformanceData["weekly"][number];
+  hoursOnlyHours: number;
+  rendHours: number;
+  pctRend: number | null;
+  pctHoursOnly: number | null;
+  activities: ActivityGroup[];
+};
 
-function MetricChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[14px] border border-border/50 bg-card/70 px-2 py-2">
-      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-semibold tabular-nums">{value}</p>
-    </div>
-  );
+function rollupWeekly(data: PerformanceData): WeeklyRollup[] {
+  // Agrupa el detalle por (semana, actividad+unidad). Filtra filas con
+  // `unitOfMeasure` vacío o "—" (no aportan información).
+  const detailValid = data.detail.filter((row) => {
+    const unit = row.unitOfMeasure?.trim();
+    return Boolean(unit) && unit !== "-" && unit !== "—";
+  });
+
+  const byWeek = new Map<string, Map<string, ActivityGroup>>();
+
+  for (const row of detailValid) {
+    const weekMap = byWeek.get(row.isoWeekId) ?? new Map<string, ActivityGroup>();
+    const unitOfMeasure = row.unitOfMeasure!.trim();
+    const groupKey = `${row.activityName}::${unitOfMeasure.toLowerCase()}`;
+    const existing = weekMap.get(groupKey);
+    const item: ActivityGroup = existing ?? {
+      name: row.activityName,
+      unitOfMeasure,
+      hoursOnly: isHoursOnlyUnit(unitOfMeasure),
+      actual: 0,
+      effective: 0,
+      units: 0,
+      rows: [],
+    };
+    item.actual += row.actualHours;
+    item.effective += row.effectiveHours;
+    item.units += row.unitsProduced;
+    item.rows.push(row);
+    weekMap.set(groupKey, item);
+    byWeek.set(row.isoWeekId, weekMap);
+  }
+
+  return data.weekly.map((week) => {
+    const activities = Array.from(byWeek.get(week.isoWeekId)?.values() ?? []).sort(
+      (a, b) => b.actual - a.actual,
+    );
+    const hoursOnlyHours = activities
+      .filter((act) => act.hoursOnly)
+      .reduce((sum, act) => sum + act.actual, 0);
+    const rendHours = activities
+      .filter((act) => !act.hoursOnly)
+      .reduce((sum, act) => sum + act.actual, 0);
+    const denom = hoursOnlyHours + rendHours;
+    return {
+      week,
+      hoursOnlyHours,
+      rendHours,
+      pctRend: denom > 0 ? rendHours / denom : null,
+      pctHoursOnly: denom > 0 ? hoursOnlyHours / denom : null,
+      activities,
+    };
+  });
 }
 
 export function PerformanceSection({ data }: { data: PerformanceData }) {
-  const initialWeek = data.weekly[0]?.isoWeekId;
-  const [openWeeks, setOpenWeeks] = useState<Set<string>>(() => new Set(initialWeek ? [initialWeek] : []));
+  const rollups = useMemo(() => rollupWeekly(data), [data]);
+  const initialWeek = rollups[0]?.week.isoWeekId;
+  const [openWeeks, setOpenWeeks] = useState<Set<string>>(
+    () => new Set(initialWeek ? [initialWeek] : []),
+  );
   const [openActivities, setOpenActivities] = useState<Set<string>>(() => new Set());
-  const activitiesByWeek = useMemo(() => {
-    const byWeek = new Map<
-      string,
-      Array<{ name: string; actual: number; effective: number; dates: PerformanceData["detail"] }>
-    >();
-    for (const row of data.detail) {
-      const list = byWeek.get(row.isoWeekId) ?? [];
-      const existing = list.find((item) => item.name === row.activityName);
-      const item = existing ?? { name: row.activityName, actual: 0, effective: 0, dates: [] };
-      item.actual += row.actualHours;
-      item.effective += row.effectiveHours;
-      item.dates.push(row);
-      if (!existing) list.push(item);
-      byWeek.set(row.isoWeekId, list);
-    }
-    return byWeek;
-  }, [data.detail]);
 
   return (
     <div className="space-y-4">
       <KpiGrid className="grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
-        <MetricTile label="Horas presenciales" value={formatFlexibleNumber(data.totals.actualHoursHn)} />
-        <MetricTile label="Horas trabajadas" value={formatFlexibleNumber(data.totals.actualHoursRend)} />
-        <MetricTile label="Rendimiento" value={pct(data.totals.rendimiento)} />
+        <MetricTile
+          label="Horas presenciales"
+          value={flex(data.totals.actualHoursHn + data.totals.actualHoursRend)}
+          hint="suma total trabajada"
+        />
+        <MetricTile
+          label="Horas con rendimiento"
+          value={flex(data.totals.actualHoursRend)}
+          hint="actividades dif. H normales"
+        />
+        <MetricTile label="Rendimiento" value={pct(data.totals.rendimiento)} hint="ponderado por horas" />
         <MetricTile
           label="Cumplimiento"
           value={pct(data.totals.cumplimiento)}
-          accent={
-            data.totals.cumplimiento != null && data.totals.cumplimiento >= 1
-              ? "success"
-              : data.totals.cumplimiento != null && data.totals.cumplimiento >= 0.9
-                ? "warning"
-                : data.totals.cumplimiento != null
-                  ? "danger"
-                  : "default"
-          }
+          hint="rendimiento / mínimo"
+          accent={complianceAccent(data.totals.cumplimiento)}
         />
       </KpiGrid>
-      <PerformanceTrendCard data={data} />
-      <ChartSurface title="Rendimiento desplegable" subtitle="Por semana, actividad y fecha">
+
+      <ChartSurface
+        title="Detalle desplegable"
+        subtitle="Por semana → actividad → fecha. Las actividades sin medida (—) se ocultan."
+      >
         <ScrollFadeTable topScrollbar>
-          <div className="min-w-[900px]">
-            <div className="grid grid-cols-[32px_1fr_repeat(3,minmax(130px,150px))] items-center gap-3 border-b border-border/60 bg-muted/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              <span aria-hidden="true" />
-              <span>Descripción</span>
-              <span>H. presenciales</span>
-              <span>H. trabajadas</span>
-              <span>Rendimiento</span>
-            </div>
-            {data.weekly.map((week) => (
-              <div key={week.isoWeekId} className="border-b border-border/40 last:border-b-0">
-                <button
-                  type="button"
-                  onClick={() => toggleSet(setOpenWeeks, week.isoWeekId)}
-                  aria-expanded={openWeeks.has(week.isoWeekId)}
-                  className="grid w-full grid-cols-[32px_1fr_repeat(3,minmax(130px,150px))] items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/35"
-                >
-                  <span className="text-muted-foreground" aria-hidden="true">
-                    {openWeeks.has(week.isoWeekId) ? "⌄" : "›"}
-                  </span>
-                  <span className="font-semibold">Semana {week.isoWeekId}</span>
-                  <span className="tabular-nums">{formatFlexibleNumber(week.actualHoursHn)}</span>
-                  <span className="tabular-nums">{formatFlexibleNumber(week.actualHoursRend)}</span>
-                  <span className={cn("font-semibold tabular-nums", toneClass(getComplianceTone(week.rendimiento)))}>
-                    {pct(week.rendimiento)}
-                  </span>
-                </button>
-                {openWeeks.has(week.isoWeekId)
-                  ? (activitiesByWeek.get(week.isoWeekId) ?? []).map((activity) => {
-                    const key = `${week.isoWeekId}::${activity.name}`;
-                    return (
-                      <div key={key}>
-                        <button
-                          type="button"
-                          onClick={() => toggleSet(setOpenActivities, key)}
-                          aria-expanded={openActivities.has(key)}
-                          className="grid w-full grid-cols-[56px_1fr_repeat(3,minmax(130px,150px))] items-center gap-3 border-t border-border/30 bg-muted/18 px-4 py-2 text-left text-xs"
-                        >
-                          <span className="pl-6 text-muted-foreground" aria-hidden="true">
-                            {openActivities.has(key) ? "⌄" : "›"}
-                          </span>
-                          <span>{activity.name}</span>
-                          <span className="tabular-nums">{formatFlexibleNumber(activity.actual)}</span>
-                          <span className="tabular-nums">{formatFlexibleNumber(activity.effective)}</span>
-                          <span className="font-semibold tabular-nums">
-                            {pct(ratio(activity.effective, activity.actual))}
-                          </span>
-                        </button>
-                        {openActivities.has(key)
-                          ? activity.dates.map((row, index) => (
-                            <div
-                              key={`${key}-${row.eventDate}-${index}`}
-                              className="grid grid-cols-[84px_1fr_repeat(3,minmax(130px,150px))] items-center gap-3 border-t border-border/20 px-4 py-2 text-xs text-muted-foreground"
-                            >
-                              <span aria-hidden="true" />
-                              <span>
-                                {dateVal(row.eventDate)} · {row.unitOfMeasure ?? "-"}
-                              </span>
-                              <span className="tabular-nums">{formatFlexibleNumber(row.actualHours)}</span>
-                              <span className="tabular-nums">{formatFlexibleNumber(row.effectiveHours)}</span>
-                              <span className="tabular-nums">{pct(row.rendimiento)}</span>
+          <div className="min-w-[1080px]">
+            <PerformanceTableHeader />
+            <div role="rowgroup">
+              {rollups.map((rollup) => {
+                const weekKey = rollup.week.isoWeekId;
+                const weekOpen = openWeeks.has(weekKey);
+                return (
+                  <div
+                    key={weekKey}
+                    className="border-b border-border/40 last:border-b-0"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleSet(setOpenWeeks, weekKey)}
+                      aria-expanded={weekOpen}
+                      className="grid w-full grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted/45"
+                    >
+                      <ChevronCell open={weekOpen} />
+                      <span className="font-semibold tracking-tight">
+                        Semana {rollup.week.isoWeekId}
+                      </span>
+                      <NumCell value={flex(rollup.week.actualHoursHn + rollup.week.actualHoursRend)} />
+                      <NumCell value={flex(rollup.week.actualHoursRend)} />
+                      <NumCell
+                        value={pct(rollup.week.rendimiento)}
+                        className={cn(
+                          "font-semibold",
+                          toneClass(getComplianceTone(rollup.week.rendimiento)),
+                        )}
+                      />
+                      <NumCell value={pct(rollup.pctRend)} />
+                      <NumCell value={pct(rollup.pctHoursOnly)} />
+                    </button>
+
+                    {weekOpen
+                      ? rollup.activities.map((activity) => {
+                          const actKey = `${weekKey}::${activity.name}::${activity.unitOfMeasure}`;
+                          const actOpen = openActivities.has(actKey);
+                          const rendimiento = activity.hoursOnly
+                            ? null
+                            : ratioOrNull(activity.effective, activity.actual);
+                          return (
+                            <div key={actKey}>
+                              <button
+                                type="button"
+                                onClick={() => toggleSet(setOpenActivities, actKey)}
+                                aria-expanded={actOpen}
+                                className="grid w-full grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 border-t border-border/30 bg-muted/20 px-4 py-2 text-left text-xs transition hover:bg-muted/40"
+                              >
+                                <ChevronCell open={actOpen} indent />
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className={cn(
+                                      "rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide",
+                                      activity.hoursOnly
+                                        ? "border border-[var(--color-chart-info)] bg-[color-mix(in_srgb,var(--color-chart-info)_18%,transparent)] text-[var(--color-chart-info-bold)]"
+                                        : "border border-[var(--color-chart-success)] bg-[color-mix(in_srgb,var(--color-chart-success)_22%,transparent)] text-[var(--color-chart-success-bold)]",
+                                    )}
+                                  >
+                                    {activity.hoursOnly ? "H Normales" : activity.unitOfMeasure}
+                                  </span>
+                                  <span className="truncate">{activity.name}</span>
+                                </span>
+                                <NumCell value={flex(activity.actual)} />
+                                <NumCell value={activity.hoursOnly ? "—" : flex(activity.effective)} />
+                                <NumCell
+                                  value={activity.hoursOnly ? "—" : pct(rendimiento)}
+                                  className={cn(
+                                    !activity.hoursOnly && "font-semibold",
+                                    !activity.hoursOnly && toneClass(getComplianceTone(rendimiento)),
+                                  )}
+                                />
+                                <NumCell value="—" muted />
+                                <NumCell value="—" muted />
+                              </button>
+
+                              {actOpen
+                                ? activity.rows.map((row, index) => {
+                                    const rowKey = `${actKey}::${row.eventDate}::${index}`;
+                                    return (
+                                      <div
+                                        key={rowKey}
+                                        className="grid grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 border-t border-border/20 bg-background/40 px-4 py-2 text-xs text-muted-foreground"
+                                      >
+                                        <span aria-hidden="true" />
+                                        <span className="pl-6">
+                                          {dateVal(row.eventDate)}
+                                          {row.unitsProduced > 0
+                                            ? ` · ${flex(row.unitsProduced)} ${activity.unitOfMeasure}`
+                                            : ""}
+                                        </span>
+                                        <NumCell value={flex(row.actualHours)} />
+                                        <NumCell
+                                          value={
+                                            activity.hoursOnly ? "—" : flex(row.effectiveHours)
+                                          }
+                                        />
+                                        <NumCell
+                                          value={activity.hoursOnly ? "—" : pct(row.rendimiento)}
+                                        />
+                                        <NumCell value="—" muted />
+                                        <NumCell value="—" muted />
+                                      </div>
+                                    );
+                                  })
+                                : null}
                             </div>
-                          ))
-                          : null}
-                      </div>
-                    );
-                  })
-                  : null}
-              </div>
-            ))}
+                          );
+                        })
+                      : null}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </ScrollFadeTable>
       </ChartSurface>
+
+      <PerformanceTrendCard data={data} />
     </div>
   );
 }
+
+function PerformanceTableHeader() {
+  return (
+    <div className="grid grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 border-b border-border/60 bg-muted/55 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      <span aria-hidden="true" />
+      <span>Descripción</span>
+      <span className="text-right">H. presenciales</span>
+      <span className="text-right">H. con rend.</span>
+      <span className="text-right">Rendimiento</span>
+      <span className="text-right">% H Rend.</span>
+      <span className="text-right">% H Normales</span>
+    </div>
+  );
+}
+
+function ChevronCell({ open, indent = false }: { open: boolean; indent?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "flex size-5 items-center justify-center text-muted-foreground",
+        indent && "ml-3",
+      )}
+      aria-hidden="true"
+    >
+      {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+    </span>
+  );
+}
+
+function NumCell({
+  value,
+  className,
+  muted,
+}: {
+  value: string;
+  className?: string;
+  muted?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "text-right tabular-nums",
+        muted && "text-muted-foreground/55",
+        className,
+      )}
+    >
+      {value}
+    </span>
+  );
+}
+
+// ─── Sección Ausentismo ──────────────────────────────────────────────────────
 
 export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
   const grouped = useMemo(() => {
@@ -376,12 +568,15 @@ export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
             value={pct(data.metrics?.pctAbsTotal)}
             hint="faltas, atrasos y permisos"
           />
-          <MetricTile label="% H. rendimiento" value={pct(data.metrics?.pctActualHoursRend)} />
-          <MetricTile label="% HN" value={pct(data.metrics?.pctActualHoursHn)} />
-          <MetricTile label="Horas ausentes" value={formatFlexibleNumber(totalHours)} />
+          <MetricTile label="% H. Rendimiento" value={pct(data.metrics?.pctActualHoursRend)} />
+          <MetricTile label="% H. Normales" value={pct(data.metrics?.pctActualHoursHn)} />
+          <MetricTile label="Horas ausentes" value={flex(totalHours)} />
         </KpiGrid>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="space-y-3">
+            {grouped.length === 0 ? (
+              <EmptyState label="Sin registros de ausentismo." />
+            ) : null}
             {grouped.map((item) => {
               const isActive = active?.activityId === item.activityId;
               const widthRatio = totalHours > 0 ? Math.min(100, (item.hours / totalHours) * 100) : 0;
@@ -400,7 +595,7 @@ export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
                 >
                   <div className="flex justify-between gap-3 text-sm">
                     <span className="font-semibold">{item.activityId}</span>
-                    <span className="tabular-nums">{formatFlexibleNumber(item.hours)} h</span>
+                    <span className="tabular-nums">{flex(item.hours)} h</span>
                   </div>
                   <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
                     <div
@@ -416,11 +611,15 @@ export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
             })}
           </div>
           <ScrollFadeTable className="bg-background/70" innerClassName="rounded-[16px]">
-            <StandardTable className="min-w-[420px]">
+            <table className="min-w-[420px] text-sm">
               <thead>
                 <tr>
-                  <StandardTh>Fecha</StandardTh>
-                  <StandardTh align="right">Horas</StandardTh>
+                  <th className="bg-background/95 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Fecha
+                  </th>
+                  <th className="bg-background/95 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Horas
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -429,17 +628,18 @@ export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
                     key={`${row.eventDate}-${row.workDate}-${index}`}
                     className="border-t border-border/40"
                   >
-                    <StandardTd>{dateVal(row.workDate ?? row.eventDate)}</StandardTd>
-                    <StandardTd align="right" className="font-semibold">
-                      {formatFlexibleNumber(row.absenceHours)}
-                    </StandardTd>
+                    <td className="px-4 py-3">{dateVal(row.workDate ?? row.eventDate)}</td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                      {flex(row.absenceHours)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
-            </StandardTable>
+            </table>
           </ScrollFadeTable>
         </div>
       </CardContent>
     </Card>
   );
 }
+

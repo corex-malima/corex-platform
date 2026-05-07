@@ -7,7 +7,6 @@ import useSWRImmutable from "swr/immutable";
 import { fetchJson } from "@/lib/fetch-json";
 import type { CollaboratorDetailPayload } from "@/lib/talento-humano-colaboradores";
 import {
-  AbsenceSummaryCard,
   AbsenteeismSection,
   PerformanceSection,
   PerformanceTrendCard,
@@ -154,7 +153,7 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
   const p = detail.profile;
   const areaHistory = detail.areaEvents.filter((event) => event.eventType === "CA");
   const entryHistory = detail.areaEvents.filter((event) => event.eventType === "IS");
-  const hasSummaryCharts = Boolean(detail.performance && detail.absenteeism);
+  const metrics = detail.absenteeism?.metrics ?? null;
 
   return (
     <div className="space-y-4">
@@ -170,21 +169,21 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
           hint="ponderado visible"
         />
         <MetricTile
-          label="Seguimientos"
-          value={detail.followups ? formatInteger(detail.followups.length) : "—"}
-          hint="registros vigentes"
+          label="% H. Normales"
+          value={pct(metrics?.pctActualHoursHn)}
+          hint="presencia sin rendimiento medible"
+        />
+        <MetricTile
+          label="% H. Rendimiento"
+          value={pct(metrics?.pctActualHoursRend)}
+          hint="actividades dif. H normales"
+        />
+        <MetricTile
+          label="% Ausentismo"
+          value={pct(metrics?.pctAbsTotal)}
+          hint="faltas, atrasos y permisos"
         />
       </KpiGrid>
-      <div
-        className={`grid gap-4 ${
-          hasSummaryCharts
-            ? "xl:grid-cols-[minmax(0,2fr)_minmax(300px,.8fr)]"
-            : "xl:grid-cols-1"
-        }`}
-      >
-        {detail.performance ? <PerformanceTrendCard data={detail.performance} /> : null}
-        {detail.absenteeism ? <AbsenceSummaryCard absenteeism={detail.absenteeism} /> : null}
-      </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <InfoCard title="Datos personales" icon={<UserRound className="size-4" aria-hidden="true" />}>
           <InfoField label="Género" value={p.gender} />
@@ -236,6 +235,7 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
           ))}
         </HistoryCard>
       </div>
+      {detail.performance ? <PerformanceTrendCard data={detail.performance} /> : null}
     </div>
   );
 }

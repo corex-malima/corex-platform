@@ -96,6 +96,7 @@ export type CollaboratorAbsenteeismMetrics = {
   pctAbsTotal: number | null;
 };
 
+
 export type CollaboratorExitRow = {
   entryDate: string | null;
   exitDate: string | null;
@@ -667,6 +668,60 @@ async function loadFollowups(personId: string): Promise<CollaboratorFollowup[]> 
   }
 }
 
+/**
+ * Construye `CollaboratorAbsenteeismMetrics` con fallback calculado.
+ *
+ * `gld.mv_tthh_exit_rend_abs_cur` solo cubre personas con salida registrada,
+ * por lo que para colaboradores activos los porcentajes vienen como `null`.
+ * Cuando la MV no tiene métricas, las derivamos en app desde:
+ *
+ * - `performance.totals.actualHoursRend` (horas en actividades dif. "H Normales")
+ * - `performance.totals.actualHoursHn` (horas presenciales en "H Normales")
+ * - `absenteeism.totalHours` (faltas + atrasos + permisos)
+ *
+ * Fórmulas (alineadas al canon del módulo):
+ *
+ * - `% H Rendimiento` = `actualHoursRend / (actualHoursRend + actualHoursHn)`
+ * - `% H Normales`    = `actualHoursHn / (actualHoursRend + actualHoursHn)`  (= 1 − %HR)
+ * - `% Ausentismo`    = `absenceHours / (absenceHours + actualHoursRend + actualHoursHn)`
+ *
+ * Nota: la MV expone `pct_actual_hours_rend` ya con la fórmula canónica
+ * `actualHoursRend / total`, por lo que ambas vías coinciden cuando hay datos.
+ */
+function buildMetricsWithFallback(
+  fromMv: CollaboratorAbsenteeismMetrics | null,
+  performance: { totals: CollaboratorPerformanceWeek } | null,
+  absenceHours: number,
+): CollaboratorAbsenteeismMetrics | null {
+  const rendHours = performance?.totals.actualHoursRend ?? 0;
+  const hnHours = performance?.totals.actualHoursHn ?? 0;
+  const workedHours = rendHours + hnHours;
+
+  const fallback: CollaboratorAbsenteeismMetrics = {
+    pctActualHoursRend: workedHours > 0 ? rendHours / workedHours : null,
+    pctActualHoursHn: workedHours > 0 ? hnHours / workedHours : null,
+    pctAbsTotal: workedHours + absenceHours > 0 ? absenceHours / (workedHours + absenceHours) : null,
+  };
+
+  if (!fromMv) {
+    // Si ningún campo es accionable, retornar null para no mostrar tiles vacíos.
+    if (
+      fallback.pctActualHoursRend == null
+      && fallback.pctActualHoursHn == null
+      && fallback.pctAbsTotal == null
+    ) {
+      return null;
+    }
+    return fallback;
+  }
+
+  return {
+    pctActualHoursRend: fromMv.pctActualHoursRend ?? fallback.pctActualHoursRend,
+    pctActualHoursHn: fromMv.pctActualHoursHn ?? fallback.pctActualHoursHn,
+    pctAbsTotal: fromMv.pctAbsTotal ?? fallback.pctAbsTotal,
+  };
+}
+
 export async function getCollaboratorDetail(
   personId: string,
   sections: {
@@ -687,13 +742,22 @@ export async function getCollaboratorDetail(
     sections.followups ? loadFollowups(personId) : Promise.resolve(null),
   ]);
 
+  // Fallback de métricas para colaboradores activos (sin registro en MV de exits).
+  const enrichedAbsenteeism = absenteeism
+    ? {
+        ...absenteeism,
+        metrics: buildMetricsWithFallback(absenteeism.metrics, performance, absenteeism.totalHours),
+      }
+    : null;
+
   return {
     generatedAt: new Date().toISOString(),
     profile,
     areaEvents,
     performance,
-    absenteeism,
+    absenteeism: enrichedAbsenteeism,
     exits,
     followups,
   };
 }
+

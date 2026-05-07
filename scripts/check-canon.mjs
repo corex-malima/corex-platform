@@ -255,6 +255,10 @@ const hugeFileAllowlist = new Set([
   "src/modules/laboratorio/components/laboratorio-tipos-page.tsx",
   "src/modules/postcosecha/components/__tests__/balanzas-table-metrics.test.ts",
   "src/modules/talento-humano/seguimientos/components/seguimientos-indicador-explorer.tsx",
+  // Lib del explorador Colaboradores (AUD-20): server-only loader con 6 cargadores
+  // por sección + helper de fallback de métricas para activos. Se mantiene
+  // unificado porque comparte tipos y patrones de queries entre cargadores.
+  "src/lib/talento-humano-colaboradores.ts",
   // Colaboradores explorer (AUD-19): explorador integral con 6 tabs canon —
   // page, sections y analytics-sections sobrepasan 350 líneas porque cada uno
   // contiene su superficie completa (charts canon, tablas canon, header card,
