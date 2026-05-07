@@ -36,6 +36,7 @@ Cada AUD documenta:
 | 17 | [`AUD-17-mega-audit-final-2026-05.md`](./AUD-17-mega-audit-final-2026-05.md) | Mega-auditoría final — 11 dimensiones evaluadas, calificación 9.0/10, tips ROI-ordenados, GO-LIVE | ✅ cerrado | 2026-05-02 | check holístico verde, 107/107 tests | **GO** |
 | 18 | [`AUD-18-final-hardening-2026-05.md`](./AUD-18-final-hardening-2026-05.md) | Final hardening — zod en 7 mutaciones críticas, rate limits admin, +58 tests, logEvent estructurado, calificación 9.5/10 | ✅ cerrado | 2026-05-03 | check holístico verde, 165/165 tests | **GO** |
 | 19 | [`AUD-19-colaboradores-canon-cleanup-2026-05.md`](./AUD-19-colaboradores-canon-cleanup-2026-05.md) | Pulido canon Colaboradores — charts a Recharts/ChartSurface, tablas a StandardTable, SearchInput, error banner, InfoField shared. Calificación módulo 9.5/10 | ✅ cerrado | 2026-05-07 | typecheck + canon + lint verdes | NO |
+| 21 | [`AUD-21-desvinculacion-ux-permisos-2026-05.md`](./AUD-21-desvinculacion-ux-permisos-2026-05.md) | Desvinculación interpretable (Scatter con cuadrantes + leyenda), tablas con scroll arriba, sidebar Explorador con icono, bulk toggle de permisos por subgrupo en Admin Usuarios | ✅ cerrado | 2026-05-08 | typecheck + canon + lint + build verdes | NO |
 
 ---
 

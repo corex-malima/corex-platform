@@ -225,11 +225,8 @@ export function TalentoDesvinculacionPage({ initialData }: { initialData: Talent
             <MetricTile label="% ausentismo total" value={formatPercent(current.summary.avgPctAbsTotal)} />
           </KpiGrid>
 
-          {/* Bloque temporal full-width: AreaChart de salidas por mes */}
-          <ExitTimeSeriesCard rows={rows} />
-
           {/* Composición principal: BarChart vertical + 2 donuts */}
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] gap-5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,460px),1fr))] gap-5">
             <ExitVerticalBarCard
               title="Top motivos de salida"
               subtitle="Distribución cuantitativa de los motivos más frecuentes."
@@ -248,9 +245,11 @@ export function TalentoDesvinculacionPage({ initialData }: { initialData: Talent
             />
           </div>
 
-          {/* Análisis de cumplimiento: Scatter + BarList */}
+          {/* Mapa interpretativo de salidas — full width para que se lea bien */}
+          <ExitScatterCard rows={rows} />
+
+          {/* Análisis de cumplimiento y antigüedad: BarLists pares */}
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,520px),1fr))] gap-5">
-            <ExitScatterCard rows={rows} />
             <BarListCard
               title="Cumplimiento al salir"
               subtitle="Segmentación por desempeño frente al rendimiento mínimo."
@@ -258,47 +257,37 @@ export function TalentoDesvinculacionPage({ initialData }: { initialData: Talent
               onSelect={(group) => selectGroup("Cumplimiento", group)}
               showCompliance
             />
-          </div>
-
-          {/* Análisis de antigüedad: BarChart vertical + BarList con cumplimiento */}
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,520px),1fr))] gap-5">
-            <ExitVerticalBarCard
-              title="Distribución por antigüedad"
-              subtitle="Rangos de meses al momento de la salida."
-              groups={groups.tenure}
-              onSelect={(group) => selectGroup("Antigüedad", group)}
-              colorOffset={3}
-            />
             <BarListCard
-              title="Antigüedad vs cumplimiento"
-              subtitle="Cada barra muestra cantidad y % de cumplimiento promedio del grupo."
+              title="Antigüedad al salir"
+              subtitle="Rangos de meses al momento de la salida (con cumplimiento prom. del grupo)."
               groups={groups.tenure}
               onSelect={(group) => selectGroup("Antigüedad", group)}
               showCompliance
             />
           </div>
 
-          {/* Tablas de contingencia (las más útiles, reducidas a 2) */}
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,680px),1fr))] gap-5">
-            <ContingencyTableCard
-              title="Motivo de salida × cumplimiento"
-              subtitle="Tabla de contingencia: filas por motivo, columnas por cumplimiento."
-              groups={groups.reasonCompliance}
-              onSelect={(group) => selectGroup("Motivo de salida", group)}
-            />
-            <ContingencyTableCard
-              title="Antigüedad × cumplimiento"
-              subtitle="Tabla de contingencia: filas por antigüedad, columnas por cumplimiento."
-              groups={groups.tenureCompliance}
-              onSelect={(group) => selectGroup("Antigüedad", group)}
-            />
-          </div>
+          {/* Tablas de contingencia — full width para que las columnas no se ahoguen */}
+          <ContingencyTableCard
+            title="Motivo de salida × cumplimiento"
+            subtitle="Tabla de contingencia: filas por motivo, columnas por cumplimiento. Click en fila abre listado de personas."
+            groups={groups.reasonCompliance}
+            onSelect={(group) => selectGroup("Motivo de salida", group)}
+          />
+          <ContingencyTableCard
+            title="Antigüedad × cumplimiento"
+            subtitle="Tabla de contingencia: filas por antigüedad, columnas por cumplimiento."
+            groups={groups.tenureCompliance}
+            onSelect={(group) => selectGroup("Antigüedad", group)}
+          />
 
-          {/* Trabajadora social — card compleja full-width */}
+          {/* Trabajadora social — matriz cross full-width */}
           <SocialWorkerContingencyCard
             groups={groups.socialWorker}
             onSelect={(group) => selectGroup("Trabajadora social", group)}
           />
+
+          {/* Bloque temporal AL FINAL: AreaChart de salidas por mes */}
+          <ExitTimeSeriesCard rows={rows} />
         </ChartSection>
       ) : (
         <EmptyState label="Sin desvinculaciones para los filtros seleccionados." />

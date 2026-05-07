@@ -14,6 +14,7 @@ import {
   TrendingUp,
   UserCircle2,
   Users,
+  UserSearch,
 } from "lucide-react";
 
 import { ACTIVE_MODULES } from "@/config/module-catalog";
@@ -34,6 +35,7 @@ export type NavGroup = {
 const GROUP_ICON_BY_LABEL: Record<string, LucideIcon> = {
   Indicadores: TrendingUp,
   "Indicadores & KPI": TrendingUp,
+  Explorador: UserSearch,
   Bodega: DatabaseZap,
   Campo: Sprout,
   Laboratorio: Beaker,
@@ -60,6 +62,7 @@ const ORDER_BY_LABEL: Record<string, number> = {
   Laboratorio: 40,
   "Talento Humano": 50,
   "Indicadores & KPI": 10,
+  Explorador: 15,
   Planificación: 10,
   Registros: 20,
   Solver: 30,

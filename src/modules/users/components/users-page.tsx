@@ -463,23 +463,16 @@ function UserFormModal({
             ) : (
               <div className="space-y-4">
                 {Object.entries(ACCESS_RESOURCES_BY_SECTION).map(([section, resources]) => (
-                  <div key={section} className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{section}</p>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {resources.map((resource) => {
-                        const enabled = effectiveAllowedSet.has(resource.resourceKey);
-                        return (
-                          <div key={resource.resourceKey} className="flex items-center justify-between gap-3 rounded-[14px] border border-border/70 bg-card/80 px-4 py-3">
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium">{resource.label}</p>
-                              <p className="truncate text-[11px] text-muted-foreground">{resource.resourceKey}</p>
-                            </div>
-                            <ToggleSwitch checked={enabled} onCheckedChange={(nextValue) => handleToggleAccess(resource.resourceKey, nextValue)} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <PermissionSection
+                    key={section}
+                    section={section}
+                    resources={resources}
+                    effectiveAllowedSet={effectiveAllowedSet}
+                    onToggle={handleToggleAccess}
+                    onBulkToggle={(keys, nextValue) => {
+                      keys.forEach((key) => handleToggleAccess(key, nextValue));
+                    }}
+                  />
                 ))}
               </div>
             )}
@@ -500,6 +493,152 @@ function UserFormModal({
       </form>
     </DialogShell>
   );
+}
+
+/**
+ * Sección de permisos con sub-agrupación inteligente para paneles
+ * fine-grained (`Colaboradores / X`, `Seguimientos / X`, `Ficha del personal / X`)
+ * y bulk toggle por sub-grupo. Para secciones de módulos regulares mantiene
+ * el grid plano sin sub-agrupación.
+ */
+function PermissionSection({
+  section,
+  resources,
+  effectiveAllowedSet,
+  onToggle,
+  onBulkToggle,
+}: {
+  section: string;
+  resources: Array<{ resourceKey: string; label: string }>;
+  effectiveAllowedSet: Set<string>;
+  onToggle: (resourceKey: string, nextValue: boolean) => void;
+  onBulkToggle: (keys: string[], nextValue: boolean) => void;
+}) {
+  // Para "Paneles" agrupamos por el prefijo antes de "/" (ej. "Colaboradores").
+  const isPanelSection = section === "Paneles";
+  const subgroups = isPanelSection
+    ? groupResourcesByPrefix(resources)
+    : { __flat: resources };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {section}
+      </p>
+      {Object.entries(subgroups).map(([subgroup, subResources]) => (
+        <PermissionSubgroup
+          key={subgroup}
+          subgroup={subgroup === "__flat" ? null : subgroup}
+          resources={subResources}
+          effectiveAllowedSet={effectiveAllowedSet}
+          onToggle={onToggle}
+          onBulkToggle={onBulkToggle}
+        />
+      ))}
+    </div>
+  );
+}
+
+function PermissionSubgroup({
+  subgroup,
+  resources,
+  effectiveAllowedSet,
+  onToggle,
+  onBulkToggle,
+}: {
+  subgroup: string | null;
+  resources: Array<{ resourceKey: string; label: string }>;
+  effectiveAllowedSet: Set<string>;
+  onToggle: (resourceKey: string, nextValue: boolean) => void;
+  onBulkToggle: (keys: string[], nextValue: boolean) => void;
+}) {
+  const enabledCount = resources.filter((resource) =>
+    effectiveAllowedSet.has(resource.resourceKey),
+  ).length;
+  const total = resources.length;
+  const allEnabled = enabledCount === total;
+  const noneEnabled = enabledCount === 0;
+  const keys = resources.map((resource) => resource.resourceKey);
+
+  return (
+    <div
+      className={cn(
+        "space-y-2",
+        subgroup ? "rounded-[16px] border border-border/60 bg-background/50 p-3" : "",
+      )}
+    >
+      {subgroup ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-[12px] font-semibold text-foreground">{subgroup}</p>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+              {enabledCount}/{total}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              disabled={allEnabled}
+              onClick={() => onBulkToggle(keys, true)}
+            >
+              Activar todo
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              disabled={noneEnabled}
+              onClick={() => onBulkToggle(keys, false)}
+            >
+              Quitar todo
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      <div className="grid gap-2 md:grid-cols-2">
+        {resources.map((resource) => {
+          const enabled = effectiveAllowedSet.has(resource.resourceKey);
+          // Cuando hay sub-grupo, recorta el prefijo del label para que no se repita.
+          const displayLabel = subgroup
+            ? resource.label.replace(/^[^/]+\/\s*/, "")
+            : resource.label;
+          return (
+            <div
+              key={resource.resourceKey}
+              className="flex items-center justify-between gap-3 rounded-[14px] border border-border/70 bg-card/80 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{displayLabel}</p>
+                <p className="truncate text-[11px] text-muted-foreground">{resource.resourceKey}</p>
+              </div>
+              <ToggleSwitch
+                checked={enabled}
+                onCheckedChange={(nextValue) => onToggle(resource.resourceKey, nextValue)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function groupResourcesByPrefix(
+  resources: Array<{ resourceKey: string; label: string }>,
+): Record<string, Array<{ resourceKey: string; label: string }>> {
+  const groups: Record<string, Array<{ resourceKey: string; label: string }>> = {};
+  for (const resource of resources) {
+    const slashIndex = resource.label.indexOf("/");
+    const prefix = slashIndex >= 0 ? resource.label.slice(0, slashIndex).trim() : "Otros";
+    const list = groups[prefix] ?? [];
+    list.push(resource);
+    groups[prefix] = list;
+  }
+  return groups;
 }
 
 function DeleteModal({

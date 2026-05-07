@@ -72,6 +72,7 @@ const officialDocs = new Set([
   "docs/audits/AUD-17-mega-audit-final-2026-05.md",
   "docs/audits/AUD-18-final-hardening-2026-05.md",
   "docs/audits/AUD-19-colaboradores-canon-cleanup-2026-05.md",
+  "docs/audits/AUD-21-desvinculacion-ux-permisos-2026-05.md",
 ]);
 
 const legacyDocPrefix = "> LEGACY / reference only.";

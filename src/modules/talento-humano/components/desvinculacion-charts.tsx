@@ -8,6 +8,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ReferenceArea,
+  ReferenceLine,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -30,6 +32,7 @@ import { RechartsTooltipAdapter } from "@/shared/charts/chart-tooltip";
 import { ChartSurface } from "@/shared/data-display/chart-surface";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import { formatDecimal, formatInteger, formatPercent } from "@/shared/lib/format";
+import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
 import { BAR_COLORS } from "@/modules/talento-humano/components/talento-view-utils";
 
 export type ExitGroup = {
@@ -166,7 +169,11 @@ export function ContingencyTableCard({
   return (
     <ChartSurface title={title} subtitle={subtitle}>
       {groups.length && columns.length ? (
-        <div className="overflow-x-auto rounded-[20px] border border-border/60 bg-background/55 p-3">
+        <ScrollFadeTable
+          className="border border-border/60 bg-background/55"
+          innerClassName="rounded-[16px]"
+          topScrollbar
+        >
           <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
             <thead>
               <tr>
@@ -197,7 +204,7 @@ export function ContingencyTableCard({
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollFadeTable>
       ) : (
         <EmptyState label="Sin datos para cruzar variables." />
       )}
@@ -243,7 +250,7 @@ function WorkerHeatMatrix({
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground">{formatInteger(groups.reduce((sum, group) => sum + group.count, 0))} salidas</span>
       </div>
-      <div className="overflow-x-auto">
+      <ScrollFadeTable innerClassName="rounded-[16px]" topScrollbar>
         <table className="w-full min-w-[640px] border-separate border-spacing-0 text-xs">
           <thead>
             <tr>
@@ -274,7 +281,7 @@ function WorkerHeatMatrix({
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollFadeTable>
     </div>
   );
 }
@@ -369,9 +376,9 @@ export function ExitTimeSeriesCard({ rows }: { rows: TalentoExitRecord[] }) {
       {points.length === 0 ? (
         <EmptyState label="Sin datos suficientes para construir una serie temporal." />
       ) : (
-        <div className="h-[260px] w-full">
+        <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+            <AreaChart data={points} margin={{ top: 12, right: 24, left: 8, bottom: 16 }}>
               <defs>
                 <linearGradient id="exitFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--color-chart-info-bold)" stopOpacity={0.32} />
@@ -454,7 +461,7 @@ export function ExitVerticalBarCard({
 }) {
   const data = groups.map((group, index) => ({
     label: group.label,
-    short: group.label.length > 12 ? `${group.label.slice(0, 12)}…` : group.label,
+    short: group.label.length > 18 ? `${group.label.slice(0, 18)}…` : group.label,
     count: group.count,
     avgCompliance: group.avgCompliance,
     color: BAR_COLORS[(index + colorOffset) % BAR_COLORS.length] ?? "var(--color-chart-info-bold)",
@@ -466,18 +473,18 @@ export function ExitVerticalBarCard({
       {data.length === 0 ? (
         <EmptyState label="Sin datos para los filtros aplicados." />
       ) : (
-        <div className="h-[260px] w-full">
+        <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }} barCategoryGap={14}>
+            <BarChart data={data} margin={{ top: 12, right: 16, left: 8, bottom: 16 }} barCategoryGap={14}>
               <CartesianGrid {...gridConfig} />
               <XAxis
                 dataKey="short"
                 {...axisConfig}
                 tick={axisTickStyleCompact}
                 interval={0}
-                angle={-18}
+                angle={-28}
                 textAnchor="end"
-                height={56}
+                height={84}
               />
               <YAxis
                 {...axisConfig}
@@ -536,10 +543,21 @@ export function ExitVerticalBarCard({
 }
 
 /**
- * Scatter de antigüedad (meses) vs cumplimiento (%) por persona. Cada punto
- * = una desvinculación. Color por bucket de cumplimiento — útil para detectar
- * cuadrantes (alto cumplimiento + corta antigüedad, baja en larga, etc.).
+ * Scatter interpretativo de antigüedad (meses al salir) × cumplimiento (rend
+ * real / mínimo). Diseñado para que un psicólogo o gerente identifique en un
+ * vistazo en qué cuadrante "vive" cada salida:
+ *
+ * - 🟢 II  (alto cumplim. + corta antigüedad) → "Pérdida temprana de talento"
+ * - 🟢 I   (alto cumplim. + larga antigüedad) → "Cierre natural de ciclo"
+ * - 🟠 III (bajo cumplim. + corta antigüedad) → "Mala adaptación / selección"
+ * - 🔴 IV  (bajo cumplim. + larga antigüedad) → "Desgaste prolongado"
+ *
+ * Umbrales canon: 100% cumplimiento (eje horizontal de referencia) y
+ * 12 meses de antigüedad (eje vertical de referencia).
  */
+const SCATTER_TENURE_THRESHOLD = 12; // meses
+const SCATTER_COMPLIANCE_THRESHOLD = 1; // ratio = 100%
+
 export function ExitScatterCard({ rows }: { rows: TalentoExitRecord[] }) {
   const points = useMemo(
     () =>
@@ -571,90 +589,266 @@ export function ExitScatterCard({ rows }: { rows: TalentoExitRecord[] }) {
     [rows],
   );
 
+  const xMax = useMemo(() => {
+    const maxValue = points.reduce((max, point) => Math.max(max, point.x), 0);
+    return Math.max(maxValue, SCATTER_TENURE_THRESHOLD * 2);
+  }, [points]);
+  const yMax = useMemo(() => {
+    const maxValue = points.reduce((max, point) => Math.max(max, point.y), 0);
+    return Math.max(maxValue, 1.5);
+  }, [points]);
+
+  // Conteos por cuadrante para resumen interpretativo bajo el chart.
+  const quadrants = useMemo(() => {
+    const counts = { earlyHigh: 0, lateHigh: 0, earlyLow: 0, lateLow: 0 };
+    for (const p of points) {
+      const lateTenure = p.x >= SCATTER_TENURE_THRESHOLD;
+      const highCompliance = p.y >= SCATTER_COMPLIANCE_THRESHOLD;
+      if (highCompliance && !lateTenure) counts.earlyHigh += 1;
+      else if (highCompliance && lateTenure) counts.lateHigh += 1;
+      else if (!highCompliance && !lateTenure) counts.earlyLow += 1;
+      else counts.lateLow += 1;
+    }
+    return counts;
+  }, [points]);
+
   return (
     <ChartSurface
-      title="Antigüedad vs cumplimiento"
-      subtitle="Cada punto = una salida. Color por umbral de cumplimiento (verde ≥100%, ámbar ≥90%, rojo <90%)"
+      title="Mapa de salidas: antigüedad × cumplimiento"
+      subtitle="Cada punto es una persona desvinculada. Las líneas dividen 4 cuadrantes interpretativos: 100% cumplimiento (eje horizontal) y 12 meses de antigüedad (eje vertical)"
     >
       {points.length === 0 ? (
         <EmptyState label="Sin pares (antigüedad, cumplimiento) suficientes." />
       ) : (
-        <div className="h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 12, right: 16, left: 0, bottom: 12 }}>
-              <CartesianGrid {...gridConfig} />
-              <XAxis
-                dataKey="x"
-                type="number"
-                name="Antigüedad"
-                {...axisConfig}
-                tick={axisTickStyleCompact}
-                tickFormatter={(value: number) => `${formatDecimal(value, 0)} m`}
-              />
-              <YAxis
-                dataKey="y"
-                type="number"
-                name="Cumplimiento"
-                {...axisConfig}
-                tick={axisTickStyle}
-                tickFormatter={(value: number) =>
-                  formatPercent(value, {
-                    input: "ratio",
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  })
-                }
-              />
-              <ZAxis range={[40, 80]} />
-              <Tooltip
-                cursor={{ strokeDasharray: "3 3", stroke: "var(--color-border)" }}
-                content={
-                  <RechartsTooltipAdapter
-                    title={(_label, payload) =>
-                      String(
-                        (payload?.[0]?.payload as { personName?: string } | undefined)?.personName
-                          ?? "",
-                      )
-                    }
-                    mapPayload={(payload) => {
-                      const row = payload[0]?.payload as
-                        | {
-                            x?: number;
-                            y?: number;
-                            exitReason?: string;
-                          }
-                        | undefined;
-                      return [
-                        {
-                          label: "Antigüedad",
-                          value: row?.x == null ? "—" : `${formatDecimal(row.x, 1)} meses`,
-                        },
-                        {
-                          label: "Cumplimiento",
-                          value:
-                            row?.y == null
-                              ? "—"
-                              : formatPercent(row.y, {
-                                  input: "ratio",
-                                  minimumFractionDigits: 0,
-                                  maximumFractionDigits: 1,
-                                }),
-                        },
-                        { label: "Motivo", value: row?.exitReason ?? "—" },
-                      ];
-                    }}
-                  />
-                }
-              />
-              <Scatter data={points} fill="var(--color-chart-info-bold)" isAnimationActive={false}>
-                {points.map((point, index) => (
-                  <Cell key={index} fill={point.color} fillOpacity={0.7} />
-                ))}
-              </Scatter>
-            </ScatterChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          <div className="h-[360px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 12, right: 24, left: 8, bottom: 24 }}>
+                <CartesianGrid {...gridConfig} />
+                {/* Cuadrantes coloreados sutilmente */}
+                <ReferenceArea
+                  x1={0}
+                  x2={SCATTER_TENURE_THRESHOLD}
+                  y1={SCATTER_COMPLIANCE_THRESHOLD}
+                  y2={yMax}
+                  fill="var(--color-chart-success)"
+                  fillOpacity={0.08}
+                />
+                <ReferenceArea
+                  x1={SCATTER_TENURE_THRESHOLD}
+                  x2={xMax}
+                  y1={SCATTER_COMPLIANCE_THRESHOLD}
+                  y2={yMax}
+                  fill="var(--color-chart-success)"
+                  fillOpacity={0.04}
+                />
+                <ReferenceArea
+                  x1={0}
+                  x2={SCATTER_TENURE_THRESHOLD}
+                  y1={0}
+                  y2={SCATTER_COMPLIANCE_THRESHOLD}
+                  fill="var(--color-chart-warning)"
+                  fillOpacity={0.06}
+                />
+                <ReferenceArea
+                  x1={SCATTER_TENURE_THRESHOLD}
+                  x2={xMax}
+                  y1={0}
+                  y2={SCATTER_COMPLIANCE_THRESHOLD}
+                  fill="var(--color-chart-danger)"
+                  fillOpacity={0.06}
+                />
+                <ReferenceLine
+                  x={SCATTER_TENURE_THRESHOLD}
+                  stroke="var(--color-border)"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: "12 meses",
+                    position: "insideTopRight",
+                    fill: "var(--color-muted-foreground)",
+                    fontSize: 10,
+                  }}
+                />
+                <ReferenceLine
+                  y={SCATTER_COMPLIANCE_THRESHOLD}
+                  stroke="var(--color-border)"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: "100% meta",
+                    position: "insideBottomRight",
+                    fill: "var(--color-muted-foreground)",
+                    fontSize: 10,
+                  }}
+                />
+                <XAxis
+                  dataKey="x"
+                  type="number"
+                  name="Antigüedad"
+                  domain={[0, xMax]}
+                  {...axisConfig}
+                  tick={axisTickStyleCompact}
+                  tickFormatter={(value: number) => `${formatDecimal(value, 0)} m`}
+                  label={{
+                    value: "Antigüedad al salir (meses)",
+                    position: "insideBottom",
+                    offset: -8,
+                    fill: "var(--color-muted-foreground)",
+                    fontSize: 11,
+                  }}
+                />
+                <YAxis
+                  dataKey="y"
+                  type="number"
+                  name="Cumplimiento"
+                  domain={[0, yMax]}
+                  {...axisConfig}
+                  tick={axisTickStyle}
+                  tickFormatter={(value: number) =>
+                    formatPercent(value, {
+                      input: "ratio",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })
+                  }
+                  label={{
+                    value: "Cumplimiento (rend / mínimo)",
+                    angle: -90,
+                    position: "insideLeft",
+                    fill: "var(--color-muted-foreground)",
+                    fontSize: 11,
+                    offset: 12,
+                  }}
+                />
+                <ZAxis range={[60, 100]} />
+                <Tooltip
+                  cursor={{ strokeDasharray: "3 3", stroke: "var(--color-border)" }}
+                  content={
+                    <RechartsTooltipAdapter
+                      title={(_label, payload) =>
+                        String(
+                          (payload?.[0]?.payload as { personName?: string } | undefined)?.personName
+                            ?? "",
+                        )
+                      }
+                      mapPayload={(payload) => {
+                        const row = payload[0]?.payload as
+                          | { x?: number; y?: number; exitReason?: string }
+                          | undefined;
+                        return [
+                          {
+                            label: "Antigüedad",
+                            value: row?.x == null ? "—" : `${formatDecimal(row.x, 1)} meses`,
+                          },
+                          {
+                            label: "Cumplimiento",
+                            value:
+                              row?.y == null
+                                ? "—"
+                                : formatPercent(row.y, {
+                                    input: "ratio",
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 1,
+                                  }),
+                          },
+                          { label: "Motivo", value: row?.exitReason ?? "—" },
+                        ];
+                      }}
+                    />
+                  }
+                />
+                <Scatter data={points} isAnimationActive={false}>
+                  {points.map((point, index) => (
+                    <Cell key={index} fill={point.color} fillOpacity={0.78} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+          <ScatterQuadrantLegend
+            quadrants={quadrants}
+            total={points.length}
+          />
+        </>
       )}
     </ChartSurface>
+  );
+}
+
+/**
+ * Pequeña leyenda 2×2 con conteos por cuadrante para que cualquier persona
+ * pueda interpretar el scatter sin tener que leer ejes.
+ */
+function ScatterQuadrantLegend({
+  quadrants,
+  total,
+}: {
+  quadrants: { earlyHigh: number; lateHigh: number; earlyLow: number; lateLow: number };
+  total: number;
+}) {
+  const items = [
+    {
+      key: "earlyHigh",
+      label: "Pérdida temprana de talento",
+      hint: "Alto cumplimiento + corta antigüedad",
+      count: quadrants.earlyHigh,
+      tone: "var(--color-chart-success-bold)",
+    },
+    {
+      key: "lateHigh",
+      label: "Cierre natural de ciclo",
+      hint: "Alto cumplimiento + larga antigüedad",
+      count: quadrants.lateHigh,
+      tone: "var(--color-chart-success)",
+    },
+    {
+      key: "earlyLow",
+      label: "Mala adaptación / selección",
+      hint: "Bajo cumplimiento + corta antigüedad",
+      count: quadrants.earlyLow,
+      tone: "var(--color-chart-warning)",
+    },
+    {
+      key: "lateLow",
+      label: "Desgaste prolongado",
+      hint: "Bajo cumplimiento + larga antigüedad",
+      count: quadrants.lateLow,
+      tone: "var(--color-chart-danger)",
+    },
+  ] as const;
+
+  return (
+    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+      {items.map((item) => {
+        const ratio = total > 0 ? item.count / total : 0;
+        return (
+          <div
+            key={item.key}
+            className="rounded-[16px] border border-border/60 bg-background/55 px-3 py-2.5"
+          >
+            <div className="flex items-start gap-2.5">
+              <span
+                className="mt-1 size-2.5 shrink-0 rounded-full"
+                style={{ background: item.tone }}
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-[13px] font-semibold text-foreground">{item.label}</p>
+                  <p className="text-[12px] tabular-nums text-muted-foreground">
+                    {formatInteger(item.count)} ·{" "}
+                    {formatPercent(ratio, {
+                      input: "ratio",
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
+                  </p>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{item.hint}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
