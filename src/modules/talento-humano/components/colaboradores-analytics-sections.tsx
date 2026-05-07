@@ -263,8 +263,12 @@ type ActivityGroup = {
 
 type WeeklyRollup = {
   week: PerformanceData["weekly"][number];
+  /** H presenciales en actividades H Normales. */
   hoursOnlyHours: number;
+  /** H presenciales en actividades dif. H Normales (con rendimiento medible). */
   rendHours: number;
+  /** H trabajadas (effective) en actividades dif. H Normales. */
+  effectiveHours: number;
   pctRend: number | null;
   pctHoursOnly: number | null;
   activities: ActivityGroup[];
@@ -312,11 +316,15 @@ function rollupWeekly(data: PerformanceData): WeeklyRollup[] {
     const rendHours = activities
       .filter((act) => !act.hoursOnly)
       .reduce((sum, act) => sum + act.actual, 0);
+    const effectiveHours = activities
+      .filter((act) => !act.hoursOnly)
+      .reduce((sum, act) => sum + act.effective, 0);
     const denom = hoursOnlyHours + rendHours;
     return {
       week,
       hoursOnlyHours,
       rendHours,
+      effectiveHours,
       pctRend: denom > 0 ? rendHours / denom : null,
       pctHoursOnly: denom > 0 ? hoursOnlyHours / denom : null,
       activities,
@@ -359,7 +367,7 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
         subtitle="Por semana → actividad → fecha. Las actividades sin medida (—) se ocultan."
       >
         <ScrollFadeTable topScrollbar>
-          <div className="min-w-[1080px]">
+          <div className="min-w-[1200px]">
             <PerformanceTableHeader />
             <div role="rowgroup">
               {rollups.map((rollup) => {
@@ -374,14 +382,18 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                       type="button"
                       onClick={() => toggleSet(setOpenWeeks, weekKey)}
                       aria-expanded={weekOpen}
-                      className="grid w-full grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted/45"
+                      className={cn(
+                        "grid w-full items-center gap-3 px-4 py-3 text-left text-sm transition hover:bg-muted/45",
+                        PERFORMANCE_GRID,
+                      )}
                     >
                       <ChevronCell open={weekOpen} />
                       <span className="font-semibold tracking-tight">
                         Semana {rollup.week.isoWeekId}
                       </span>
                       <NumCell value={flex(rollup.week.actualHoursHn + rollup.week.actualHoursRend)} />
-                      <NumCell value={flex(rollup.week.actualHoursRend)} />
+                      <NumCell value={flex(rollup.rendHours)} />
+                      <NumCell value={flex(rollup.effectiveHours)} />
                       <NumCell value={pct(rollup.week.rendimiento)} className="font-semibold" />
                       <NumCell value={pct(rollup.pctRend)} />
                       <NumCell value={pct(rollup.pctHoursOnly)} />
@@ -400,7 +412,10 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                                 type="button"
                                 onClick={() => toggleSet(setOpenActivities, actKey)}
                                 aria-expanded={actOpen}
-                                className="grid w-full grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 border-t border-border/30 bg-muted/20 px-4 py-2 text-left text-xs transition hover:bg-muted/40"
+                                className={cn(
+                                  "grid w-full items-center gap-3 border-t border-border/30 bg-muted/20 px-4 py-2 text-left text-xs transition hover:bg-muted/40",
+                                  PERFORMANCE_GRID,
+                                )}
                               >
                                 <ChevronCell open={actOpen} indent />
                                 <span className="flex min-w-0 items-center gap-2">
@@ -417,6 +432,7 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                                   <span className="truncate">{activity.name}</span>
                                 </span>
                                 <NumCell value={flex(activity.actual)} />
+                                <NumCell value={activity.hoursOnly ? "—" : flex(activity.actual)} />
                                 <NumCell value={activity.hoursOnly ? "—" : flex(activity.effective)} />
                                 <NumCell
                                   value={activity.hoursOnly ? "—" : pct(rendimiento)}
@@ -432,7 +448,10 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                                     return (
                                       <div
                                         key={rowKey}
-                                        className="grid grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 border-t border-border/20 bg-background/40 px-4 py-2 text-xs text-muted-foreground"
+                                        className={cn(
+                                          "grid items-center gap-3 border-t border-border/20 bg-background/40 px-4 py-2 text-xs text-muted-foreground",
+                                          PERFORMANCE_GRID,
+                                        )}
                                       >
                                         <span aria-hidden="true" />
                                         <span className="pl-6">
@@ -442,6 +461,9 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                                             : ""}
                                         </span>
                                         <NumCell value={flex(row.actualHours)} />
+                                        <NumCell
+                                          value={activity.hoursOnly ? "—" : flex(row.actualHours)}
+                                        />
                                         <NumCell
                                           value={
                                             activity.hoursOnly ? "—" : flex(row.effectiveHours)
@@ -473,13 +495,28 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
   );
 }
 
+/**
+ * Layout de 8 columnas para la tabla expandible de Rendimientos.
+ * - col 1: chevron
+ * - col 2: descripción
+ * - cols 3..8: métricas numéricas alineadas a la derecha
+ */
+const PERFORMANCE_GRID =
+  "grid-cols-[28px_minmax(220px,1.4fr)_repeat(6,minmax(110px,1fr))]";
+
 function PerformanceTableHeader() {
   return (
-    <div className="grid grid-cols-[28px_minmax(220px,1.4fr)_repeat(5,minmax(110px,1fr))] items-center gap-3 border-b border-border/60 bg-muted/55 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+    <div
+      className={cn(
+        "grid items-center gap-3 border-b border-border/60 bg-muted/55 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground",
+        PERFORMANCE_GRID,
+      )}
+    >
       <span aria-hidden="true" />
       <span>Descripción</span>
       <span className="text-right">H. presenciales</span>
-      <span className="text-right">H. con rend.</span>
+      <span className="text-right">H. presencial (rend)</span>
+      <span className="text-right">H. trabajada (rend)</span>
       <span className="text-right">Rendimiento</span>
       <span className="text-right">% H Rend.</span>
       <span className="text-right">% H Normales</span>

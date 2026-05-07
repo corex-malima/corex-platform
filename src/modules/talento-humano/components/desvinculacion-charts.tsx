@@ -1,10 +1,35 @@
 "use client";
 
+import { useMemo } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ZAxis,
+} from "recharts";
+
 import { cn } from "@/lib/utils";
 import type { TalentoExitRecord } from "@/lib/talento-humano";
+import {
+  axisConfig,
+  axisTickStyle,
+  axisTickStyleCompact,
+  gridConfig,
+  tooltipCursorStyle,
+} from "@/shared/charts/chart-axis-config";
+import { RechartsTooltipAdapter } from "@/shared/charts/chart-tooltip";
 import { ChartSurface } from "@/shared/data-display/chart-surface";
 import { EmptyState } from "@/shared/data-display/empty-state";
-import { formatInteger, formatPercent } from "@/shared/lib/format";
+import { formatDecimal, formatInteger, formatPercent } from "@/shared/lib/format";
 import { BAR_COLORS } from "@/modules/talento-humano/components/talento-view-utils";
 
 export type ExitGroup = {
@@ -282,4 +307,354 @@ function buildColumns(groups: CrossGroup[], limit = 6) {
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "es-EC"))
     .slice(0, limit)
     .map(([label]) => label);
+}
+
+// ─── Charts canon — variedad visual ──────────────────────────────────────────
+
+const MONTH_LABEL: Record<number, string> = {
+  1: "Ene",
+  2: "Feb",
+  3: "Mar",
+  4: "Abr",
+  5: "May",
+  6: "Jun",
+  7: "Jul",
+  8: "Ago",
+  9: "Sep",
+  10: "Oct",
+  11: "Nov",
+  12: "Dic",
+};
+
+function monthShort(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-");
+  const mLabel = MONTH_LABEL[Number(month)] ?? month ?? "";
+  return year ? `${mLabel} ${year.slice(-2)}` : (mLabel ?? yearMonth);
+}
+
+/**
+ * Tendencia mensual de salidas como `AreaChart` con gradient. Muestra el
+ * volumen de desvinculaciones por mes para detectar picos estacionales.
+ */
+export function ExitTimeSeriesCard({ rows }: { rows: TalentoExitRecord[] }) {
+  const points = useMemo(() => {
+    const buckets = new Map<string, { exits: number; cumplimientoSum: number; cumplimientoCount: number }>();
+    for (const row of rows) {
+      if (!row.exitDate) continue;
+      const key = row.exitDate.slice(0, 7); // YYYY-MM
+      const entry = buckets.get(key) ?? { exits: 0, cumplimientoSum: 0, cumplimientoCount: 0 };
+      entry.exits += 1;
+      if (typeof row.cumplimiento === "number" && Number.isFinite(row.cumplimiento)) {
+        entry.cumplimientoSum += row.cumplimiento;
+        entry.cumplimientoCount += 1;
+      }
+      buckets.set(key, entry);
+    }
+    return Array.from(buckets.entries())
+      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+      .map(([key, entry]) => ({
+        key,
+        label: monthShort(key),
+        exits: entry.exits,
+        avgCompliance:
+          entry.cumplimientoCount > 0 ? entry.cumplimientoSum / entry.cumplimientoCount : null,
+      }));
+  }, [rows]);
+
+  return (
+    <ChartSurface
+      title="Tendencia mensual de salidas"
+      subtitle="Volumen de desvinculaciones por mes en el periodo filtrado"
+    >
+      {points.length === 0 ? (
+        <EmptyState label="Sin datos suficientes para construir una serie temporal." />
+      ) : (
+        <div className="h-[260px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={points} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+              <defs>
+                <linearGradient id="exitFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-chart-info-bold)" stopOpacity={0.32} />
+                  <stop offset="100%" stopColor="var(--color-chart-info-bold)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid {...gridConfig} />
+              <XAxis
+                dataKey="label"
+                {...axisConfig}
+                tick={axisTickStyleCompact}
+                interval="preserveStartEnd"
+                minTickGap={20}
+              />
+              <YAxis
+                {...axisConfig}
+                tick={axisTickStyle}
+                allowDecimals={false}
+                tickFormatter={(value: number) => formatInteger(value)}
+              />
+              <Tooltip
+                cursor={tooltipCursorStyle}
+                content={
+                  <RechartsTooltipAdapter
+                    title={(label) => String(label)}
+                    mapPayload={(payload) => {
+                      const row = payload[0]?.payload as
+                        | { exits?: number; avgCompliance?: number | null }
+                        | undefined;
+                      return [
+                        { label: "Salidas", value: formatInteger(row?.exits ?? 0) },
+                        {
+                          label: "Cumplimiento prom.",
+                          value:
+                            row?.avgCompliance == null
+                              ? "—"
+                              : formatPercent(row.avgCompliance, {
+                                  input: "ratio",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 1,
+                                }),
+                        },
+                      ];
+                    }}
+                  />
+                }
+              />
+              <Area
+                type="monotone"
+                dataKey="exits"
+                stroke="var(--color-chart-info-bold)"
+                strokeWidth={2}
+                fill="url(#exitFill)"
+                isAnimationActive={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </ChartSurface>
+  );
+}
+
+/**
+ * `BarChart` vertical canon — alternativa al `BarListCard` para reflejar
+ * jerarquía cuantitativa con ejes y tooltip Recharts. Útil para top-N motivos.
+ */
+export function ExitVerticalBarCard({
+  title,
+  subtitle,
+  groups,
+  onSelect,
+  colorOffset = 0,
+}: {
+  title: string;
+  subtitle?: string;
+  groups: ExitGroup[];
+  onSelect: (group: ExitGroup) => void;
+  colorOffset?: number;
+}) {
+  const data = groups.map((group, index) => ({
+    label: group.label,
+    short: group.label.length > 12 ? `${group.label.slice(0, 12)}…` : group.label,
+    count: group.count,
+    avgCompliance: group.avgCompliance,
+    color: BAR_COLORS[(index + colorOffset) % BAR_COLORS.length] ?? "var(--color-chart-info-bold)",
+    payload: group,
+  }));
+
+  return (
+    <ChartSurface title={title} subtitle={subtitle}>
+      {data.length === 0 ? (
+        <EmptyState label="Sin datos para los filtros aplicados." />
+      ) : (
+        <div className="h-[260px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }} barCategoryGap={14}>
+              <CartesianGrid {...gridConfig} />
+              <XAxis
+                dataKey="short"
+                {...axisConfig}
+                tick={axisTickStyleCompact}
+                interval={0}
+                angle={-18}
+                textAnchor="end"
+                height={56}
+              />
+              <YAxis
+                {...axisConfig}
+                tick={axisTickStyle}
+                allowDecimals={false}
+                tickFormatter={(value: number) => formatInteger(value)}
+              />
+              <Tooltip
+                cursor={tooltipCursorStyle}
+                content={
+                  <RechartsTooltipAdapter
+                    title={(_label, payload) =>
+                      String((payload?.[0]?.payload as { label?: string } | undefined)?.label ?? "")
+                    }
+                    mapPayload={(payload) => {
+                      const row = payload[0]?.payload as
+                        | { count?: number; avgCompliance?: number | null }
+                        | undefined;
+                      return [
+                        { label: "Salidas", value: formatInteger(row?.count ?? 0) },
+                        {
+                          label: "Cumplimiento prom.",
+                          value:
+                            row?.avgCompliance == null
+                              ? "—"
+                              : formatPercent(row.avgCompliance, {
+                                  input: "ratio",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 0,
+                                }),
+                        },
+                      ];
+                    }}
+                  />
+                }
+              />
+              <Bar
+                dataKey="count"
+                radius={[8, 8, 0, 0]}
+                cursor="pointer"
+                onClick={(payload) => {
+                  const group = (payload as { payload?: ExitGroup })?.payload;
+                  if (group) onSelect(group);
+                }}
+              >
+                {data.map((point) => (
+                  <Cell key={point.label} fill={point.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </ChartSurface>
+  );
+}
+
+/**
+ * Scatter de antigüedad (meses) vs cumplimiento (%) por persona. Cada punto
+ * = una desvinculación. Color por bucket de cumplimiento — útil para detectar
+ * cuadrantes (alto cumplimiento + corta antigüedad, baja en larga, etc.).
+ */
+export function ExitScatterCard({ rows }: { rows: TalentoExitRecord[] }) {
+  const points = useMemo(
+    () =>
+      rows
+        .filter(
+          (row) =>
+            typeof row.activeMonths === "number"
+            && typeof row.cumplimiento === "number",
+        )
+        .map((row) => {
+          const cumplimiento = row.cumplimiento as number;
+          const tone = getComplianceTone(cumplimiento);
+          const color =
+            tone === "success"
+              ? "var(--color-chart-success-bold)"
+              : tone === "warning"
+                ? "var(--color-chart-warning)"
+                : tone === "danger"
+                  ? "var(--color-chart-danger)"
+                  : "var(--color-chart-neutral)";
+          return {
+            x: row.activeMonths as number,
+            y: cumplimiento,
+            personName: row.personName,
+            exitReason: row.exitReason ?? "Sin dato",
+            color,
+          };
+        }),
+    [rows],
+  );
+
+  return (
+    <ChartSurface
+      title="Antigüedad vs cumplimiento"
+      subtitle="Cada punto = una salida. Color por umbral de cumplimiento (verde ≥100%, ámbar ≥90%, rojo <90%)"
+    >
+      {points.length === 0 ? (
+        <EmptyState label="Sin pares (antigüedad, cumplimiento) suficientes." />
+      ) : (
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 12, right: 16, left: 0, bottom: 12 }}>
+              <CartesianGrid {...gridConfig} />
+              <XAxis
+                dataKey="x"
+                type="number"
+                name="Antigüedad"
+                {...axisConfig}
+                tick={axisTickStyleCompact}
+                tickFormatter={(value: number) => `${formatDecimal(value, 0)} m`}
+              />
+              <YAxis
+                dataKey="y"
+                type="number"
+                name="Cumplimiento"
+                {...axisConfig}
+                tick={axisTickStyle}
+                tickFormatter={(value: number) =>
+                  formatPercent(value, {
+                    input: "ratio",
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })
+                }
+              />
+              <ZAxis range={[40, 80]} />
+              <Tooltip
+                cursor={{ strokeDasharray: "3 3", stroke: "var(--color-border)" }}
+                content={
+                  <RechartsTooltipAdapter
+                    title={(_label, payload) =>
+                      String(
+                        (payload?.[0]?.payload as { personName?: string } | undefined)?.personName
+                          ?? "",
+                      )
+                    }
+                    mapPayload={(payload) => {
+                      const row = payload[0]?.payload as
+                        | {
+                            x?: number;
+                            y?: number;
+                            exitReason?: string;
+                          }
+                        | undefined;
+                      return [
+                        {
+                          label: "Antigüedad",
+                          value: row?.x == null ? "—" : `${formatDecimal(row.x, 1)} meses`,
+                        },
+                        {
+                          label: "Cumplimiento",
+                          value:
+                            row?.y == null
+                              ? "—"
+                              : formatPercent(row.y, {
+                                  input: "ratio",
+                                  minimumFractionDigits: 0,
+                                  maximumFractionDigits: 1,
+                                }),
+                        },
+                        { label: "Motivo", value: row?.exitReason ?? "—" },
+                      ];
+                    }}
+                  />
+                }
+              />
+              <Scatter data={points} fill="var(--color-chart-info-bold)" isAnimationActive={false}>
+                {points.map((point, index) => (
+                  <Cell key={index} fill={point.color} fillOpacity={0.7} />
+                ))}
+              </Scatter>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </ChartSurface>
+  );
 }

@@ -255,6 +255,10 @@ const hugeFileAllowlist = new Set([
   "src/modules/laboratorio/components/laboratorio-tipos-page.tsx",
   "src/modules/postcosecha/components/__tests__/balanzas-table-metrics.test.ts",
   "src/modules/talento-humano/seguimientos/components/seguimientos-indicador-explorer.tsx",
+  // Componente de charts de Desvinculación (post-AUD-19): incluye 5 charts canon
+  // (BarList, Donut, Contingency, ScatterPlot, AreaTimeSeries, VerticalBar) más
+  // helpers de tonos y matrices de TS. Mantenerlo unificado por dominio TTHH.
+  "src/modules/talento-humano/components/desvinculacion-charts.tsx",
   // Lib del explorador Colaboradores (AUD-20): server-only loader con 6 cargadores
   // por sección + helper de fallback de métricas para activos. Se mantiene
   // unificado porque comparte tipos y patrones de queries entre cargadores.
