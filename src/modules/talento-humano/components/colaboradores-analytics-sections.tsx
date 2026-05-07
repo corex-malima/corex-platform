@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import type React from "react";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -535,21 +538,67 @@ function NumCell({
 
 // ─── Sección Ausentismo ──────────────────────────────────────────────────────
 
+/**
+ * Etiqueta corta y tono canon por código de actividad de ausentismo.
+ * Se filtra a `AJH`, `L`, `PTH` en el server (server-only).
+ */
+const ABSENCE_ACTIVITY_META: Record<string, { fallbackName: string; color: string }> = {
+  AJH: {
+    fallbackName: "Atrasos justificados",
+    color: "var(--color-chart-warning)",
+  },
+  L: {
+    fallbackName: "Faltas",
+    color: "var(--color-chart-danger)",
+  },
+  PTH: {
+    fallbackName: "Permisos con descuento",
+    color: "var(--color-chart-info-bold)",
+  },
+};
+
+function activityLabel(activityId: string | null, activityName: string | null): string {
+  const meta = activityId ? ABSENCE_ACTIVITY_META[activityId] : null;
+  return activityName ?? meta?.fallbackName ?? activityId ?? "Sin actividad";
+}
+
+function activityColor(activityId: string | null, fallbackIndex: number): string {
+  const meta = activityId ? ABSENCE_ACTIVITY_META[activityId] : null;
+  if (meta) return meta.color;
+  const palette = [
+    "var(--color-chart-info-bold)",
+    "var(--color-chart-warning)",
+    "var(--color-chart-danger)",
+    "var(--color-chart-success-bold)",
+  ];
+  return palette[fallbackIndex % palette.length]!;
+}
+
 export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
   const grouped = useMemo(() => {
-    const map = new Map<string, { hours: number; rows: AbsenteeismData["rows"] }>();
+    const map = new Map<string, { hours: number; name: string; rows: AbsenteeismData["rows"] }>();
     for (const row of data.rows) {
-      const key = row.activityId ?? "Sin actividad";
-      const item = map.get(key) ?? { hours: 0, rows: [] };
+      const key = row.activityId ?? "—";
+      const item = map.get(key) ?? {
+        hours: 0,
+        name: activityLabel(row.activityId, row.activityName),
+        rows: [],
+      };
       item.hours += row.absenceHours;
       item.rows.push(row);
       map.set(key, item);
     }
     return Array.from(map.entries())
-      .map(([activityId, item]) => ({ activityId, ...item }))
+      .map(([activityId, item], index) => ({
+        activityId,
+        ...item,
+        color: activityColor(activityId === "—" ? null : activityId, index),
+      }))
       .sort((a, b) => b.hours - a.hours);
   }, [data.rows]);
-  const [selectedActivity, setSelectedActivity] = useState(grouped[0]?.activityId ?? null);
+  const [selectedActivity, setSelectedActivity] = useState<string | null>(
+    grouped[0]?.activityId ?? null,
+  );
   const active = grouped.find((item) => item.activityId === selectedActivity) ?? grouped[0] ?? null;
   const totalHours = data.totalHours;
 
@@ -562,84 +611,218 @@ export function AbsenteeismSection({ data }: { data: AbsenteeismData }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <KpiGrid className="grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
+        <KpiGrid className="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
           <MetricTile
             label="% Ausentismo"
             value={pct(data.metrics?.pctAbsTotal)}
-            hint="faltas, atrasos y permisos"
+            hint="AJH + L + PTH sobre el total trabajado"
           />
-          <MetricTile label="% H. Rendimiento" value={pct(data.metrics?.pctActualHoursRend)} />
           <MetricTile label="% H. Normales" value={pct(data.metrics?.pctActualHoursHn)} />
-          <MetricTile label="Horas ausentes" value={flex(totalHours)} />
+          <MetricTile label="% H. Rendimiento" value={pct(data.metrics?.pctActualHoursRend)} />
+          <MetricTile
+            label="Horas ausentes"
+            value={flex(totalHours)}
+            hint={`${grouped.length} categoría(s)`}
+          />
         </KpiGrid>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="space-y-3">
-            {grouped.length === 0 ? (
-              <EmptyState label="Sin registros de ausentismo." />
-            ) : null}
-            {grouped.map((item) => {
-              const isActive = active?.activityId === item.activityId;
-              const widthRatio = totalHours > 0 ? Math.min(100, (item.hours / totalHours) * 100) : 0;
-              return (
-                <button
-                  key={item.activityId}
-                  type="button"
-                  onClick={() => setSelectedActivity(item.activityId)}
-                  aria-pressed={isActive}
-                  className={cn(
-                    "w-full rounded-[18px] border p-3 text-left transition",
-                    isActive
-                      ? "border-[var(--color-chart-info-bold)] bg-[color-mix(in_srgb,var(--color-chart-info)_18%,transparent)]"
-                      : "border-border/60 bg-background/70 hover:border-border",
-                  )}
-                >
-                  <div className="flex justify-between gap-3 text-sm">
-                    <span className="font-semibold">{item.activityId}</span>
-                    <span className="tabular-nums">{flex(item.hours)} h</span>
-                  </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${widthRatio}%`,
-                        background: "var(--color-chart-info-bold)",
-                      }}
-                    />
-                  </div>
-                </button>
-              );
-            })}
+
+        {grouped.length === 0 ? (
+          <EmptyState label="Sin registros de ausentismo (AJH, L, PTH)." />
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+            <AbsenceBarChart
+              groups={grouped}
+              activeId={active?.activityId ?? null}
+              onSelect={setSelectedActivity}
+            />
+            <AbsenceDetailTable
+              activityId={active?.activityId ?? null}
+              activityName={active?.name ?? null}
+              color={active?.color ?? "var(--color-chart-info-bold)"}
+              rows={active?.rows ?? []}
+              totalHours={active?.hours ?? 0}
+              shareOfTotal={totalHours > 0 && active ? active.hours / totalHours : null}
+            />
           </div>
-          <ScrollFadeTable className="bg-background/70" innerClassName="rounded-[16px]">
-            <table className="min-w-[420px] text-sm">
-              <thead>
-                <tr>
-                  <th className="bg-background/95 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Fecha
-                  </th>
-                  <th className="bg-background/95 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Horas
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {(active?.rows ?? []).map((row, index) => (
-                  <tr
-                    key={`${row.eventDate}-${row.workDate}-${index}`}
-                    className="border-t border-border/40"
-                  >
-                    <td className="px-4 py-3">{dateVal(row.workDate ?? row.eventDate)}</td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                      {flex(row.absenceHours)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollFadeTable>
-        </div>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * BarChart horizontal interactivo de categorías de ausentismo. Click en una
+ * barra selecciona la categoría y actualiza la tabla de detalle a la derecha.
+ */
+function AbsenceBarChart({
+  groups,
+  activeId,
+  onSelect,
+}: {
+  groups: Array<{
+    activityId: string;
+    name: string;
+    hours: number;
+    color: string;
+    rows: AbsenteeismData["rows"];
+  }>;
+  activeId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const data = groups.map((group) => ({
+    id: group.activityId,
+    label: group.name,
+    hours: group.hours,
+    color: group.color,
+    isActive: group.activityId === activeId,
+  }));
+  const maxLabel = data.reduce((max, point) => Math.max(max, point.label.length), 0);
+  const yWidth = Math.max(96, Math.min(180, maxLabel * 7));
+
+  return (
+    <ChartSurface
+      title="Distribución por categoría"
+      subtitle="Horas acumuladas por tipo. Click en una barra para ver detalle."
+    >
+      <div className="h-[260px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+            barCategoryGap={12}
+          >
+            <CartesianGrid {...gridConfig} horizontal={false} vertical />
+            <XAxis
+              type="number"
+              {...axisConfig}
+              tick={axisTickStyleCompact}
+              tickFormatter={(value: number) => formatFlexibleNumber(value)}
+            />
+            <YAxis
+              type="category"
+              dataKey="label"
+              width={yWidth}
+              {...axisConfig}
+              tick={axisTickStyle}
+            />
+            <Tooltip
+              cursor={tooltipCursorStyle}
+              content={
+                <RechartsTooltipAdapter
+                  title={(label) => String(label)}
+                  mapPayload={(payload) => {
+                    const row = payload[0]?.payload as
+                      | { hours?: number; id?: string }
+                      | undefined;
+                    return [
+                      { label: "Horas", value: flex(row?.hours ?? null) },
+                      { label: "Código", value: row?.id ?? "—" },
+                    ];
+                  }}
+                />
+              }
+            />
+            <Bar
+              dataKey="hours"
+              radius={[0, 8, 8, 0]}
+              cursor="pointer"
+              onClick={(payload) => {
+                const id = (payload as { id?: string })?.id;
+                if (id) onSelect(id);
+              }}
+            >
+              {data.map((point) => (
+                <Cell
+                  key={point.id}
+                  fill={point.color}
+                  fillOpacity={point.isActive ? 1 : 0.55}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartSurface>
+  );
+}
+
+/**
+ * Tabla de fechas para la categoría seleccionada en el BarChart.
+ */
+function AbsenceDetailTable({
+  activityId,
+  activityName,
+  color,
+  rows,
+  totalHours,
+  shareOfTotal,
+}: {
+  activityId: string | null;
+  activityName: string | null;
+  color: string;
+  rows: AbsenteeismData["rows"];
+  totalHours: number;
+  shareOfTotal: number | null;
+}) {
+  return (
+    <ChartSurface
+      title={activityName ?? "Detalle"}
+      subtitle={
+        activityId
+          ? `${flex(totalHours)} h · ${pct(shareOfTotal)} del total · ${activityId}`
+          : "Selecciona una categoría"
+      }
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <span
+          className="size-2.5 rounded-full"
+          style={{ background: color }}
+          aria-hidden="true"
+        />
+        <span className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
+          Detalle por fecha · últimas {rows.length} entradas
+        </span>
+      </div>
+      <ScrollFadeTable className="bg-background/70" innerClassName="rounded-[16px]">
+        <table className="min-w-[320px] text-sm">
+          <thead>
+            <tr>
+              <th className="bg-background/95 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Fecha
+              </th>
+              <th className="bg-background/95 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Horas
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={2}
+                  className="px-4 py-5 text-center text-sm text-muted-foreground"
+                >
+                  Sin registros para esta categoría.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row, index) => (
+                <tr
+                  key={`${row.eventDate}-${row.workDate}-${index}`}
+                  className="border-t border-border/40"
+                >
+                  <td className="px-4 py-3">{dateVal(row.workDate ?? row.eventDate)}</td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                    {flex(row.absenceHours)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </ScrollFadeTable>
+    </ChartSurface>
   );
 }
 

@@ -87,6 +87,7 @@ export type CollaboratorAbsenteeismRow = {
   eventDate: string | null;
   workDate: string | null;
   activityId: string | null;
+  activityName: string | null;
   absenceHours: number;
 };
 
@@ -505,17 +506,23 @@ async function loadPerformance(personId: string) {
 
 async function loadAbsenteeism(personId: string) {
   const [result, metricsResult] = await Promise.all([
-    query<{ event_date: DbDate; work_date: DbDate; activity_id: string | null; absence_hours: unknown }>(
+    query<{ event_date: DbDate; work_date: DbDate; activity_id: string | null; activity_name: string | null; absence_hours: unknown }>(
     `
     SELECT
-      event_date,
-      work_date,
-      activity_id,
-      SUM(absence_hours)::numeric AS absence_hours
-    FROM slv.prod_fact_absenteeism_cur
-    WHERE person_id = $1
-    GROUP BY event_date, work_date, activity_id
-    ORDER BY COALESCE(work_date, event_date) DESC NULLS LAST
+      a.event_date,
+      a.work_date,
+      a.activity_id,
+      MAX(act.activity_name) AS activity_name,
+      SUM(a.absence_hours)::numeric AS absence_hours
+    FROM slv.prod_fact_absenteeism_cur a
+    LEFT JOIN slv.prod_dim_activity_profile_scd2 act
+      ON act.activity_id = a.activity_id
+      AND act.is_current = true
+      AND act.is_valid = true
+    WHERE a.person_id = $1
+      AND a.activity_id IN ('AJH', 'L', 'PTH')
+    GROUP BY a.event_date, a.work_date, a.activity_id
+    ORDER BY COALESCE(a.work_date, a.event_date) DESC NULLS LAST
     LIMIT 500
     `,
     [personId],
@@ -535,6 +542,7 @@ async function loadAbsenteeism(personId: string) {
     eventDate: toDate(row.event_date),
     workDate: toDate(row.work_date),
     activityId: toText(row.activity_id),
+    activityName: toText(row.activity_name),
     absenceHours: toNumber(row.absence_hours),
   }));
   return {

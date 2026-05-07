@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { BriefcaseBusiness, CalendarClock, HeartPulse, UserRound } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, HeartPulse, MapPin, UserRound } from "lucide-react";
 import useSWRImmutable from "swr/immutable";
 
 import { fetchJson } from "@/lib/fetch-json";
@@ -157,7 +157,7 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
 
   return (
     <div className="space-y-4">
-      <KpiGrid className="grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
+      <KpiGrid className="grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">
         <MetricTile
           label="Ingresos"
           value={formatInteger(p.entryCount)}
@@ -184,22 +184,38 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
           hint="faltas, atrasos y permisos"
         />
       </KpiGrid>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-3">
         <InfoCard title="Datos personales" icon={<UserRound className="size-4" aria-hidden="true" />}>
           <InfoField label="Género" value={p.gender} />
           <InfoField label="Estado civil" value={p.maritalStatus} />
           <InfoField label="Nacimiento" value={dateVal(p.birthDate)} />
+          <InfoField label="Lugar nacimiento" value={p.birthPlace} />
           <InfoField label="Nacionalidad" value={p.nationality} />
           <InfoField label="Educación" value={p.educationTitle} />
+          <InfoField label="Hijos" value={p.childrenCount == null ? "—" : formatInteger(p.childrenCount)} />
+          <InfoField
+            label="Dependientes"
+            value={p.dependentsCount == null ? "—" : formatInteger(p.dependentsCount)}
+          />
           <InfoField label="Discapacidad" value={boolVal(p.disabledFlag)} />
         </InfoCard>
         <InfoCard title="Datos laborales" icon={<BriefcaseBusiness className="size-4" aria-hidden="true" />}>
           <InfoField label="Empresa" value={p.employerName} />
           <InfoField label="Tipo empleado" value={p.employeeType} />
           <InfoField label="Contrato" value={p.contractType} />
+          <InfoField label="Clasificación" value={p.jobClassificationCode} />
+          <InfoField label="Código finca" value={p.farmCode} />
+          <InfoField label="T. social" value={p.associatedWorkerName} />
           <InfoField label="Pago rendimiento" value={boolVal(p.performancePayApplicable)} />
           <InfoField label="Última entrada" value={dateVal(p.lastEntryDate)} />
           <InfoField label="Última salida" value={dateVal(p.lastExitDate)} />
+        </InfoCard>
+        <InfoCard title="Contacto" icon={<MapPin className="size-4" aria-hidden="true" />}>
+          <InfoField label="Email" value={p.email} className="sm:col-span-2" />
+          <InfoField label="Teléfono" value={p.phoneNumber} />
+          <InfoField label="Ciudad" value={p.city} />
+          <InfoField label="Parroquia" value={p.parish} />
+          <InfoField label="Dirección" value={p.address} className="sm:col-span-2" />
         </InfoCard>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
