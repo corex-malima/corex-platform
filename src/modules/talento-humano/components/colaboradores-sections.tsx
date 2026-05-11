@@ -1,10 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { BriefcaseBusiness, CalendarClock, HeartPulse, MapPin, UserRound } from "lucide-react";
-import useSWRImmutable from "swr/immutable";
+import { useState, type ReactNode } from "react";
+import { BriefcaseBusiness, CalendarClock, MapPin, UserRound } from "lucide-react";
 
-import { fetchJson } from "@/lib/fetch-json";
 import type { CollaboratorDetailPayload } from "@/lib/talento-humano-colaboradores";
 import {
   AbsenteeismSection,
@@ -16,6 +14,7 @@ import { InfoField } from "@/shared/data-display/info-field";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { KpiGrid } from "@/shared/layout/filter-panel";
 import { formatDate, formatFlexibleNumber, formatInteger, formatPercent } from "@/shared/lib/format";
+import { PersonMedicalPanel } from "@/shared/overlays/person-medical-panel";
 import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
 import { StandardTable, StandardTd, StandardTh } from "@/shared/tables/standard-table";
 import { Badge } from "@/shared/ui/badge";
@@ -28,30 +27,6 @@ export type CollaboratorTabKey =
   | "absenteeism"
   | "exits"
   | "followups";
-
-type MedicalPayload = {
-  summary: {
-    examsCount: number;
-    lastExamDate: string | null;
-    lastExamType: string | null;
-    availableMarkerCount: number;
-    alertExamCount: number;
-  };
-  exams: Array<{
-    examId: number;
-    date: string;
-    type: string;
-    alertsCount: number;
-    markers: Array<{
-      field: string;
-      name: string;
-      value: number | null;
-      unit: string;
-      status: string;
-      range: string;
-    }>;
-  }>;
-};
 
 export function initials(name: string) {
   return name
@@ -127,7 +102,9 @@ export function TabContent({
     ) : (
       <EmptyState label="Sin permiso o sin datos de rendimiento." />
     );
-  if (tab === "medical") return <MedicalSection personId={detail.profile.personId} />;
+  if (tab === "medical") {
+    return <MedicalSection personId={detail.profile.personId} fallbackName={detail.profile.personName} />;
+  }
   if (tab === "absenteeism")
     return detail.absenteeism ? (
       <AbsenteeismSection data={detail.absenteeism} />
@@ -219,7 +196,7 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
         </InfoCard>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
-        <HistoryCard title="Historial de área" headers={["Área", "Desde", "Hasta", "Actual"]}>
+        <HistoryCard title="Historial de área" headers={["Área", "Desde", "Hasta", "Antigüedad", "Actual"]}>
           {areaHistory.slice(0, 12).map((event) => (
             <tr
               key={`area-${event.areaId ?? "x"}-${event.validFrom ?? "open"}-${event.validTo ?? "open"}`}
@@ -228,6 +205,7 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
               <StandardTd>{event.areaName ?? event.areaId ?? "—"}</StandardTd>
               <StandardTd>{dateVal(event.validFrom)}</StandardTd>
               <StandardTd>{dateVal(event.validTo)}</StandardTd>
+              <StandardTd>{event.tenureLabel ?? "—"}</StandardTd>
               <StandardTd>
                 {event.isCurrent ? (
                   <Badge variant="success">Actual</Badge>
@@ -238,7 +216,7 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
             </tr>
           ))}
         </HistoryCard>
-        <HistoryCard title="Ingresos y salidas" headers={["Desde", "Hasta", "Actual"]}>
+        <HistoryCard title="Ingresos y salidas" headers={["Desde", "Hasta", "Antigüedad", "Actual"]}>
           {entryHistory.slice(0, 12).map((event) => (
             <tr
               key={`entry-${event.validFrom ?? "open"}-${event.validTo ?? "open"}`}
@@ -246,6 +224,7 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
             >
               <StandardTd>{dateVal(event.validFrom)}</StandardTd>
               <StandardTd>{dateVal(event.validTo)}</StandardTd>
+              <StandardTd>{event.tenureLabel ?? "—"}</StandardTd>
               <StandardTd>
                 {event.isCurrent ? (
                   <Badge variant="success">Vigente</Badge>
@@ -262,75 +241,8 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
   );
 }
 
-function MedicalSection({ personId }: { personId: string }) {
-  const { data, error, isLoading } = useSWRImmutable(
-    `/api/medical/person/${encodeURIComponent(personId)}`,
-    (url) => fetchJson<MedicalPayload>(url, "No se pudo cargar la ficha médica."),
-  );
-  const latest = data?.exams[0] ?? null;
-  if (isLoading) return <EmptyState label="Cargando ficha médica." />;
-  if (error) return <EmptyState label="No se pudo cargar la ficha médica." />;
-
-  return (
-    <div className="space-y-4">
-      <KpiGrid className="grid-cols-[repeat(auto-fit,minmax(190px,1fr))]">
-        <MetricTile
-          label="Exámenes"
-          value={formatInteger(data?.summary.examsCount ?? 0)}
-          hint={`Último: ${dateVal(data?.summary.lastExamDate)}`}
-        />
-        <MetricTile label="Tipo último" value={data?.summary.lastExamType ?? "—"} />
-        <MetricTile
-          label="Marcadores"
-          value={formatInteger(data?.summary.availableMarkerCount ?? 0)}
-        />
-        <MetricTile
-          label="Alertas"
-          value={formatInteger(data?.summary.alertExamCount ?? 0)}
-        />
-      </KpiGrid>
-      <Card className="border-border/70 bg-card/84">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <HeartPulse className="size-4" aria-hidden="true" />
-            Últimos marcadores
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!latest ? (
-            <EmptyState label="Sin exámenes médicos registrados." />
-          ) : (
-            <ScrollFadeTable className="bg-background/70" innerClassName="rounded-[16px]">
-              <StandardTable className="min-w-[640px]">
-                <thead>
-                  <tr>
-                    <StandardTh>Marcador</StandardTh>
-                    <StandardTh align="right">Valor</StandardTh>
-                    <StandardTh>Unidad</StandardTh>
-                    <StandardTh>Estado</StandardTh>
-                    <StandardTh>Rango</StandardTh>
-                  </tr>
-                </thead>
-                <tbody>
-                  {latest.markers.slice(0, 12).map((marker) => (
-                    <tr key={marker.field} className="border-t border-border/40">
-                      <StandardTd>{marker.name}</StandardTd>
-                      <StandardTd align="right" className="font-semibold">
-                        {marker.value == null ? "—" : formatFlexibleNumber(marker.value)}
-                      </StandardTd>
-                      <StandardTd>{marker.unit}</StandardTd>
-                      <StandardTd>{marker.status}</StandardTd>
-                      <StandardTd>{marker.range}</StandardTd>
-                    </tr>
-                  ))}
-                </tbody>
-              </StandardTable>
-            </ScrollFadeTable>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+function MedicalSection({ personId, fallbackName }: { personId: string; fallbackName: string }) {
+  return <PersonMedicalPanel personId={personId} fallbackName={fallbackName} />;
 }
 
 function ExitsSection({ rows }: { rows: NonNullable<CollaboratorDetailPayload["exits"]> }) {
@@ -391,40 +303,74 @@ function FollowupsSection({
 }: {
   rows: NonNullable<CollaboratorDetailPayload["followups"]>;
 }) {
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const selected = rows.find((followup) => followup.eventId === selectedEventId) ?? rows[0] ?? null;
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {rows.length === 0 ? <EmptyState label="Sin seguimientos registrados." /> : null}
-      {rows.map((followup) => (
-        <Card key={followup.eventId} className="border-border/70 bg-card/84">
+      {rows.length > 0 ? (
+        <Card className="border-border/70 bg-card/84">
+          <CardHeader>
+            <CardTitle className="text-base">Seguimientos registrados</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {rows.map((followup) => {
+                const active = selected?.eventId === followup.eventId;
+                return (
+                  <button
+                    key={followup.eventId}
+                    type="button"
+                    onClick={() => setSelectedEventId(followup.eventId)}
+                    className={[
+                      "min-w-[220px] rounded-2xl border px-4 py-3 text-left text-sm transition",
+                      active
+                        ? "border-primary/40 bg-primary text-primary-foreground shadow-sm"
+                        : "border-border/70 bg-background/70 hover:border-primary/30 hover:bg-muted/40",
+                    ].join(" ")}
+                  >
+                    <span className="block font-semibold">{dateVal(followup.followUpDate)}</span>
+                    <span className="mt-1 block text-xs opacity-75">
+                      {followup.followUpCode} · {followup.followupRouteCode} · v{followup.responseVersion}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {selected ? (
+        <Card className="border-border/70 bg-card/84">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{dateVal(followup.followUpDate)}</Badge>
-              <Badge variant="secondary">{followup.followupRouteCode}</Badge>
-              <Badge variant="outline">v{followup.responseVersion}</Badge>
+              <Badge variant="outline">{dateVal(selected.followUpDate)}</Badge>
+              <Badge variant="secondary">{selected.followupRouteCode}</Badge>
+              <Badge variant="outline">v{selected.responseVersion}</Badge>
             </div>
-            <CardTitle className="text-base">Seguimiento {followup.followUpCode}</CardTitle>
+            <CardTitle className="text-base">Seguimiento {selected.followUpCode}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {followup.sections.map((section) => (
-              <div
-                key={section.title}
-                className="rounded-[18px] border border-border/60 bg-background/70 p-3"
-              >
-                <p className="text-sm font-semibold">{section.title}</p>
+            {selected.sections.map((section) => (
+              <div key={section.title} className="rounded-[18px] border border-border/60 bg-background/70 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold">{section.title}</p>
+                  <Badge variant="outline" className="rounded-full">
+                    {section.items.filter((item) => item.value).length} respuestas
+                  </Badge>
+                </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {section.items.map((item) => (
-                    <InfoField
-                      key={`${section.title}-${item.label}`}
-                      label={item.label}
-                      value={item.value}
-                    />
+                    <InfoField key={`${section.title}-${item.label}`} label={item.label} value={item.value} />
                   ))}
                 </div>
               </div>
             ))}
           </CardContent>
         </Card>
-      ))}
+      ) : null}
     </div>
   );
 }

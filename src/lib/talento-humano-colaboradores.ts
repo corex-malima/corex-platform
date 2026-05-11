@@ -3,6 +3,7 @@ import "server-only";
 import { query } from "@/lib/db";
 import { loadFollowupCatalogs } from "@/lib/talento-humano-seguimientos-catalogs";
 import { getFollowupResponseDetail, listFollowupResponses } from "@/lib/talento-humano-seguimientos-responses";
+import { calculateCollaboratorPerformanceTotals, formatTenureLabel } from "@/lib/talento-humano-colaboradores-utils";
 import type { EmployeeFollowupResponseDetail } from "@/modules/talento-humano/seguimientos/server/types";
 
 type DbDate = string | Date | null;
@@ -58,6 +59,8 @@ export type CollaboratorAreaEvent = {
   areaGeneral: string | null;
   validFrom: string | null;
   validTo: string | null;
+  tenureDays: number | null;
+  tenureLabel: string | null;
   isCurrent: boolean;
 };
 
@@ -65,6 +68,9 @@ export type CollaboratorPerformanceWeek = {
   isoWeekId: string;
   actualHoursHn: number;
   actualHoursRend: number;
+  effectiveHoursRend: number;
+  actualHoursForRend: number;
+  rendMinWeightedBase: number;
   totalActualHours: number;
   rendimiento: number | null;
   rendimientoMin: number | null;
@@ -166,12 +172,6 @@ function percentToRatio(value: unknown): number | null {
   if (value == null) return null;
   const numeric = toNumber(value);
   return numeric / 100;
-}
-
-function weightedRatio(rows: Array<{ value: number | null; weight: number }>) {
-  const denominator = rows.reduce((sum, row) => sum + (row.value === null ? 0 : row.weight), 0);
-  if (denominator <= 0) return null;
-  return rows.reduce((sum, row) => sum + (row.value === null ? 0 : row.value * row.weight), 0) / denominator;
 }
 
 function searchTokens(q: string) {
@@ -395,12 +395,16 @@ async function loadProfile(personId: string): Promise<CollaboratorProfile | null
 async function loadAreaEvents(personId: string): Promise<CollaboratorAreaEvent[]> {
   const result = await query<{
     event_type: string; area_id: string | null; area_name: string | null; area_general: string | null;
-    valid_from: DbDate; valid_to: DbDate; is_current: boolean;
+    valid_from: DbDate; valid_to: DbDate; tenure_days: string | number | null; is_current: boolean;
   }>(
     `
     SELECT e.event_type, e.area_id, ar.area_name, ar.area_general,
       to_char(e.valid_from, 'YYYY-MM-DD') AS valid_from,
       to_char(e.valid_to, 'YYYY-MM-DD') AS valid_to,
+      CASE
+        WHEN e.valid_from IS NULL THEN NULL
+        ELSE GREATEST((COALESCE(e.valid_to::date, CURRENT_DATE) - e.valid_from::date), 0)
+      END AS tenure_days,
       e.is_current
     FROM slv.tthh_asgn_person_area_event_scd2 e
     LEFT JOIN slv.camp_dim_area_profile_scd2 ar
@@ -420,6 +424,8 @@ async function loadAreaEvents(personId: string): Promise<CollaboratorAreaEvent[]
     areaGeneral: toText(row.area_general),
     validFrom: toDate(row.valid_from),
     validTo: toDate(row.valid_to),
+    tenureDays: row.tenure_days == null ? null : toNumber(row.tenure_days),
+    tenureLabel: formatTenureLabel(row.tenure_days == null ? null : toNumber(row.tenure_days)),
     isCurrent: row.is_current,
   }));
 }
@@ -432,7 +438,6 @@ async function loadPerformance(personId: string) {
       FROM gld.prod_rend_adj_cur
       WHERE person_id = $1
       ORDER BY iso_week_id DESC
-      LIMIT 52
       `,
       [personId],
     ),
@@ -455,7 +460,6 @@ async function loadPerformance(personId: string) {
       WHERE h.person_id = $1
       GROUP BY c.iso_week_id, h.event_date, h.activity_name, h.activity_type, h.unit_of_measure
       ORDER BY c.iso_week_id DESC NULLS LAST, h.event_date DESC NULLS LAST, h.activity_name
-      LIMIT 800
       `,
       [personId],
     ),
@@ -467,10 +471,14 @@ async function loadPerformance(personId: string) {
     const totalActualHours = toNumber(row.total_actual_hours);
     const rendimiento = row.rend == null ? null : toNumber(row.rend);
     const rendimientoMin = row.rend_min == null ? null : toNumber(row.rend_min);
+    const effectiveHoursRend = rendimiento === null ? 0 : rendimiento * actualHoursRend;
     return {
       isoWeekId: String(row.iso_week_id),
       actualHoursHn,
       actualHoursRend,
+      effectiveHoursRend,
+      actualHoursForRend: actualHoursRend,
+      rendMinWeightedBase: rendimientoMin === null ? 0 : rendimientoMin * actualHoursRend,
       totalActualHours,
       rendimiento,
       rendimientoMin,
@@ -478,18 +486,11 @@ async function loadPerformance(personId: string) {
     };
   });
 
+  const calculatedTotals = calculateCollaboratorPerformanceTotals(weekly);
   const totals: CollaboratorPerformanceWeek = {
     isoWeekId: "TOTAL",
-    actualHoursHn: weekly.reduce((sum, row) => sum + row.actualHoursHn, 0),
-    actualHoursRend: weekly.reduce((sum, row) => sum + row.actualHoursRend, 0),
-    totalActualHours: weekly.reduce((sum, row) => sum + row.totalActualHours, 0),
-    rendimiento: weightedRatio(weekly.map((row) => ({ value: row.rendimiento, weight: row.actualHoursRend }))),
-    rendimientoMin: weightedRatio(weekly.map((row) => ({ value: row.rendimientoMin, weight: row.actualHoursRend }))),
-    cumplimiento: null,
+    ...calculatedTotals,
   };
-  totals.cumplimiento = totals.rendimiento !== null && totals.rendimientoMin && totals.rendimientoMin > 0
-    ? totals.rendimiento / totals.rendimientoMin
-    : null;
 
   const detail = detailResult.rows.map((row) => {
     const actualHours = toNumber(row.actual_hours);
@@ -819,4 +820,3 @@ export async function getCollaboratorDetail(
     followups,
   };
 }
-

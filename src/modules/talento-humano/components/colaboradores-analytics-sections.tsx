@@ -399,6 +399,12 @@ export function PerformanceSection({ data }: { data: PerformanceData }) {
                       <NumCell value={pct(rollup.pctHoursOnly)} />
                     </button>
 
+                    {weekOpen && rollup.activities.length === 0 ? (
+                      <div className="border-t border-border/30 bg-muted/16 px-14 py-4 text-sm text-muted-foreground">
+                        Sin detalle para esta semana.
+                      </div>
+                    ) : null}
+
                     {weekOpen
                       ? rollup.activities.map((activity) => {
                           const actKey = `${weekKey}::${activity.name}::${activity.unitOfMeasure}`;
@@ -823,4 +829,3 @@ function AbsenceDetailTable({
     </ChartSurface>
   );
 }
-
