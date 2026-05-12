@@ -11,25 +11,28 @@ import type {
 
 /**
  * Derivar ruta AGR/ADM desde el job_classification_code del DW.
- * AGRICOLA → AGR, ADMINISTRATIVO → ADM, fallback → AGR.
+ *
+ * Regla canon: **match perfecto sobre `job_classification_code`**.
+ *   - `AGRICOLA`       → AGR
+ *   - `ADMINISTRATIVO` → ADM
+ *   - cualquier otra cosa (NULL, vacío, "CHOFER", "SERVICIOS PRESTADOS", etc.) → `null`
+ *
+ * El loader filtra las filas con ruta `null` para que NO aparezcan en
+ * Seguimientos. `contract_type` se filtra adicionalmente en SQL para
+ * excluir `SERVICIOS PRESTADOS` (no son relación de dependencia).
+ *
+ * Antes esta función usaba `follow_up_type` como override y caía a AGR
+ * por default — eso etiquetaba mal personal administrativo. Ahora la
+ * única fuente de verdad es el perfil SCD2.
  */
 export function deriveFollowupRoute(
-  followUpType: string | null | undefined,
   jobClassificationCode: string | null | undefined,
-): "AGR" | "ADM" {
-  // Si el tipo del seguimiento lo indica explícitamente
-  if (followUpType) {
-    const t = followUpType.toUpperCase();
-    if (t.includes("ADM") || t === "ADMINISTRATIVO") return "ADM";
-    if (t.includes("AGR") || t === "AGRICOLA") return "AGR";
-  }
-  // Fallback a clasificación del perfil
-  if (jobClassificationCode) {
-    const c = jobClassificationCode.toUpperCase();
-    if (c === "ADMINISTRATIVO") return "ADM";
-    if (c === "AGRICOLA") return "AGR";
-  }
-  return "AGR";
+): "AGR" | "ADM" | null {
+  if (!jobClassificationCode) return null;
+  const c = jobClassificationCode.trim().toUpperCase();
+  if (c === "ADMINISTRATIVO") return "ADM";
+  if (c === "AGRICOLA") return "AGR";
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

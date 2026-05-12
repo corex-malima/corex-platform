@@ -166,21 +166,25 @@ describe("updateFollowupResponseSchema", () => {
 });
 
 describe("deriveFollowupRoute", () => {
-  it("deriva AGR desde AGRICOLA en job_classification_code", () => {
-    expect(deriveFollowupRoute(null, "AGRICOLA")).toBe("AGR");
+  it("deriva AGR desde AGRICOLA (match exacto)", () => {
+    expect(deriveFollowupRoute("AGRICOLA")).toBe("AGR");
+    expect(deriveFollowupRoute("  agricola  ")).toBe("AGR");
   });
 
-  it("deriva ADM desde ADMINISTRATIVO en job_classification_code", () => {
-    expect(deriveFollowupRoute(null, "ADMINISTRATIVO")).toBe("ADM");
+  it("deriva ADM desde ADMINISTRATIVO (match exacto)", () => {
+    expect(deriveFollowupRoute("ADMINISTRATIVO")).toBe("ADM");
+    expect(deriveFollowupRoute("administrativo")).toBe("ADM");
   });
 
-  it("deriva desde follow_up_type cuando esta disponible", () => {
-    expect(deriveFollowupRoute("ADM_SEGUIMIENTO", "AGRICOLA")).toBe("ADM");
-    expect(deriveFollowupRoute("AGR_TIPO_1", "ADMINISTRATIVO")).toBe("AGR");
+  it("devuelve null para clasificaciones distintas (CHOFER, SERVICIOS PRESTADOS, etc.)", () => {
+    expect(deriveFollowupRoute("CHOFER")).toBeNull();
+    expect(deriveFollowupRoute("SERVICIOS PRESTADOS")).toBeNull();
+    expect(deriveFollowupRoute("OTRO")).toBeNull();
   });
 
-  it("hace fallback a AGR cuando no hay datos", () => {
-    expect(deriveFollowupRoute(null, null)).toBe("AGR");
-    expect(deriveFollowupRoute(undefined, undefined)).toBe("AGR");
+  it("devuelve null cuando no hay job_classification_code", () => {
+    expect(deriveFollowupRoute(null)).toBeNull();
+    expect(deriveFollowupRoute(undefined)).toBeNull();
+    expect(deriveFollowupRoute("")).toBeNull();
   });
 });

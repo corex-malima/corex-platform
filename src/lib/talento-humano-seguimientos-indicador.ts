@@ -202,6 +202,8 @@ async function queryDwRows(filters: FollowupIndicatorFilters, overrides?: { year
     FROM gld.mv_tthh_asgn_followup_scd2 f
     JOIN slv.tthh_dim_person_profile_scd2 p
       ON p.person_id = f.person_id AND p.is_current = true AND p.is_valid = true
+      AND UPPER(TRIM(p.job_classification_code)) IN ('AGRICOLA','ADMINISTRATIVO')
+      AND COALESCE(UPPER(p.contract_type), '') NOT LIKE '%SERVICIOS PRESTADOS%'
     LEFT JOIN LATERAL (
       SELECT ap.area_name
       FROM slv.tthh_asgn_person_area_event_scd2 e
@@ -260,8 +262,10 @@ function aggregateRows(rows: DwRow[], registeredCodes: Set<string>, routeFilter:
   let totalRegistered = 0;
 
   for (const row of rows) {
-    const derivedRoute = deriveFollowupRoute(row.follow_up_type, row.job_classification_code);
-    if (routeValues.length > 0 && !routeValues.includes(derivedRoute ?? "")) continue;
+    const derivedRoute = deriveFollowupRoute(row.job_classification_code);
+    // Defense-in-depth: el SQL ya filtra AGRICOLA/ADMINISTRATIVO.
+    if (derivedRoute === null) continue;
+    if (routeValues.length > 0 && !routeValues.includes(derivedRoute)) continue;
 
     const isRegistered = registeredCodes.has(row.unique_follow_up_code);
     totalScheduled++;

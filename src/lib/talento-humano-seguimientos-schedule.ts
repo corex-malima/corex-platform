@@ -155,6 +155,8 @@ export async function loadScheduledFollowups(
       ON p.person_id = f.person_id
       AND p.is_current = true
       AND p.is_valid = true
+      AND UPPER(TRIM(p.job_classification_code)) IN ('AGRICOLA','ADMINISTRATIVO')
+      AND COALESCE(UPPER(p.contract_type), '') NOT LIKE '%SERVICIOS PRESTADOS%'
     LEFT JOIN LATERAL (
       SELECT e.area_id::text AS area_id, ap.area_name, ap.area_general
       FROM slv.tthh_asgn_person_area_event_scd2 e
@@ -221,7 +223,12 @@ export async function loadScheduledFollowups(
   // ── 3. Merge y derivación de ruta/estado ─────────────────────────────────
   return dwResult.rows
     .map((row) => {
-      const derivedRoute = deriveFollowupRoute(row.follow_up_type, row.job_classification_code);
+      const derivedRoute = deriveFollowupRoute(row.job_classification_code);
+
+      // Defense-in-depth: el SQL ya filtra AGRICOLA/ADMINISTRATIVO y descarta
+      // SERVICIOS PRESTADOS. Si por algún motivo llega un row con
+      // job_classification_code distinto (rotación SCD2, etc.), aquí se descarta.
+      if (derivedRoute === null) return null;
 
       const routeCodes = decodeMultiSelectValue(filters.route);
       if (routeCodes.length > 0 && !routeCodes.includes(derivedRoute)) {
