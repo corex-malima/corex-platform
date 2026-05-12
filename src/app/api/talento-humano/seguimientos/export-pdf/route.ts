@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/api-auth";
 import { handleApiError } from "@/lib/api-error";
 import { logEvent } from "@/lib/logger";
 import { getRequestId } from "@/lib/request-id";
+import { computeTenureDays, formatTenureLabel } from "@/lib/talento-humano-colaboradores-utils";
 import { loadScheduledFollowups } from "@/lib/talento-humano-seguimientos-schedule";
 import { followupFiltersSchema } from "@/lib/talento-humano-seguimientos-schemas";
 import {
@@ -105,11 +106,13 @@ function buildDataTex(rows: Awaited<ReturnType<typeof loadScheduledFollowups>>, 
     const fecha = tex(formatFollowupDate(row.followUpDate));
     const clasif = ROUTE_LABEL[row.derivedRoute] ?? tex(row.derivedRoute);
     const estado = tex(STATUS_LABEL[row.status] ?? row.status);
-    return `  ${nombre} & ${area} & ${fecha} & ${clasif} & ${estado} \\\\`;
+    const tenureDays = computeTenureDays(row.lastEntryDate);
+    const antiguedad = tex(formatTenureLabel(tenureDays) ?? "-");
+    return `  ${nombre} & ${area} & ${fecha} & ${clasif} & ${estado} & ${antiguedad} \\\\`;
   }).join("\n");
 
   const emptyRow = rows.length === 0
-    ? `  \\multicolumn{5}{c}{\\textit{Sin seguimientos con los filtros aplicados.}} \\\\`
+    ? `  \\multicolumn{6}{c}{\\textit{Sin seguimientos con los filtros aplicados.}} \\\\`
     : "";
 
   return `\\SetDocCode{${tex(docCode)}}
@@ -119,18 +122,18 @@ function buildDataTex(rows: Awaited<ReturnType<typeof loadScheduledFollowups>>, 
   \\section*{Agenda de Seguimientos -- Trabajo Social}
 
   \\begin{center}
-  \\begin{longtable}{@{} p{6.1cm} p{2.4cm} l l l @{}}
+  \\begin{longtable}{@{} p{5.4cm} p{2.0cm} l l l p{2.4cm} @{}}
     \\caption{Agenda de seguimientos programados} \\\\
     \\toprule
-    \\textbf{Nombre} & \\textbf{Cod. \\'Area} & \\textbf{Fecha} & \\textbf{Clasif.} & \\textbf{Estado} \\\\
+    \\textbf{Nombre} & \\textbf{Cod. \\'Area} & \\textbf{Fecha} & \\textbf{Clasif.} & \\textbf{Estado} & \\textbf{Antig\\"uedad} \\\\
     \\midrule
     \\endfirsthead
     \\toprule
-    \\textbf{Nombre} & \\textbf{Cod. \\'Area} & \\textbf{Fecha} & \\textbf{Clasif.} & \\textbf{Estado} \\\\
+    \\textbf{Nombre} & \\textbf{Cod. \\'Area} & \\textbf{Fecha} & \\textbf{Clasif.} & \\textbf{Estado} & \\textbf{Antig\\"uedad} \\\\
     \\midrule
     \\endhead
     \\midrule
-    \\multicolumn{5}{r}{\\small\\itshape Contin\\'ua\\ldots} \\\\
+    \\multicolumn{6}{r}{\\small\\itshape Contin\\'ua\\ldots} \\\\
     \\endfoot
     \\bottomrule
     \\endlastfoot

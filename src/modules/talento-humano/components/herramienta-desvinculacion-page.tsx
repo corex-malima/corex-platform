@@ -34,8 +34,8 @@ function buildQuery(filters: DesvinculacionToolFilters): string {
   const params = new URLSearchParams();
   if (filters.weekId) params.set("weekId", filters.weekId);
   if (filters.area && filters.area !== "all") params.set("area", filters.area);
-  if (filters.jobClassification && filters.jobClassification !== "all") {
-    params.set("jobClassification", filters.jobClassification);
+  if (filters.tenureBucket && filters.tenureBucket !== "all") {
+    params.set("tenureBucket", filters.tenureBucket);
   }
   if (filters.estado && filters.estado !== "all") params.set("estado", filters.estado);
   if (filters.q) params.set("q", filters.q);
@@ -109,9 +109,9 @@ export function HerramientaDesvinculacionPage({ initialData }: { initialData: De
   const summary = payload.summary;
 
   const optionsAreas = useMemo(() => payload.options?.areas ?? [], [payload.options?.areas]);
-  const optionsClassifications = useMemo(
-    () => payload.options?.jobClassifications ?? [],
-    [payload.options?.jobClassifications],
+  const optionsTenureBuckets = useMemo(
+    () => payload.options?.tenureBuckets ?? [],
+    [payload.options?.tenureBuckets],
   );
   const optionsWeeks = useMemo(
     () => payload.options?.weeks ?? [],
@@ -184,11 +184,11 @@ export function HerramientaDesvinculacionPage({ initialData }: { initialData: De
               onChange={(value) => updateFilter("area", value)}
             />
             <MultiSelectField
-              id="hd-clasif"
-              label="Clasificación"
-              value={filters.jobClassification}
-              options={optionsClassifications}
-              onChange={(value) => updateFilter("jobClassification", value)}
+              id="hd-antiguedad"
+              label="Antigüedad"
+              value={filters.tenureBucket}
+              options={optionsTenureBuckets}
+              onChange={(value) => updateFilter("tenureBucket", value)}
             />
             <MultiSelectField
               id="hd-estado"

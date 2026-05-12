@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const { filters, weeks } = await normalizeDesvinculacionFilters({
       weekId: sp.get("weekId") ?? undefined,
       area: sp.get("area") ?? undefined,
-      jobClassification: sp.get("jobClassification") ?? undefined,
+      tenureBucket: sp.get("tenureBucket") ?? undefined,
       estado: sp.get("estado") ?? undefined,
       q: sp.get("q") ?? undefined,
     });

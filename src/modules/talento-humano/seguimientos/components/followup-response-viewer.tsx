@@ -5,6 +5,7 @@ import { Eye, X } from "lucide-react";
 import useSWR from "swr";
 
 import { fetchJson } from "@/lib/fetch-json";
+import { computeTenureDays, formatTenureLabel } from "@/lib/talento-humano-colaboradores-utils";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -84,11 +85,19 @@ export function FollowupResponseViewer({ followup, catalogs, onClose }: Props) {
                 <Badge variant="success">Registrado</Badge>
                 <Badge variant="outline">Clasificacion {followup.derivedRoute}</Badge>
                 {data?.responseVersion ? <Badge variant="secondary">Version {data.responseVersion}</Badge> : null}
+                {(() => {
+                  const tenure = formatTenureLabel(computeTenureDays(followup.lastEntryDate));
+                  return tenure ? <Badge variant="outline">Antigüedad: {tenure}</Badge> : null;
+                })()}
               </div>
               <div>
                 <CardTitle className="text-lg">{followup.personName}</CardTitle>
                 <CardDescription>
                   Respuesta del seguimiento {followup.followUpDate}
+                  {(() => {
+                    const days = computeTenureDays(followup.lastEntryDate);
+                    return days !== null ? ` · ${days} día${days === 1 ? "" : "s"} en la empresa` : "";
+                  })()}
                   {data?.actorId ? ` · Registrado por ${data.actorId}` : ""}
                 </CardDescription>
               </div>

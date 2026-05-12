@@ -71,6 +71,7 @@ export type EmployeeScheduledFollowupRow = {
   areaName: string | null;
   areaGeneral: string | null;
   jobClassificationCode: string | null;
+  lastEntryDate: string | null;
   derivedRoute: EmployeeFollowupRouteCode;
   status: EmployeeFollowupStatus;
   responseEventId: string | null;

@@ -17,6 +17,7 @@ type ScheduledFollowupDwRow = ScheduledFollowupQueryRow & {
   area_id: string | null;
   area_name: string | null;
   area_general: string | null;
+  last_entry_date: string | null;
 };
 
 type ResponseStatusRow = {
@@ -145,6 +146,7 @@ export async function loadScheduledFollowups(
       p.person_name,
       p.associated_worker_name,
       p.job_classification_code,
+      to_char(p.last_entry_date, 'YYYY-MM-DD') AS last_entry_date,
       a.area_id,
       a.area_name,
       a.area_general
@@ -247,6 +249,7 @@ export async function loadScheduledFollowups(
         areaName: row.area_name,
         areaGeneral: row.area_general,
         jobClassificationCode: row.job_classification_code,
+        lastEntryDate: row.last_entry_date,
         derivedRoute,
         status,
         responseEventId: statusRow?.event_id ?? null,

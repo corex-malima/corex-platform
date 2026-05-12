@@ -2,6 +2,7 @@ import { type NextRequest } from "next/server";
 
 import { requireAuth } from "@/lib/api-auth";
 import { handleApiError } from "@/lib/api-error";
+import { computeTenureDays, formatTenureLabel } from "@/lib/talento-humano-colaboradores-utils";
 import { loadScheduledFollowups } from "@/lib/talento-humano-seguimientos-schedule";
 import { followupFiltersSchema } from "@/lib/talento-humano-seguimientos-schemas";
 import type { EmployeeFollowupFilters } from "@/modules/talento-humano/seguimientos/server/types";
@@ -95,14 +96,19 @@ function sheetCell(value: unknown, rowIndex: number, columnIndex: number): strin
 }
 
 function buildWorksheet(rows: Awaited<ReturnType<typeof loadScheduledFollowups>>): string {
-  const headers = ["Nombre", "Cod. Area", "Fecha", "Clasif.", "Estado"];
-  const data = rows.map((row) => [
-    titleCaseName(row.personName),
-    row.areaId ?? "-",
-    formatFollowupDate(row.followUpDate),
-    ROUTE_LABEL[row.derivedRoute] ?? row.derivedRoute,
-    STATUS_LABEL[row.status] ?? row.status,
-  ]);
+  const headers = ["Nombre", "Cod. Area", "Fecha", "Clasif.", "Estado", "Antigüedad (días)", "Antigüedad"];
+  const data = rows.map((row) => {
+    const tenureDays = computeTenureDays(row.lastEntryDate);
+    return [
+      titleCaseName(row.personName),
+      row.areaId ?? "-",
+      formatFollowupDate(row.followUpDate),
+      ROUTE_LABEL[row.derivedRoute] ?? row.derivedRoute,
+      STATUS_LABEL[row.status] ?? row.status,
+      tenureDays !== null ? tenureDays : "-",
+      formatTenureLabel(tenureDays) ?? "-",
+    ];
+  });
 
   const sheetRows = [headers, ...data].map((row, rowIndex) => {
     const excelRow = rowIndex + 1;
@@ -117,6 +123,8 @@ function buildWorksheet(rows: Awaited<ReturnType<typeof loadScheduledFollowups>>
     <col min="3" max="3" width="14" customWidth="1"/>
     <col min="4" max="4" width="12" customWidth="1"/>
     <col min="5" max="5" width="14" customWidth="1"/>
+    <col min="6" max="6" width="16" customWidth="1"/>
+    <col min="7" max="7" width="22" customWidth="1"/>
   </cols>
   <sheetData>${sheetRows}</sheetData>
 </worksheet>`;

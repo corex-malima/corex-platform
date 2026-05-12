@@ -1,7 +1,8 @@
 import "server-only";
 
 import { query } from "@/lib/db";
-import { decodeMultiSelectValue, matchesMultiSelectValue } from "@/lib/multi-select";
+import { decodeMultiSelectValue } from "@/lib/multi-select";
+import { TENURE_BUCKETS, tenureBucketFromDays } from "@/lib/talento-humano-colaboradores-utils";
 import {
   RULES_CONSTANTS,
   classifyEstado,
@@ -13,7 +14,7 @@ import {
 export type DesvinculacionToolFilters = {
   weekId: string;
   area: string;
-  jobClassification: string;
+  tenureBucket: string;
   estado: string;
   q: string;
 };
@@ -78,7 +79,7 @@ export type DesvinculacionToolSummary = {
 
 export type DesvinculacionToolOptions = {
   areas: Array<{ id: string; name: string }>;
-  jobClassifications: string[];
+  tenureBuckets: string[];
   weeks: string[];
 };
 
@@ -153,7 +154,7 @@ export async function normalizeDesvinculacionFilters(
     filters: {
       weekId,
       area: normalizeMulti(raw.area ?? null),
-      jobClassification: normalizeMulti(raw.jobClassification ?? null),
+      tenureBucket: normalizeMulti(raw.tenureBucket ?? null),
       estado: normalizeMulti(raw.estado ?? null),
       q: (raw.q ?? "").trim(),
     },
@@ -346,21 +347,32 @@ function rowMatchesEstado(row: DesvinculacionToolRow, encoded: string): boolean 
   return selected.includes(row.estado);
 }
 
+function rowMatchesTenureBucket(row: DesvinculacionToolRow, encoded: string): boolean {
+  if (!encoded || encoded === "all") return true;
+  const selected = decodeMultiSelectValue(encoded);
+  if (selected.length === 0) return true;
+  const bucket = tenureBucketFromDays(row.tenureDays);
+  return selected.includes(bucket);
+}
+
 function buildOptions(
   rows: DesvinculacionToolRow[],
   weeks: string[],
 ): DesvinculacionToolOptions {
   const areas = new Map<string, string>();
-  const classifications = new Set<string>();
+  // Solo exponemos los buckets de antigüedad que tienen al menos 1 colaborador
+  // — evita opciones huecas en el dropdown.
+  const bucketsPresent = new Set<string>();
   for (const row of rows) {
     if (row.areaId) areas.set(row.areaId, row.areaName ?? row.areaId);
-    if (row.jobClassificationCode) classifications.add(row.jobClassificationCode);
+    bucketsPresent.add(tenureBucketFromDays(row.tenureDays));
   }
+  const tenureBuckets = TENURE_BUCKETS.filter((bucket) => bucketsPresent.has(bucket));
   return {
     areas: Array.from(areas.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "es-EC")),
-    jobClassifications: Array.from(classifications).sort((a, b) => a.localeCompare(b, "es-EC")),
+    tenureBuckets,
     weeks,
   };
 }
@@ -436,7 +448,7 @@ export async function getDesvinculacionToolData(
   const normalized: DesvinculacionToolFilters = {
     weekId,
     area: normalizeMulti(filters.area),
-    jobClassification: normalizeMulti(filters.jobClassification),
+    tenureBucket: normalizeMulti(filters.tenureBucket),
     estado: normalizeMulti(filters.estado),
     q: filters.q?.trim() ?? "",
   };
@@ -501,7 +513,7 @@ export async function getDesvinculacionToolData(
   // la auditoría — es la mejor diagnóstico del slice que el usuario está viendo.
   const preEstadoRows = visibleRows.filter((row) =>
     rowMatchesArea(row, normalized.area)
-      && matchesMultiSelectValue(normalized.jobClassification, row.jobClassificationCode)
+      && rowMatchesTenureBucket(row, normalized.tenureBucket)
       && rowMatchesSearch(row, tokens),
   );
   const audit = buildAudit(preEstadoRows);
