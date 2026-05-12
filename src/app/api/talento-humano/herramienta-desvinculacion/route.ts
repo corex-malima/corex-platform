@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
       weekId: sp.get("weekId") ?? undefined,
       area: sp.get("area") ?? undefined,
       jobClassification: sp.get("jobClassification") ?? undefined,
+      estado: sp.get("estado") ?? undefined,
       q: sp.get("q") ?? undefined,
     });
 

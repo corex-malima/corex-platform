@@ -34,20 +34,20 @@ export const RULES_CONSTANTS = {
   MIN_VALID_FOR_NEWBIE: 2,
   /**
    * Z de Mann-Kendall por debajo del cual decimos "tendencia decreciente".
-   * Relajado iterativamente: −1.0 → −0.5 → −0.25 (≈ 60 % one-sided). El
-   * veredicto FINAL sigue requiriendo cumplimiento < 90 % en la semana
-   * actual válida, así que el doble filtro mantiene la rigurosidad sin
-   * importar cuán bajo bajemos este umbral.
+   * Calibración iterativa con datos reales: −1.0 (estricto, 0 salida) →
+   * −0.25 (demasiado permisivo) → −0.5 (≈ 70 % one-sided, balance final).
+   * Combinado con el filtro absoluto de cumplimiento < 90 %, deja solo
+   * candidatos sólidos en SALIDA.
    */
-  MK_Z_DECLINE_THRESHOLD: -0.25,
+  MK_Z_DECLINE_THRESHOLD: -0.5,
   /**
    * Pendiente Theil-Sen (en unidades de cumplimiento por semana) por debajo
    * de la cual la magnitud de la caída se considera relevante por sí sola.
-   * −0.003 ≡ caída de 0.3 pp/sem ≡ 3.6 pp en 12 semanas. Combinada con MK
+   * −0.005 ≡ caída de 0.5 pp/sem ≡ 6 pp en 12 semanas. Combinada con MK
    * vía `OR`, captura tanto declines consistentes-pero-noisy como declines
    * suaves-pero-de-magnitud-clara.
    */
-  SLOPE_DECLINE_THRESHOLD: -0.003,
+  SLOPE_DECLINE_THRESHOLD: -0.005,
   /** Umbral de cumplimiento bajo (escala 0..1+). */
   CUMPLIMIENTO_LOW: 0.90,
   /** Umbral de cumplimiento objetivo (escala 0..1+). */
