@@ -93,12 +93,32 @@ export function decodeProcessNodeKey(encoded: string): { nodeKey: string; destin
   };
 }
 
+type ProcessKpiBadge = {
+  kind: "hydration" | "waste";
+  cumplimientoLabel: string;
+  realLabel: string;
+  metaLabel: string;
+  accent: "success" | "warning" | "danger" | "default";
+};
+
+function toProcessKpiBadge(n: BalanzasNodeSummary): ProcessKpiBadge | undefined {
+  if (!n.kpiBadge) return undefined;
+  return {
+    kind: n.kpiBadge.kind,
+    cumplimientoLabel: n.kpiBadge.cumplimientoLabel,
+    realLabel: n.kpiBadge.realLabel,
+    metaLabel: n.kpiBadge.metaLabel,
+    accent: n.kpiBadge.accent,
+  };
+}
+
 function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) {
   const out: Array<{
     key: string;
     label: string;
     overlayOffsetLeft: number;
     metrics: Array<{ label: string; formatted: string }>;
+    kpiBadge?: ProcessKpiBadge;
     status: "ready" | "unavailable";
     processBindings: Array<{ elementId: string }>;
     destinationBreakdown: never[];
@@ -106,6 +126,8 @@ function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) 
 
   for (const n of nodes) {
     if (!nodeMatchesMetricMode(n.key, mode)) continue;
+
+    const kpiBadge = toProcessKpiBadge(n);
 
     // Caso especial: nodo con split por destino → 3 overlays virtuales
     if (n.bpmnByDestination) {
@@ -117,6 +139,7 @@ function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) 
           label: `${n.shortLabel} · ${split.label}`,
           overlayOffsetLeft: 0,
           metrics: n.metrics.map((m) => ({ label: m.label, formatted: m.formatted })),
+          kpiBadge,
           status: (n.rowCount > 0 ? "ready" : "unavailable") as "ready" | "unavailable",
           processBindings: [{ elementId }],
           destinationBreakdown: [],
@@ -132,6 +155,7 @@ function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) 
       label: n.label,
       overlayOffsetLeft: n.overlayOffsetLeft,
       metrics: n.metrics.map((m) => ({ label: m.label, formatted: m.formatted })),
+      kpiBadge,
       status: (n.rowCount > 0 ? "ready" : "unavailable") as "ready" | "unavailable",
       processBindings: [{ elementId: n.bpmnElementId }],
       destinationBreakdown: [],

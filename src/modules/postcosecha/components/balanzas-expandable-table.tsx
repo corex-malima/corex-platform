@@ -7,6 +7,7 @@ import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
 import type { BalanzasNodeDetail } from "@/lib/postcosecha-balanzas";
 import {
   aggregateBalanzasMetrics,
+  balanzasCellAccentClass,
   buildBalanzasLeafMetrics,
   formatBalanzasTableMetric,
 } from "@/modules/postcosecha/components/balanzas-table-metrics";
@@ -222,11 +223,18 @@ export function BalanzasExpandableTable({
         key: col.key,
         label: col.label,
         align: "right",
-        render: (node, level) => (
-          <span className={level === 0 ? "font-semibold text-foreground" : undefined}>
-            {formatBalanzasTableMetric(node.data.metrics[col.key] ?? null, col)}
-          </span>
-        ),
+        render: (node, level) => {
+          const value = node.data.metrics[col.key] ?? null;
+          const accent = balanzasCellAccentClass(value, col);
+          const isHeader = level === 0;
+          const className = [
+            isHeader ? "font-semibold text-foreground" : "",
+            // Si la celda tiene accent semáforo, gana sobre el "text-foreground"
+            // del header (level 0) — mantenemos el color del cumplimiento.
+            accent,
+          ].filter(Boolean).join(" ") || undefined;
+          return <span className={className}>{formatBalanzasTableMetric(value, col)}</span>;
+        },
       })),
     ];
   }, [dateColumn, detail.columns]);

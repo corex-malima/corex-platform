@@ -66,10 +66,14 @@ export type BalanzasDetailColumnFormat = "kg" | "g" | "pct" | "count" | "ratio";
 /**
  * Modos de agregación para columnas numéricas de tabla / métricas de summary.
  *
- *   "sum"                  → SUM(col)
- *   "derived-ratio"        → (SUM(num)/SUM(den)) − 1   (ratio de crecimiento, ej Hidratación)
- *   "derived-quotient"     → SUM(num)/SUM(den)         (cociente puro)
- *   "derived-loss-ratio"   → 1 − SUM(num)/SUM(den)     (fracción de pérdida POSITIVA, ej Desperdicio)
+ *   "sum"                     → SUM(col)
+ *   "derived-ratio"           → (SUM(num)/SUM(den)) − 1   (ratio de crecimiento, ej Hidratación)
+ *   "derived-quotient"        → SUM(num)/SUM(den)         (cociente puro)
+ *   "derived-loss-ratio"      → 1 − SUM(num)/SUM(den)     (fracción de pérdida POSITIVA, ej Desperdicio)
+ *   "derived-from-aggregates" → AGG[num]/AGG[den], donde num/den son OTRAS
+ *                               columnas con sus propios `aggregateMode`.
+ *                               Computado en segunda pasada. Usado para
+ *                               cumplimiento = real_agg / meta_agg.
  *
  * Cuando se usa `derived-loss-ratio`, además, el row-by-row de la columna
  * se NIEGA en `loadNodeDetail` para mantener consistencia visual
@@ -80,7 +84,24 @@ export type BalanzasDetailAggregateMode =
   | "sum"
   | "derived-ratio"
   | "derived-quotient"
-  | "derived-loss-ratio";
+  | "derived-loss-ratio"
+  | "derived-from-aggregates";
+
+/**
+ * Regla declarativa para aplicar accent semáforo a celdas de cumplimiento
+ * en la tabla detalle.
+ *
+ *   "cumplimiento"          → ratio "mayor es mejor" (Hidratación):
+ *                              ≥1.0 success, ≥0.8 warning, <0.8 danger.
+ *   "cumplimiento-inverso"  → ratio "menor es mejor" (Desperdicio).
+ *                              Los umbrales aplican igual porque el loader
+ *                              ya devuelve cumplimiento = meta/real (>1 sobre meta).
+ *   null / undefined         → sin color (default).
+ *
+ * Las tablas (`balanzas-flat-table.tsx`, `balanzas-expandable-table.tsx`)
+ * mapean el string a la función de `@/shared/lib/cumplimiento` al renderizar.
+ */
+export type BalanzasColumnAccentRule = "cumplimiento" | "cumplimiento-inverso" | null;
 
 export type BalanzasDetailAggregateSources = {
   numeratorKey: string;
@@ -94,6 +115,12 @@ export type BalanzasDetailColumn = {
   format: BalanzasDetailColumnFormat | null;
   aggregateMode: BalanzasDetailAggregateMode | null;
   aggregateSources?: BalanzasDetailAggregateSources;
+  /**
+   * Regla declarativa para colorear la celda (texto verde/ámbar/rojo)
+   * según el valor numérico. Solo se aplica si la celda es numérica.
+   * Las tablas en el cliente lo mapean a un className condicional.
+   */
+  accentRule?: BalanzasColumnAccentRule;
 };
 
 export type BalanzasDetailTableMode = "tree" | "flat";
@@ -116,6 +143,32 @@ export type BalanzasDestinationKey = "arcoiris" | "blanco" | "tinturado";
  */
 export type BalanzasBpmnByDestination = Record<BalanzasDestinationKey, string>;
 
+/**
+ * Badge visible en el overlay BPMN del nodo (sobre el círculo clickeable).
+ * Comunica el cumplimiento del KPI principal del nodo sin tener que abrir
+ * el modal. Solo presente en nodos con `kpiSupport` declarado.
+ *
+ *   kind            "hydration" | "waste" — semántica del badge.
+ *   real            valor numérico (ratio decimal, ya formateado en `realLabel`).
+ *   realLabel       "52,73%" — display del real.
+ *   meta            valor de la meta ponderada.
+ *   metaLabel       "54,70%" — display de la meta.
+ *   cumplimiento    ratio cumplimiento (mayor es mejor en ambos casos por
+ *                   la convención del loader).
+ *   cumplimientoLabel "96,4%" — display.
+ *   accent          "success" | "warning" | "danger" | "default".
+ */
+export type BalanzasNodeSummaryKpiBadge = {
+  kind: "hydration" | "waste";
+  real: number | null;
+  realLabel: string;
+  meta: number | null;
+  metaLabel: string;
+  cumplimiento: number | null;
+  cumplimientoLabel: string;
+  accent: "success" | "warning" | "danger" | "default";
+};
+
 export type BalanzasNodeSummary = {
   key: string;
   label: string;
@@ -135,6 +188,12 @@ export type BalanzasNodeSummary = {
   metrics: BalanzasSummaryMetric[];
   bpmnElementId: string | null;
   overlayOffsetLeft: number;
+  /**
+   * Badge KPI opcional con cumplimiento del nodo (visible en el BPMN
+   * overlay sin abrir el modal). Solo se llena si el nodo tiene
+   * `kpiSupport.hydration` o `kpiSupport.waste`.
+   */
+  kpiBadge?: BalanzasNodeSummaryKpiBadge;
   /**
    * Cuando está definido, el explorer genera 3 overlays virtuales (uno por
    * destino: Arcoíris / Blanco / Tinturado) en lugar de 1 sobre el
@@ -1446,22 +1505,11 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     },
     kpiSupport: {
       // Desperdicio: 1 − SUM(b2a)/SUM(b2), positivo, ponderado por b2.
+      // El Ajuste NO va aquí — el usuario lo restringió al nodo de Peso ideal
+      // (`apertura-b1c-b2a-ideal`).
       waste: {
         b2Key: "weight_b2_kg",
         b2aKey: "weight_b2a_kg",
-        destinationKey: "destination",
-      },
-      // Ajuste: este nodo NO tiene weight_per_stem_kg ni grade/lot_date,
-      // pero el usuario pidió mostrar el KPI aquí. Los datos crudos se
-      // leen desde `apertura_b1c_vs_b2_weight_<farm>_np_cur` vía
-      // `loadAdjustmentSourceRows`. El cómputo aplica los mismos filtros
-      // temporales del nodo actual.
-      adjustment: {
-        weightPerStemKey: "weight_per_stem_kg",
-        b1cKey: "weight_b1c_estimated_kg",
-        lotDateKey: "lot_date",
-        workDateKey: "work_date",
-        gradeKey: "grade",
         destinationKey: "destination",
       },
     },
@@ -1665,6 +1713,104 @@ function loadFilterOptions(farm: string): Promise<BalanzasFilterOptions> {
 
 // ─── Node summary ─────────────────────────────────────────────────────────────
 
+/**
+ * Computa el badge KPI que aparece sobre el overlay clickeable del BPMN.
+ * Prioridad: Hidratación > Desperdicio (si el nodo soporta ambos, se
+ * elige hidratación por ser el indicador "primario" del nodo b1c-vs-b2).
+ *
+ * Hace una query agregada por grade (hidratación) o destination
+ * (desperdicio) y aplica las funciones puras del módulo KPI para
+ * obtener la meta ponderada y el cumplimiento. Si no hay metas
+ * cargadas o no hay rows, devuelve undefined.
+ */
+async function computeSummaryKpiBadge(
+  nodeDef: BalanzasNodeDef,
+  whereSql: string,
+  whereParams: unknown[],
+): Promise<BalanzasNodeSummaryKpiBadge | undefined> {
+  const support = nodeDef.kpiSupport;
+  if (!support) return undefined;
+  const metaOrigin = resolveMetaOrigin(nodeDef.branch);
+  if (!metaOrigin) return undefined;
+
+  // Hidratación tiene prioridad si ambos están definidos.
+  if (support.hydration) {
+    const { gradeKey, b1cKey, b2Key } = support.hydration;
+    try {
+      const { rows } = await query<Record<string, unknown>>(
+        `SELECT ${gradeKey} AS grade,
+                SUM(${b1cKey}::numeric) AS b1c,
+                SUM(${b2Key}::numeric) AS b2
+         FROM ${nodeDef.viewName} ${whereSql}
+         GROUP BY ${gradeKey}`,
+        whereParams,
+      );
+      const computeRows = rows.map((r) => ({
+        [gradeKey]: r.grade,
+        [b1cKey]: r.b1c,
+        [b2Key]: r.b2,
+      }));
+      const targets = await loadHydrationTargets();
+      const k = computeHydrationKpi(computeRows, support.hydration, targets, metaOrigin);
+      return buildKpiBadge("hydration", k.real, k.meta, k.cumplimiento);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (support.waste) {
+    const { destinationKey, b2Key, b2aKey } = support.waste;
+    try {
+      const { rows } = await query<Record<string, unknown>>(
+        `SELECT ${destinationKey} AS destination,
+                SUM(${b2Key}::numeric) AS b2,
+                SUM(${b2aKey}::numeric) AS b2a
+         FROM ${nodeDef.viewName} ${whereSql}
+         GROUP BY ${destinationKey}`,
+        whereParams,
+      );
+      const computeRows = rows.map((r) => ({
+        [destinationKey]: r.destination,
+        [b2Key]: r.b2,
+        [b2aKey]: r.b2a,
+      }));
+      const targets = await loadWasteTargets();
+      const k = computeWasteKpi(computeRows, support.waste, targets, metaOrigin);
+      return buildKpiBadge("waste", k.real, k.meta, k.cumplimiento);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function buildKpiBadge(
+  kind: "hydration" | "waste",
+  real: number | null,
+  meta: number | null,
+  cumplimiento: number | null,
+): BalanzasNodeSummaryKpiBadge {
+  // Mismo umbral semáforo que `cumplimientoAccent` de @/shared/lib/cumplimiento
+  // (sin importar UI desde el core).
+  let accent: BalanzasNodeSummaryKpiBadge["accent"] = "default";
+  if (cumplimiento !== null && Number.isFinite(cumplimiento)) {
+    if (cumplimiento >= 1.0) accent = "success";
+    else if (cumplimiento >= 0.8) accent = "warning";
+    else accent = "danger";
+  }
+  return {
+    kind,
+    real,
+    realLabel: real === null ? "—" : formatPercentShared(real, { input: "ratio" }),
+    meta,
+    metaLabel: meta === null ? "—" : formatPercentShared(meta, { input: "ratio" }),
+    cumplimiento,
+    cumplimientoLabel: cumplimiento === null ? "—" : formatPercentShared(cumplimiento, { input: "ratio" }),
+    accent,
+  };
+}
+
 async function loadNodeSummary(
   nodeDef: BalanzasNodeDef,
   filters: BalanzasFilters,
@@ -1680,7 +1826,10 @@ async function loadNodeSummary(
   `;
 
   try {
-    const result = await query<Record<string, unknown>>(sql, values);
+    const [result, kpiBadge] = await Promise.all([
+      query<Record<string, unknown>>(sql, values),
+      computeSummaryKpiBadge(nodeDef, where, values),
+    ]);
     const row = result.rows[0] ?? {};
     return {
       key: nodeDef.key,
@@ -1700,6 +1849,7 @@ async function loadNodeSummary(
       bpmnElementId: nodeDef.bpmnBinding?.elementId ?? null,
       overlayOffsetLeft: nodeDef.bpmnBinding?.overlayOffsetLeft ?? 0,
       bpmnByDestination: nodeDef.bpmnByDestination,
+      kpiBadge,
     };
   } catch {
     return {
@@ -1796,6 +1946,165 @@ async function loadDetailTemporalOptions(
   };
 }
 
+/**
+ * Entry para `injectKpiTableColumns`: define una columna virtual nueva
+ * (Meta o Cumplimiento) que se va a insertar en la tabla detalle.
+ *
+ *   key                  identifier del campo virtual (también la columna).
+ *   config               aggregateMode + format + aggregateSources (si aplica).
+ *   insertAfterKey       el visibleColumnKey después del cual posicionar la nueva.
+ *   accentRule           regla de color (solo cumplimiento, nullable).
+ */
+type DynamicColumnEntry = {
+  key: string;
+  config: BalanzasDetailColumnConfig;
+  insertAfterKey: string;
+  accentRule: BalanzasColumnAccentRule;
+};
+
+/**
+ * Inyecta campos virtuales row-by-row para Meta + Cumplimiento de
+ * Hidratación y Desperdicio, según el `kpiSupport` declarado en el nodo.
+ *
+ * Después de esta función:
+ *   - cada row tiene `hydration_target`, `hydration_cumplimiento`,
+ *     `_hyd_meta_x_b1c` (helper para ponderar la meta al agrupar).
+ *   - cada row tiene `dispatch_target`, `dispatch_cumplimiento`,
+ *     `_dispatch_meta_x_b2`.
+ *
+ * Devuelve la lista de entradas dinámicas (config + posición + accentRule)
+ * que `loadNodeDetail` usará para construir `columns[]`.
+ */
+async function injectKpiTableColumns(
+  nodeDef: BalanzasNodeDef,
+  rows: BalanzasDetailRow[],
+): Promise<DynamicColumnEntry[]> {
+  const support = nodeDef.kpiSupport;
+  if (!support) return [];
+  const metaOrigin = resolveMetaOrigin(nodeDef.branch);
+  if (!metaOrigin) return [];
+
+  const entries: DynamicColumnEntry[] = [];
+
+  // ── Hidratación ────────────────────────────────────────────────────────────
+  if (support.hydration) {
+    const { gradeKey, b1cKey } = support.hydration;
+    const targets = await loadHydrationTargets();
+
+    for (const r of rows) {
+      const grade = r[gradeKey];
+      const realRatio = toNumber(r.hydration_pct); // ya viene como ratio (0..1+)
+      const b1c = toNumber(r[b1cKey]) ?? 0;
+      let metaValue: number | null = null;
+      if (typeof grade === "string" && grade) {
+        metaValue = targets.get(`${metaOrigin}|${grade}`) ?? null;
+      }
+      (r as Record<string, unknown>).hydration_target = metaValue;
+      (r as Record<string, unknown>).hydration_cumplimiento =
+        realRatio !== null && metaValue !== null && metaValue > 0
+          ? realRatio / metaValue
+          : null;
+      (r as Record<string, unknown>)._hyd_meta_x_b1c =
+        metaValue !== null ? metaValue * b1c : null;
+    }
+
+    entries.push(
+      {
+        key: "hydration_target",
+        insertAfterKey: "hydration_pct",
+        config: {
+          format: "pct",
+          aggregateMode: "derived-quotient",
+          aggregateSources: { numeratorKey: "_hyd_meta_x_b1c", denominatorKey: b1cKey },
+        },
+        accentRule: null,
+      },
+      {
+        key: "hydration_cumplimiento",
+        insertAfterKey: "hydration_target",
+        config: {
+          format: "pct",
+          aggregateMode: "derived-from-aggregates",
+          aggregateSources: { numeratorKey: "hydration_pct", denominatorKey: "hydration_target" },
+        },
+        accentRule: "cumplimiento",
+      },
+    );
+  }
+
+  // ── Desperdicio ────────────────────────────────────────────────────────────
+  if (support.waste) {
+    const { destinationKey, b2Key } = support.waste;
+    const targets = await loadWasteTargets();
+
+    // Detectar el nombre de la columna de "pérdida positiva" según la MV.
+    // En todas las MVs balanza la columna se llama `dispatch_pct` (ya negada
+    // a positivo por la convención derived-loss-ratio).
+    const realKey = "dispatch_pct";
+
+    for (const r of rows) {
+      const dest = r[destinationKey];
+      const realPositive = toNumber(r[realKey]);
+      const b2 = toNumber(r[b2Key]) ?? 0;
+      let metaValue: number | null = null;
+      if (typeof dest === "string" && dest) {
+        metaValue = targets.get(`${metaOrigin}|${dest}`) ?? null;
+      }
+      (r as Record<string, unknown>).dispatch_target = metaValue;
+      (r as Record<string, unknown>).dispatch_cumplimiento =
+        realPositive !== null && realPositive > 0 && metaValue !== null
+          ? metaValue / realPositive
+          : null;
+      (r as Record<string, unknown>)._dispatch_meta_x_b2 =
+        metaValue !== null ? metaValue * b2 : null;
+    }
+
+    entries.push(
+      {
+        key: "dispatch_target",
+        insertAfterKey: "dispatch_pct",
+        config: {
+          format: "pct",
+          aggregateMode: "derived-quotient",
+          aggregateSources: { numeratorKey: "_dispatch_meta_x_b2", denominatorKey: b2Key },
+        },
+        accentRule: null,
+      },
+      {
+        key: "dispatch_cumplimiento",
+        insertAfterKey: "dispatch_target",
+        config: {
+          format: "pct",
+          aggregateMode: "derived-from-aggregates",
+          aggregateSources: { numeratorKey: "dispatch_target", denominatorKey: "dispatch_pct" },
+        },
+        accentRule: "cumplimiento-inverso",
+      },
+    );
+  }
+
+  return entries;
+}
+
+/**
+ * Construye el array de visibleColumnKeys insertando cada entry dinámica
+ * después del `insertAfterKey` indicado. Si la key base no está en el
+ * array de visible, la nueva se agrega al final.
+ */
+function extendVisibleColumns(
+  base: string[],
+  entries: DynamicColumnEntry[],
+): string[] {
+  if (entries.length === 0) return base;
+  const out = [...base];
+  for (const e of entries) {
+    const idx = out.indexOf(e.insertAfterKey);
+    if (idx === -1) out.push(e.key);
+    else out.splice(idx + 1, 0, e.key);
+  }
+  return out;
+}
+
 export async function loadNodeDetail(
   nodeKey: string,
   filters: BalanzasFilters,
@@ -1863,14 +2172,29 @@ export async function loadNodeDetail(
     }
   }
 
+  // Inyectar campos virtuales Meta + Cumplimiento por row (para que se vean
+  // en la tabla detalle y se agreguen correctamente al expandir por semana).
+  // Lookup de metas en paralelo; si no hay kpiSupport, no se cargan.
+  const dynamicConfigEntries = await injectKpiTableColumns(nodeDef, rows);
+
   const sampleRow = rows[0] ?? {};
-  const detailColumnConfig = nodeDef.detailColumnConfig ?? {};
-  const visibleColumnKeys = nodeDef.detailVisibleColumns ?? Object.keys(sampleRow);
+  // Merge config base del nodo + entries dinámicas (Meta/Cumplimiento) inyectadas
+  // por `injectKpiTableColumns`. También extiende detailVisibleColumns insertando
+  // las nuevas keys justo después de la métrica original (`hydration_pct` /
+  // `dispatch_pct`) para que el orden visual sea natural.
+  const detailColumnConfig: Record<string, BalanzasDetailColumnConfig> = {
+    ...(nodeDef.detailColumnConfig ?? {}),
+    ...Object.fromEntries(dynamicConfigEntries.map((e) => [e.key, e.config])),
+  };
+  const baseVisible = nodeDef.detailVisibleColumns ?? Object.keys(sampleRow);
+  const visibleColumnKeys = extendVisibleColumns(baseVisible, dynamicConfigEntries);
+  const accentRuleByKey = new Map(dynamicConfigEntries.map((e) => [e.key, e.accentRule]));
   const columns = visibleColumnKeys
     .filter((key) => key in sampleRow)
     .map<BalanzasDetailColumn>((key) => {
     const config = detailColumnConfig[key];
     const numeric = Boolean(config) || typeof sampleRow[key] === "number";
+    const accentRule = accentRuleByKey.get(key);
 
     return {
       key,
@@ -1879,6 +2203,7 @@ export async function loadNodeDetail(
       format: numeric ? config?.format ?? "count" : null,
       aggregateMode: numeric ? config?.aggregateMode ?? "sum" : null,
       aggregateSources: numeric ? config?.aggregateSources : undefined,
+      accentRule: accentRule ?? undefined,
     };
     });
 
@@ -2041,6 +2366,9 @@ const COLUMN_LABELS: Record<string, string> = {
   // Hidratación / Despacho
   hydration_pct: "Hidratación %",
   hydration_target: "Meta hidratación",
+  hydration_cumplimiento: "Cumplim. hidr.",
+  dispatch_target: "Meta desperdicio",
+  dispatch_cumplimiento: "Cumplim. desp.",
   dispatch_pct: "Despacho %",
   dispatch_pct_stems: "Despacho tallos %",
   dispatch_pct_weight: "Despacho peso %",

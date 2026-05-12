@@ -1,5 +1,10 @@
 import { formatFlexibleNumber, formatPercent } from "@/shared/lib/format";
 import type { BalanzasDetailColumn } from "@/lib/postcosecha-balanzas";
+import {
+  cumplimientoAccent,
+  cumplimientoAccentInverso,
+  type CumplimientoAccent,
+} from "@/shared/lib/cumplimiento";
 
 type BalanzasRow = Record<string, unknown>;
 
@@ -54,7 +59,17 @@ export function aggregateBalanzasMetrics(
   const summedMetrics = buildSummedMetrics(rows, numericColumns);
   const aggregated: Record<string, number | null> = {};
 
+  // ── Pasada 1: sum / derived-ratio / derived-quotient / derived-loss-ratio ──
+  // Las columnas "derived-from-aggregates" se posponen porque dependen de
+  // aggregated[otherKey].
+  const deferredFromAggregates: BalanzasDetailColumn[] = [];
+
   for (const column of numericColumns) {
+    if (column.aggregateMode === "derived-from-aggregates") {
+      deferredFromAggregates.push(column);
+      continue;
+    }
+
     if (
       (column.aggregateMode === "derived-ratio"
         || column.aggregateMode === "derived-quotient"
@@ -78,6 +93,18 @@ export function aggregateBalanzasMetrics(
     }
 
     aggregated[column.key] = summedMetrics[column.key] ?? null;
+  }
+
+  // ── Pasada 2: derived-from-aggregates (depende de pasada 1) ───────────────
+  for (const column of deferredFromAggregates) {
+    if (!column.aggregateSources) {
+      aggregated[column.key] = null;
+      continue;
+    }
+    const num = aggregated[column.aggregateSources.numeratorKey];
+    const den = aggregated[column.aggregateSources.denominatorKey];
+    aggregated[column.key] =
+      num === null || den === null || den === 0 ? null : num / den;
   }
 
   return aggregated;
@@ -108,6 +135,45 @@ export function formatBalanzasTableMetric(
     case "count":
     default:
       return formatFlexibleNumber(numericValue, { empty: TABLE_EMPTY });
+  }
+}
+
+/**
+ * Devuelve el className Tailwind a aplicar a la celda según la regla de
+ * accent declarada en la columna. Solo aplica a columnas de cumplimiento
+ * (valor ratio donde >1 = sobre meta).
+ *
+ * Mapeo:
+ *   success → text-chart-success-bold (verde)
+ *   warning → text-chart-warning (ámbar)
+ *   danger  → text-chart-danger (rojo)
+ *   default → "" (sin color)
+ */
+export function balanzasCellAccentClass(
+  value: unknown,
+  column: BalanzasDetailColumn,
+): string {
+  if (!column.accentRule) return "";
+  const numericValue = asBalanzasNumber(value);
+  if (numericValue === null) return "";
+
+  let accent: CumplimientoAccent;
+  switch (column.accentRule) {
+    case "cumplimiento":
+      accent = cumplimientoAccent(numericValue);
+      break;
+    case "cumplimiento-inverso":
+      accent = cumplimientoAccentInverso(numericValue);
+      break;
+    default:
+      return "";
+  }
+
+  switch (accent) {
+    case "success": return "text-chart-success-bold font-medium";
+    case "warning": return "text-chart-warning font-medium";
+    case "danger":  return "text-chart-danger font-medium";
+    default:        return "";
   }
 }
 

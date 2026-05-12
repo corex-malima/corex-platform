@@ -3,7 +3,7 @@
 import type { BalanzasNodeDetail } from "@/lib/postcosecha-balanzas";
 import { ScrollFadeTable } from "@/shared/tables/scroll-fade-table";
 import { StandardTable, StandardTd, StandardTh } from "@/shared/tables/standard-table";
-import { formatBalanzasTableMetric, formatBalanzasTextValue } from "@/modules/postcosecha/components/balanzas-table-metrics";
+import { balanzasCellAccentClass, formatBalanzasTableMetric, formatBalanzasTextValue } from "@/modules/postcosecha/components/balanzas-table-metrics";
 
 export function BalanzasFlatTable({ detail }: { detail: BalanzasNodeDetail }) {
   return (
@@ -26,16 +26,23 @@ export function BalanzasFlatTable({ detail }: { detail: BalanzasNodeDetail }) {
 
             return (
               <tr key={rowKey} className="border-b border-border/60 last:border-b-0">
-              {detail.columns.map((column) => (
-                <StandardTd
-                  key={`${rowKey}-${column.key}`}
-                  align={column.numeric ? "right" : "left"}
-                >
-                  {column.numeric
-                    ? formatBalanzasTableMetric(row[column.key] as number | null | undefined, column)
-                    : formatBalanzasTextValue(row[column.key])}
-                </StandardTd>
-              ))}
+              {detail.columns.map((column) => {
+                const rawValue = row[column.key];
+                const accentClass = column.numeric
+                  ? balanzasCellAccentClass(rawValue, column)
+                  : "";
+                return (
+                  <StandardTd
+                    key={`${rowKey}-${column.key}`}
+                    align={column.numeric ? "right" : "left"}
+                    className={accentClass || undefined}
+                  >
+                    {column.numeric
+                      ? formatBalanzasTableMetric(rawValue as number | null | undefined, column)
+                      : formatBalanzasTextValue(rawValue)}
+                  </StandardTd>
+                );
+              })}
               </tr>
             );
           })}

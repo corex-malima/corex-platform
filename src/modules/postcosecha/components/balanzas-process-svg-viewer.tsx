@@ -23,11 +23,19 @@ import {
 
 type BalanzasViewStatus = "ready" | "unavailable";
 type BalanzasProcessBinding = { elementId: string };
+type BalanzasProcessKpiBadge = {
+  kind: "hydration" | "waste";
+  cumplimientoLabel: string;
+  realLabel: string;
+  metaLabel: string;
+  accent: "success" | "warning" | "danger" | "default";
+};
 type BalanzasProcessNodeView = {
   key: string;
   label: string;
   overlayOffsetLeft: number;
   metrics: { label: string; formatted: string }[];
+  kpiBadge?: BalanzasProcessKpiBadge;
   status: BalanzasViewStatus;
   processBindings: BalanzasProcessBinding[];
 };
@@ -325,6 +333,26 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
                       })}
                     </tbody>
                   </table>
+                  {node.kpiBadge ? (
+                    <div
+                      className={cn(
+                        "mt-1 flex items-center justify-between gap-1 rounded-md px-1.5 py-0.5 text-[8.5px] font-semibold tabular-nums leading-tight",
+                        node.kpiBadge.accent === "success"
+                          ? "bg-emerald-500/15 text-emerald-700"
+                          : node.kpiBadge.accent === "warning"
+                            ? "bg-amber-500/20 text-amber-800"
+                            : node.kpiBadge.accent === "danger"
+                              ? "bg-rose-500/15 text-rose-700"
+                              : "bg-slate-200/70 text-slate-600",
+                      )}
+                      title={`Real ${node.kpiBadge.realLabel} · Meta ${node.kpiBadge.metaLabel}`}
+                    >
+                      <span className="uppercase tracking-wider">
+                        {node.kpiBadge.kind === "hydration" ? "Cumpl. HIDR" : "Cumpl. DESP"}
+                      </span>
+                      <span>{node.kpiBadge.cumplimientoLabel}</span>
+                    </div>
+                  ) : null}
                 </button>
               );
             }),

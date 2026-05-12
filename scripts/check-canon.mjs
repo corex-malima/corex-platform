@@ -228,6 +228,10 @@ const hugeFileAllowlist = new Set([
   "src/lib/salud.ts",
   "src/lib/fenograma-core.ts",
   "src/lib/postcosecha-balanzas-core.ts",
+  // Viewer SVG BPMN de Balanzas: layout pixel-perfect (mapa de
+  // overlays + zoom + pan). El conteo de lineas crece con cada
+  // mejora visual; splitear por subcomponentes no aporta legibilidad.
+  "src/modules/postcosecha/components/balanzas-process-svg-viewer.tsx",
   // KPI loader de Balanzas (Hidratacion + Desperdicio + Ajuste):
   // mantiene types + loaders cacheados + funciones puras testeables
   // en un solo modulo cohesivo. Splitearlo no aporta — todo coordina
