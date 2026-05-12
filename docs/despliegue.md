@@ -139,6 +139,79 @@ Si CoreX se ejecuta localmente en la PC del usuario, la API seguira leyendo/escr
 
 `TZ=UTC` es obligatorio en servidor y contenedor para evitar drift de fechas tipo `YYYY-MM-DD` y errores off-by-one al normalizar fechas de BD.
 
+### Mount del NAS para fotos de reclamos (Linux + Docker)
+
+El container Node corre como uid/gid 1001 (`nextjs`, ver `Dockerfile`). Para que pueda leer y escribir en el NAS SMB hay que montar el share **en el host Linux** con esas credenciales y luego hacer bind mount al container. **El usuario final del navegador no toca el NAS ni necesita credenciales SMB** — solo la cuenta de servicio del host las tiene.
+
+Pasos en el host Linux (una vez por servidor):
+
+1. Instalar el cliente CIFS:
+
+   ```bash
+   sudo apt install -y cifs-utils
+   ```
+
+2. Crear punto de montaje:
+
+   ```bash
+   sudo mkdir -p /mnt/nas
+   ```
+
+3. Crear credentials file con la cuenta de servicio del dominio (no la tuya):
+
+   ```bash
+   sudo install -m 600 -o root -g root /dev/null /etc/samba/corex-svc.cred
+   sudo tee /etc/samba/corex-svc.cred > /dev/null <<EOF
+   username=svc_corex
+   password=...
+   domain=GRUPO-MALIMA
+   EOF
+   ```
+
+4. Agregar entry a `/etc/fstab` para que el mount persista entre reboots:
+
+   ```fstab
+   //10.0.2.15/06_transformacion/Vigentes/PROYECTOS/PLANIFICACION/lakehouse/data/nosql  /mnt/nas  cifs  credentials=/etc/samba/corex-svc.cred,uid=1001,gid=1001,iocharset=utf8,vers=3.0,_netdev,nofail  0  0
+   ```
+
+   - `uid=1001,gid=1001` debe coincidir con el usuario `nextjs` dentro del container.
+   - `_netdev,nofail` evita que el server quede colgado al boot si el NAS está caído.
+
+5. Montar:
+
+   ```bash
+   sudo mount -a
+   ```
+
+6. Verificar que el path existe y es legible/escribible para uid 1001:
+
+   ```bash
+   ls -la /mnt/nas/comercial/img
+   sudo -u "#1001" touch /mnt/nas/comercial/img/_corex_write_test && \
+     sudo -u "#1001" rm /mnt/nas/comercial/img/_corex_write_test
+   ```
+
+7. Levantar el container (el `docker-compose.yml` ya trae el bind mount `/mnt/nas:/mnt/nas:rw` + la env `COMMERCIAL_CLAIMS_NAS_ROOT=/mnt/nas/comercial/img`):
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+8. Validar al primer arranque:
+
+   ```bash
+   docker compose logs web_corex | grep -i "ENV\|NAS"
+   ```
+
+   En producción si `COMMERCIAL_CLAIMS_NAS_ROOT` no está definida, `validate-runtime-env.mjs` emite `[ENV] COMMERCIAL_CLAIMS_NAS_ROOT no esta definido. ...`.
+
+Troubleshooting:
+
+- **`EACCES` al subir fotos**: el uid/gid del mount no coincide con el del container. Verifica `id nextjs` dentro del container y ajusta `uid=`/`gid=` en `/etc/fstab`.
+- **`ENOENT` al subir fotos**: la subcarpeta `comercial/img` no existe en el NAS. Créala desde Windows con la cuenta de servicio.
+- **Container arranca pero la primera foto falla con 500**: probablemente `COMMERCIAL_CLAIMS_NAS_ROOT` no se setteó. Revisa `docker compose config` y `.env`.
+- **Falló el mount al reiniciar el host**: revisa `journalctl -u systemd-networkd` y `dmesg | tail`. Con `_netdev,nofail` el host arranca igual aunque el NAS no esté disponible — el container fallará al primer upload, no al boot.
+
 ### Logging y rate limit
 
 ```env

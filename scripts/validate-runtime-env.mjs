@@ -75,6 +75,10 @@ if (process.env.NODE_ENV === "production") {
       hint: "Necesario para los maestros comerciales y el flujo transaccional de reclamos.",
     },
     {
+      name: "COMMERCIAL_CLAIMS_NAS_ROOT",
+      hint: "Ruta dentro del contenedor para fotos de reclamos (bind mount al NAS). Sin esto, subir/leer fotos retorna 500.",
+    },
+    {
       name: "CAMP_DATABASE_NAME",
       hint: "Necesario para el pool db_camp usado por el modulo Campo.",
     },

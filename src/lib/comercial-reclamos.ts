@@ -236,7 +236,15 @@ function readCommercialClaimsNasRoot() {
   if (!configuredRoot) {
     throw new Error("Configura COMMERCIAL_CLAIMS_NAS_ROOT para guardar fotos de reclamos en el NAS.");
   }
-  return configuredRoot;
+  // Hardening para deploy Linux + Docker:
+  //  - `path.normalize` colapsa // duplicados, resuelve . y .., y respeta el
+  //    separator del SO (Linux usa /).
+  //  - El strip de trailing slash/backslash evita rutas con doble "//" cuando
+  //    luego concatenamos con `path.join(nasRoot, relativePath)`.
+  // Si el operador puso por error \\10.0.2.15\... (UNC Windows) corriendo
+  // en Linux, la ruta sigue siendo inválida — pero al menos los typos de
+  // trailing slash dejan de ser un problema.
+  return path.normalize(configuredRoot).replace(/[/\\]+$/, "");
 }
 
 function sanitizeFileName(fileName: string) {
