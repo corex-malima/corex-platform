@@ -371,6 +371,27 @@ Documentación completa: `pdf-canon/docs/`.
 
 Para reportes tabulares con muchas filas (ej. seguimientos), preferir XLSX sobre PDF. Usar `xlsx` (SheetJS) en una API route protegida con auth + RBAC. Ver `src/app/api/talento-humano/seguimientos/export-xlsx/route.ts` como referencia (`/api/talento-humano/seguimientos/export-xlsx`).
 
+## Talento Humano — Colaboradores
+
+El explorador de Colaboradores tiene patrones específicos que conviene reusar:
+
+- **Helpers puros de dominio**: `src/lib/talento-humano-colaboradores-utils.ts` exporta `formatTenureLabel(days)` (devuelve `"21 d"`, `"7 meses"`, `"2 años, 3 meses"`) y `calculateCollaboratorPerformanceTotals(rows)` (agregación ponderada por horas para rendimiento, rendimientoMin y cumplimiento). Cobertura: `src/lib/__tests__/talento-humano-colaboradores-utils.test.ts`.
+- **`% Ausentismo` canon**: `absence_rate = SUM(absence_hours WHERE activity_id IN ('F','P','ATR')) / SUM(actual_hours FROM slv.prod_fact_hours_cur)`. Códigos canon: `F` (Faltas), `P` (Permisos con descuento), `ATR` (Atrasos). El resto de códigos en `slv.prod_fact_absenteeism_cur` (AJH, L, PTH, etc.) NO cuentan como ausentismo.
+- **Reuso de `PersonMedicalPanel`**: el tab Ficha médica de Colaboradores reusa el componente canon de Fenograma vía re-export en `src/shared/overlays/person-medical-panel.ts`. No duplicar markup médico.
+- **Historiales de área**: la query devuelve `tenureDays` calculado en SQL; la UI muestra el label legible vía `formatTenureLabel`.
+
+## Caja/Cama Meta — Productividad
+
+La meta ponderada por ciclo se calcula como `Σ(caja_meta_origen × cajas_aportadas_origen) / Σ(cajas_aportadas_origen)`. Las cajas equivalen a `green_weight_kg / 10`, así que la fórmula es matemáticamente equivalente a pesar por kg de verde, pero la implementación expresa cajas explícitamente para alinearse con la regla de negocio.
+
+Casos especiales del catálogo de orígenes:
+- `CLO` (preclasificación normal) → `opening` / "Apertura" como path canon (las metas viven solo bajo ese path tras la migración `sql/migrate_db_admin_boxes_per_bed_clo_opening_only.sql`).
+- `CLO PRECLASIFICACION` → se mapea a `opening` en `src/lib/productividad.ts` (no hay `gv` para este origen).
+
+## Metas y objetivos — bulk import + JSONB libre
+
+El editor de Metas (`/dashboard/admin/administracion-maestros/metas-objetivos`) admite caminos heterogéneos vía `target_scope_jsonb.filters` libres (cualquier dimensión, no fija). Hay autogeneración de `target_code` cuando se omite y carga bulk transaccional vía `POST /api/admin/administracion-maestros/metas-objetivos/bulk`. Schema canon: `src/lib/admin-masters-schemas.ts`.
+
 ## Deuda arquitectónica conocida
 
 - `src/components/dashboard/` queda reducido a `module-placeholder.tsx`. No crear archivos nuevos allí.
