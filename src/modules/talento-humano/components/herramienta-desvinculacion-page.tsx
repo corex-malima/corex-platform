@@ -302,23 +302,30 @@ export function HerramientaDesvinculacionPage({ initialData }: { initialData: De
           </p>
           <p>
             <strong>Ventana de análisis</strong>: las últimas {RULES_CONSTANTS.WINDOW_WEEKS} semanas
-            ISO contadas hasta la semana filtrada. Se necesitan al menos
-            {" "}{RULES_CONSTANTS.MIN_VALID_FOR_ESTABLISHED} semanas válidas para emitir un veredicto
-            &laquo;establecido&raquo;; entre {RULES_CONSTANTS.MIN_VALID_FOR_NEWBIE} y {RULES_CONSTANTS.MIN_VALID_FOR_ESTABLISHED - 1}
-            {" "}se trata al colaborador como &laquo;nuevo&raquo;.
+            ISO contadas hasta la semana filtrada.
+          </p>
+          <p>
+            <strong>Nuevo vs Establecido</strong>: el colaborador es &laquo;nuevo&raquo; si lleva
+            <strong> ≤ {RULES_CONSTANTS.NEWBIE_TENURE_DAYS} días</strong> desde su última fecha de ingreso
+            (`last_entry_date`). Período en que aún se está adaptando y la decisión la domina el ojo
+            humano, no la estadística. Los nuevos solo se evalúan con un umbral absoluto sobre la última
+            semana válida; no se les corre Mann-Kendall (poca potencia).
+            Los &laquo;establecidos&raquo; (&gt; 1 mes) necesitan al menos
+            {" "}{RULES_CONSTANTS.MIN_VALID_FOR_ESTABLISHED} semanas válidas en la ventana para emitir veredicto
+            pleno; si no, quedan como <code>sin_datos</code>.
           </p>
           <p>
             <strong>Tendencia decreciente</strong>: doble señal (OR) sobre los cumplimientos de las
             semanas válidas: <code>Mann-Kendall Z &lt; {RULES_CONSTANTS.MK_Z_DECLINE_THRESHOLD}</code>
-            {" "}(≈ 70 % de confianza one-sided, captura consistencia direccional) o pendiente
-            {" "}<code>Theil-Sen &lt; {RULES_CONSTANTS.SLOPE_DECLINE_THRESHOLD}</code> (≥ 0.5 pp/sem,
-            captura magnitud aún con ruido). Calibrado para dejar solo declives sólidos
-            — combinado con el filtro absoluto de cumplimiento, los falsos positivos quedan al mínimo.
+            {" "}(≈ 78 % de confianza one-sided, captura consistencia direccional) o pendiente
+            {" "}<code>Theil-Sen &lt; {RULES_CONSTANTS.SLOPE_DECLINE_THRESHOLD}</code> (≥ 0.7 pp/sem,
+            captura magnitud aún con ruido). Calibrado para dejar solo declives sólidos — combinado
+            con el filtro absoluto de cumplimiento, los falsos positivos quedan al mínimo.
           </p>
           <p>
-            <strong>🔴 Salida</strong> requiere las TRES condiciones simultáneas: ≥ {RULES_CONSTANTS.MIN_VALID_FOR_ESTABLISHED} semanas válidas,
-            la semana actual válida con cumplimiento &lt; {(RULES_CONSTANTS.CUMPLIMIENTO_LOW * 100).toFixed(0)}%, y tendencia decreciente.
-            El doble filtro mantiene la rigurosidad incluso con MK relajado.
+            <strong>🔴 Salida</strong> requiere las CUATRO condiciones simultáneas: ser establecido,
+            tener ≥ {RULES_CONSTANTS.MIN_VALID_FOR_ESTABLISHED} semanas válidas, la semana actual válida con
+            cumplimiento &lt; {(RULES_CONSTANTS.CUMPLIMIENTO_LOW * 100).toFixed(0)}%, y tendencia decreciente.
           </p>
           <p>
             <strong>🟢 Sin alerta</strong> agrupa OK, en observación nuevo y sin señal actual —

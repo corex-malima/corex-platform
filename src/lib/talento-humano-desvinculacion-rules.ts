@@ -26,28 +26,30 @@ export const RULES_CONSTANTS = {
   MIN_HOURS_PRESENCIALES: 40,
   /** Umbral mínimo de ratio H rend (actual_hours_rend / total_actual_hours). */
   MIN_H_REND_RATIO: 0.70,
-  /** Semanas válidas necesarias para considerarse "establecido". */
+  /**
+   * Antigüedad (días desde `last_entry_date`) en la que se sigue
+   * considerando al colaborador como "nuevo". ≤ 30 días = primer mes,
+   * período en que el ojo humano dominará la decisión, no la estadística.
+   */
+  NEWBIE_TENURE_DAYS: 30,
+  /** Semanas válidas necesarias para análisis pleno (Mann-Kendall + decisión). */
   MIN_VALID_FOR_ESTABLISHED: 6,
   /** Semanas válidas mínimas para correr Mann-Kendall con potencia razonable. */
   MIN_VALID_FOR_ANY_TREND: 4,
-  /** Semanas válidas mínimas para emitir veredicto "nuevo" en lugar de "sin datos". */
+  /** Semanas válidas mínimas absolutas (sino → sin_datos). */
   MIN_VALID_FOR_NEWBIE: 2,
   /**
    * Z de Mann-Kendall por debajo del cual decimos "tendencia decreciente".
-   * Calibración iterativa con datos reales: −1.0 (estricto, 0 salida) →
-   * −0.25 (demasiado permisivo) → −0.5 (≈ 70 % one-sided, balance final).
-   * Combinado con el filtro absoluto de cumplimiento < 90 %, deja solo
-   * candidatos sólidos en SALIDA.
+   * Calibración iterativa con datos reales: −1.0 (0 salida) → −0.25
+   * (demasiado permisivo) → −0.5 (4 salida) → −0.75 (≈ 78 % one-sided,
+   * deja solo declives sólidos). Combinado con cumplimiento < 90 %.
    */
-  MK_Z_DECLINE_THRESHOLD: -0.5,
+  MK_Z_DECLINE_THRESHOLD: -0.75,
   /**
-   * Pendiente Theil-Sen (en unidades de cumplimiento por semana) por debajo
-   * de la cual la magnitud de la caída se considera relevante por sí sola.
-   * −0.005 ≡ caída de 0.5 pp/sem ≡ 6 pp en 12 semanas. Combinada con MK
-   * vía `OR`, captura tanto declines consistentes-pero-noisy como declines
-   * suaves-pero-de-magnitud-clara.
+   * Pendiente Theil-Sen (cumplimiento por semana). −0.007 ≡ caída
+   * de 0.7 pp/sem ≡ ~8 pp en 12 semanas. Combinada con MK vía OR.
    */
-  SLOPE_DECLINE_THRESHOLD: -0.005,
+  SLOPE_DECLINE_THRESHOLD: -0.007,
   /** Umbral de cumplimiento bajo (escala 0..1+). */
   CUMPLIMIENTO_LOW: 0.90,
   /** Umbral de cumplimiento objetivo (escala 0..1+). */
@@ -88,6 +90,8 @@ export type EstadoClassification = {
   mannKendall: MannKendallResult | null;
   theilSenSlope: number | null;
   isDeclining: boolean;
+  /** true si el colaborador califica como "nuevo" por antigüedad (≤ 30 d). */
+  isNewbie: boolean;
 };
 
 export type EstadoMeta = {
@@ -247,6 +251,7 @@ export function isoWeekSubtract(weekId: string, n: number): string {
 export function classifyEstado(
   windowData: WeekDatum[],
   lastWeekId: string,
+  tenureDays: number | null = null,
 ): EstadoClassification {
   // El cliente puede pasar las semanas desordenadas o con gaps; orden ASC.
   const sorted = [...windowData].sort((a, b) => a.isoWeekId.localeCompare(b.isoWeekId));
@@ -267,16 +272,19 @@ export function classifyEstado(
     : null;
   const slope = validCumplimientos.length >= 2 ? theilSenSlope(validCumplimientos) : null;
   // `isDeclining` se dispara con dos señales (OR):
-  //  - MK Z < −0.5 (consistencia direccional aunque la magnitud sea baja), o
-  //  - Theil-Sen slope < −0.005 (magnitud relevante aunque la serie sea noisy).
-  // Solo se evalúa con ≥ 4 semanas válidas para mantener potencia razonable.
+  //  - MK Z < umbral (consistencia direccional aunque la magnitud sea baja), o
+  //  - Theil-Sen slope < umbral (magnitud relevante aunque la serie sea noisy).
+  // Solo se evalúa con ≥ MIN_VALID_FOR_ANY_TREND semanas válidas.
   const mkDeclines = mk !== null && mk.z < RULES_CONSTANTS.MK_Z_DECLINE_THRESHOLD;
   const slopeDeclines = slope !== null
     && slope < RULES_CONSTANTS.SLOPE_DECLINE_THRESHOLD
     && validCumplimientos.length >= RULES_CONSTANTS.MIN_VALID_FOR_ANY_TREND;
   const isDeclining = mkDeclines || slopeDeclines;
 
+  const isNewbie = tenureDays !== null && tenureDays <= RULES_CONSTANTS.NEWBIE_TENURE_DAYS;
+
   const estado = decideEstado({
+    isNewbie,
     validWeeks,
     lastIsValid,
     lastCumplimiento,
@@ -292,15 +300,40 @@ export function classifyEstado(
     mannKendall: mk,
     theilSenSlope: slope,
     isDeclining,
+    isNewbie,
   };
 }
 
+/**
+ * Árbol de decisión canon. Los 9 estados son mutuamente excluyentes y
+ * cubren todos los casos posibles (cada path termina en exactamente uno):
+ *
+ *   validWeeks < 2                                  → sin_datos
+ *   isNewbie (tenure ≤ 30 d)
+ *     lastValid + cumplimiento < 90 %               → advertencia_nuevo
+ *     resto                                         → en_observacion_nuevo
+ *   establecido (tenure > 30 d o sin info)
+ *     validWeeks < 6                                → sin_datos
+ *     NOT lastValid o cumplimiento null             → sin_senal_actual
+ *     cumplimiento < 90 % + declining               → salida
+ *     cumplimiento < 90 % + NOT declining           → bajo_sin_tendencia
+ *     90–100 % + declining                          → advertencia
+ *     90–100 % + NOT declining                      → ok
+ *     ≥ 100 % + declining                           → cumple_con_caida
+ *     ≥ 100 % + NOT declining                       → ok
+ *
+ * Decisión sobre `tenureDays === null`: se trata como "establecido" para
+ * no privilegiar la falta de información (más conservador). Si más
+ * adelante se quiere marcarlos diferente, se puede agregar un estado.
+ */
 function decideEstado({
+  isNewbie,
   validWeeks,
   lastIsValid,
   lastCumplimiento,
   isDeclining,
 }: {
+  isNewbie: boolean;
   validWeeks: number;
   lastIsValid: boolean;
   lastCumplimiento: number | null;
@@ -308,33 +341,33 @@ function decideEstado({
 }): DesvinculacionEstado {
   const { MIN_VALID_FOR_NEWBIE, MIN_VALID_FOR_ESTABLISHED, CUMPLIMIENTO_LOW, CUMPLIMIENTO_TARGET } = RULES_CONSTANTS;
 
-  // Sin datos suficientes para decidir nada.
+  // 1. Sin datos básicos: cualquiera con < 2 semanas válidas no se evalúa.
   if (validWeeks < MIN_VALID_FOR_NEWBIE) return "sin_datos";
 
-  // "Nuevito": entre 2 y 5 válidas. No corremos veredicto pesado.
-  if (validWeeks < MIN_VALID_FOR_ESTABLISHED) {
+  // 2. Nuevo por antigüedad (≤ 1 mes): juicio liviano, solo umbral absoluto.
+  if (isNewbie) {
     if (lastIsValid && lastCumplimiento !== null && lastCumplimiento < CUMPLIMIENTO_LOW) {
       return "advertencia_nuevo";
     }
     return "en_observacion_nuevo";
   }
 
-  // "Establecido": ≥ 6 válidas. Aplican las reglas plenas.
-  if (!lastIsValid) return "sin_senal_actual";
+  // 3. Establecido: necesita ≥ 6 semanas válidas para análisis confiable.
+  if (validWeeks < MIN_VALID_FOR_ESTABLISHED) return "sin_datos";
 
-  // lastCumplimiento puede ser null si la semana actual no tiene rendimiento;
-  // tratada como caso degenerado → "sin señal" para no inventar.
+  // 4. Establecido sin señal en la semana actual (poca presencia o H rend bajo).
+  if (!lastIsValid) return "sin_senal_actual";
   if (lastCumplimiento === null || !Number.isFinite(lastCumplimiento)) {
     return "sin_senal_actual";
   }
 
+  // 5. Matriz cumplimiento × tendencia.
   if (lastCumplimiento < CUMPLIMIENTO_LOW) {
     return isDeclining ? "salida" : "bajo_sin_tendencia";
   }
   if (lastCumplimiento < CUMPLIMIENTO_TARGET) {
     return isDeclining ? "advertencia" : "ok";
   }
-  // lastCumplimiento >= 1.00
   return isDeclining ? "cumple_con_caida" : "ok";
 }
 
@@ -363,7 +396,7 @@ const ESTADO_META: Record<DesvinculacionEstado, EstadoMeta> = {
     label: "Advertencia (nuevo)",
     emoji: "🟡",
     badgeVariant: "warning",
-    description: "Pocos datos válidos (< 6 semanas) y cumplimiento bajo en última semana válida.",
+    description: "Colaborador con ≤ 1 mes de antigüedad y cumplimiento bajo en la semana actual válida. Atención temprana, decisión humana.",
   },
   cumple_con_caida: {
     label: "Cumple con caída",
@@ -375,7 +408,7 @@ const ESTADO_META: Record<DesvinculacionEstado, EstadoMeta> = {
     label: "En observación (nuevo)",
     emoji: "🆕",
     badgeVariant: "secondary",
-    description: "Menos de 6 semanas válidas. Sin patrón consolidado todavía.",
+    description: "Colaborador con ≤ 1 mes de antigüedad. Período de adaptación — sin patrón consolidado todavía.",
   },
   ok: {
     label: "OK",
@@ -393,7 +426,7 @@ const ESTADO_META: Record<DesvinculacionEstado, EstadoMeta> = {
     label: "Sin datos",
     emoji: "⚪",
     badgeVariant: "outline",
-    description: "Menos de 2 semanas válidas en la ventana — sin base para análisis.",
+    description: "Datos insuficientes para análisis: < 2 semanas válidas en cualquier caso, o < 6 semanas válidas si tiene más de 1 mes de antigüedad.",
   },
 };
 

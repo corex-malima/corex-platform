@@ -86,6 +86,9 @@ function estadoTooltip(row: DesvinculacionToolRow): string {
   lines.push(`${meta.emoji} ${meta.label}`);
   lines.push(meta.description);
   lines.push("");
+  if (row.tenureDays !== null) {
+    lines.push(`Antigüedad: ${row.tenureDays} día${row.tenureDays === 1 ? "" : "s"}${row.isNewbie ? " (nuevo)" : ""}`);
+  }
   lines.push(`Semanas válidas: ${row.validWeeks} de ${row.totalWeeksInWindow}`);
   lines.push(`Última semana válida: ${row.lastIsValid ? "Sí" : "No"}`);
   if (row.mkTau !== null) lines.push(`Mann-Kendall τ: ${row.mkTau.toFixed(2)}`);

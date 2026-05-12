@@ -212,28 +212,64 @@ describe("classifyEstado", () => {
     expect(result.estado).toBe("sin_senal_actual");
   });
 
-  it("ADVERTENCIA_NUEVO: 4 válidas + last < 90", () => {
-    // 8 semanas pero 4 inválidas por horas, las 4 válidas con cumplimiento bajo final
-    const window = buildWindow(10, 8, [null, 1.0, null, 0.95, null, 0.92, null, 0.85], {
-      0: { totalHours: 10 },
-      2: { totalHours: 10 },
-      4: { totalHours: 10 },
-      6: { totalHours: 10 },
-    });
-    const result = classifyEstado(window, "202617");
-    expect(result.validWeeks).toBe(4);
+  it("ADVERTENCIA_NUEVO: nuevo por antigüedad (≤30 d) + last < 90 %", () => {
+    // Colaborador con 15 días de antigüedad — bracket "nuevo" sin importar
+    // cuántas semanas válidas. Cumplimiento bajo en última semana válida.
+    const window = buildWindow(10, 4, [1.0, 0.95, 0.92, 0.85]);
+    const result = classifyEstado(window, "202613", 15);
+    expect(result.isNewbie).toBe(true);
     expect(result.estado).toBe("advertencia_nuevo");
   });
 
-  it("EN_OBSERVACION_NUEVO: 3 válidas, todas OK", () => {
-    const window = buildWindow(10, 6, [1.0, null, 1.05, null, 1.02, null], {
-      1: { totalHours: 10 },
-      3: { totalHours: 10 },
-      5: { totalHours: 10 },
-    });
-    const result = classifyEstado(window, "202614");
-    expect(result.validWeeks).toBe(3);
+  it("EN_OBSERVACION_NUEVO: nuevo por antigüedad, cumplimiento OK", () => {
+    const window = buildWindow(10, 3, [1.0, 1.05, 1.02]);
+    const result = classifyEstado(window, "202612", 10);
+    expect(result.isNewbie).toBe(true);
     expect(result.estado).toBe("en_observacion_nuevo");
+  });
+
+  it("EN_OBSERVACION_NUEVO: nuevo sin lastValid pero con algunos datos", () => {
+    // Newbie con la semana actual inválida (pocas horas) — sin pánico,
+    // sigue en observación.
+    const window = buildWindow(10, 4, [1.0, 1.0, 1.0, 0.85], {
+      3: { totalHours: 20 },
+    });
+    const result = classifyEstado(window, "202613", 7);
+    expect(result.isNewbie).toBe(true);
+    expect(result.lastIsValid).toBe(false);
+    expect(result.estado).toBe("en_observacion_nuevo");
+  });
+
+  it("Establecido con datos insuficientes (<6 válidas) → sin_datos", () => {
+    // Tenure > 30 → no es newbie. validWeeks = 3 → insuficiente para
+    // análisis establecido. No es ni newbie ni evaluable → sin_datos.
+    const window = buildWindow(10, 3, [0.95, 0.92, 0.85]);
+    const result = classifyEstado(window, "202612", 200);
+    expect(result.isNewbie).toBe(false);
+    expect(result.validWeeks).toBe(3);
+    expect(result.estado).toBe("sin_datos");
+  });
+
+  it("tenureDays exactamente 30 días → es newbie (frontera inclusiva)", () => {
+    const window = buildWindow(10, 4, [1.0, 0.95, 0.92, 0.85]);
+    const result = classifyEstado(window, "202613", 30);
+    expect(result.isNewbie).toBe(true);
+    expect(result.estado).toBe("advertencia_nuevo");
+  });
+
+  it("tenureDays 31 días → es establecido (no newbie)", () => {
+    const window = buildWindow(10, 4, [1.0, 0.95, 0.92, 0.85]);
+    const result = classifyEstado(window, "202613", 31);
+    expect(result.isNewbie).toBe(false);
+    // validWeeks=4 < 6 → sin_datos (establecido sin info suficiente)
+    expect(result.estado).toBe("sin_datos");
+  });
+
+  it("tenureDays null se trata como establecido (conservador)", () => {
+    const window = buildWindow(10, 4, [1.0, 0.95, 0.92, 0.85]);
+    const result = classifyEstado(window, "202613", null);
+    expect(result.isNewbie).toBe(false);
+    expect(result.estado).toBe("sin_datos");
   });
 
   it("SIN_DATOS: < 2 válidas", () => {

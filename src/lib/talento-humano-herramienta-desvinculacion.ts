@@ -40,6 +40,9 @@ export type DesvinculacionToolRow = {
   totalWeeksInWindow: number;
   lastIsValid: boolean;
   isDeclining: boolean;
+  isNewbie: boolean;
+  tenureDays: number | null;
+  lastEntryDate: string | null;
   mkTau: number | null;
   mkZ: number | null;
   slopePerWeek: number | null;
@@ -168,6 +171,8 @@ type RawWindowRow = {
   area_general: string | null;
   job_title: string | null;
   job_classification_code: string | null;
+  last_entry_date: string | null;
+  tenure_days: number | string | null;
   actual_hours_rend: number | string | null;
   actual_hours_hn: number | string | null;
   total_actual_hours: number | string | null;
@@ -184,6 +189,8 @@ type PersonAccumulator = {
   areaGeneral: string | null;
   jobTitle: string | null;
   jobClassificationCode: string | null;
+  lastEntryDate: string | null;
+  tenureDays: number | null;
   weeksByIsoId: Map<string, RawWindowRow>;
 };
 
@@ -210,7 +217,7 @@ async function loadDesvinculacionWindow(
     profiles AS (
       SELECT DISTINCT ON (person_id)
         person_id, person_name, national_id, job_title,
-        contract_type, job_classification_code
+        contract_type, job_classification_code, last_entry_date
       FROM slv.tthh_dim_person_profile_scd2
       WHERE is_current = true AND is_valid = true
       ORDER BY person_id, valid_from DESC NULLS LAST
@@ -243,6 +250,11 @@ async function loadDesvinculacionWindow(
       ar.area_general,
       p.job_title,
       p.job_classification_code,
+      to_char(p.last_entry_date, 'YYYY-MM-DD')                                  AS last_entry_date,
+      CASE WHEN p.last_entry_date IS NULL
+           THEN NULL
+           ELSE GREATEST(0, (CURRENT_DATE - p.last_entry_date::date))::int
+      END                                                                       AS tenure_days,
       COALESCE(rw.actual_hours_rend, 0)::numeric  AS actual_hours_rend,
       COALESCE(rw.actual_hours_hn, 0)::numeric    AS actual_hours_hn,
       COALESCE(rw.total_actual_hours, 0)::numeric AS total_actual_hours,
@@ -279,6 +291,8 @@ async function loadDesvinculacionWindow(
         areaGeneral: toText(row.area_general),
         jobTitle: toText(row.job_title),
         jobClassificationCode: toText(row.job_classification_code),
+        lastEntryDate: toText(row.last_entry_date),
+        tenureDays: row.tenure_days != null ? toNumber(row.tenure_days) : null,
         weeksByIsoId,
       });
     }
@@ -445,7 +459,7 @@ export async function getDesvinculacionToolData(
       ? rendimiento / rendimientoMin
       : null;
 
-    const classification = classifyEstado(windowData, weekId);
+    const classification = classifyEstado(windowData, weekId, person.tenureDays);
 
     allRows.push({
       personId: person.personId,
@@ -467,6 +481,9 @@ export async function getDesvinculacionToolData(
       totalWeeksInWindow: classification.totalWeeks,
       lastIsValid: classification.lastIsValid,
       isDeclining: classification.isDeclining,
+      isNewbie: classification.isNewbie,
+      tenureDays: person.tenureDays,
+      lastEntryDate: person.lastEntryDate,
       mkTau: classification.mannKendall?.tau ?? null,
       mkZ: classification.mannKendall?.z ?? null,
       slopePerWeek: classification.theilSenSlope,
