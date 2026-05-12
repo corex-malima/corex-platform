@@ -310,11 +310,10 @@ export const MODULE_CATALOG: CatalogModule[] = [
     navigationGroup: "Dashboard",
     trail: ["Calidad", "Indicadores & KPI"],
     accessSection: "Analítica / Indicadores & KPI",
-    // hidden por defecto: tras la integración del frente reclamos el usuario
-    // asigna acceso manualmente desde Admin · Seguridad · Usuarios y luego
-    // cambia status a "active" cuando esté listo para que aparezca en el
-    // sidebar. Mantenerlo "hidden" evita auto-grant a usuarios viewer.
-    status: "hidden",
+    // El recurso está en `RESTRICTED_FROM_VIEWER_DEFAULTS` (access-control):
+    // visible para superadmin, NO auto-asignado a viewer. El usuario asigna
+    // manualmente vía Admin · Seguridad · Usuarios.
+    status: "active",
     mobileVisible: false,
   },
   {
@@ -328,9 +327,9 @@ export const MODULE_CATALOG: CatalogModule[] = [
     navigationGroup: "Gestion",
     trail: ["Comercial", "Reclamos"],
     accessSection: "Gestion",
-    // hidden por defecto: ver nota en calidad-reclamos. El usuario activa
-    // el módulo y asigna permisos cuando esté listo para producción.
-    status: "hidden",
+    // En `RESTRICTED_FROM_VIEWER_DEFAULTS`: no auto-grant a viewer.
+    // Superadmin lo ve; el resto, solo por asignación manual.
+    status: "active",
     quickAccess: true,
     mobileVisible: false,
   },

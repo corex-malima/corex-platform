@@ -407,9 +407,12 @@ El editor de Metas (`/dashboard/admin/administracion-maestros/metas-objetivos`) 
 
 ### Reclamos / Frente Comercial (integrado vía commit `e9f3cdc` — mayo 2026)
 
-Deuda pendiente registrada al integrar el frente comercial; el módulo
-queda en `status: "hidden"` para `calidad-reclamos` y `comercial-reclamos`
-hasta que el usuario decida activarlo y asignar permisos.
+Deuda pendiente registrada al integrar el frente comercial. Los dos
+módulos visibles (`calidad-reclamos` y `comercial-reclamos`) están
+`status: "active"` pero listados en `RESTRICTED_FROM_VIEWER_DEFAULTS`
+en `src/lib/access-control.ts`: superadmin los ve, viewer NO los recibe
+automáticamente. Para abrir acceso a usuarios `custom`, asignar
+manualmente desde Admin · Seguridad · Usuarios.
 
 1. **Fotos de reclamos: pasar de NAS directo a disco local + sync**.
    Hoy `src/lib/comercial-reclamos.ts` escribe directo al NAS bajo
@@ -445,9 +448,11 @@ hasta que el usuario decida activarlo y asignar permisos.
    ```
 6. **Configurar NAS share + cuenta de servicio** (`GRUPO-MALIMA\svc_corex`
    según README) en el server de producción.
-7. **Activar módulos**: cuando estén listos, cambiar `calidad-reclamos` y
-   `comercial-reclamos` de `status: "hidden"` a `status: "active"` y
-   asignar permisos vía Admin · Seguridad · Usuarios.
+7. **Abrir acceso a más roles**: si más adelante se decide que todos los
+   viewers deben ver Reclamos, quitar las dos entradas de
+   `RESTRICTED_FROM_VIEWER_DEFAULTS` en `src/lib/access-control.ts`.
+   Para asignación manual a usuarios `custom`, vía
+   Admin · Seguridad · Usuarios sin tocar código.
 
 ## Variables de entorno
 

@@ -98,6 +98,24 @@ export const ADMIN_RESOURCE_KEYS = new Set<string>(
     .map((resource) => resource.resourceKey),
 );
 
+/**
+ * Recursos activos que NO deben asignarse automáticamente al rol `viewer`.
+ * El módulo aparece para `superadmin` (que tiene todo) y para `custom` solo
+ * si se le asigna manualmente vía Admin · Seguridad · Usuarios.
+ *
+ * Útil para módulos sensibles o nuevos que requieren onboarding controlado
+ * antes de exponerse al público interno general.
+ *
+ * Frente Comercial / Reclamos (commit e9f3cdc, mayo 2026): el usuario decide
+ * manualmente quiénes ven Reclamos. Los maestros (Administracion section) ya
+ * están bloqueados por `ADMIN_RESOURCE_KEYS`, así que solo los 2 frentes de
+ * Gestion/Analítica necesitan listarse acá.
+ */
+export const RESTRICTED_FROM_VIEWER_DEFAULTS = new Set<string>([
+  "/dashboard/comercial/reclamos",
+  "/dashboard/calidad/reclamos",
+]);
+
 export const ROLE_OPTIONS: Array<{ value: RoleCode; label: string; description: string }> = [
   { value: "superadmin", label: "Superadmin", description: "Acceso total a modulos activos e internos de gestion." },
   { value: "viewer", label: "Viewer", description: "Todas las pantallas activas no administrativas." },
@@ -417,6 +435,7 @@ export function getBaseAllowedResources(roleCode: RoleCode): string[] {
   if (roleCode === "viewer") {
     return ACCESS_RESOURCES
       .filter((resource) => !ADMIN_RESOURCE_KEYS.has(resource.resourceKey))
+      .filter((resource) => !RESTRICTED_FROM_VIEWER_DEFAULTS.has(resource.resourceKey))
       .map((resource) => resource.resourceKey);
   }
 
