@@ -228,6 +228,11 @@ const hugeFileAllowlist = new Set([
   "src/lib/salud.ts",
   "src/lib/fenograma-core.ts",
   "src/lib/postcosecha-balanzas-core.ts",
+  // KPI loader de Balanzas (Hidratacion + Desperdicio + Ajuste):
+  // mantiene types + loaders cacheados + funciones puras testeables
+  // en un solo modulo cohesivo. Splitearlo no aporta — todo coordina
+  // alrededor del shape `BalanzasNodeKpi`.
+  "src/lib/postcosecha-balanzas-kpi.ts",
   "src/lib/postcosecha-clasificacion-en-blanco.ts",
   "src/lib/talento-humano.ts",
   "src/modules/campo/components/campo-explorer.tsx",

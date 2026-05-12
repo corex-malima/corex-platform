@@ -1,6 +1,23 @@
 import "server-only";
 
 import { query } from "@/lib/db";
+import {
+  computeAdjustmentKpi,
+  computeHydrationKpi,
+  computeWasteKpi,
+  loadAdjustmentParams,
+  loadHydrationFactorIndex,
+  loadHydrationTargets,
+  loadWasteTargets,
+  loadWeeklySalesIndex,
+  resolveDwOrigin,
+  resolveMetaOrigin,
+  resolveVarietyFromFarm,
+  type AdjustmentColumnConfig,
+  type BalanzasNodeKpi,
+  type HydrationColumnConfig,
+  type WasteColumnConfig,
+} from "@/lib/postcosecha-balanzas-kpi";
 import { cachedAsync } from "@/lib/server-cache";
 import { decodeMultiSelectValue } from "@/lib/multi-select";
 import { formatFlexibleNumber, formatPercent as formatPercentShared } from "@/shared/lib/format";
@@ -129,7 +146,17 @@ export type BalanzasNodeDetail = {
   temporalOptions: BalanzasDetailTemporalOptions;
   rowCount: number;
   metrics: BalanzasSummaryMetric[];
+  /**
+   * KPIs con meta y cumplimiento (Hidratación / Desperdicio / Ajuste).
+   * Solo se devuelve si el nodo tiene `kpiSupport` configurado en
+   * `BALANZAS_NODES`. Campo opcional para retrocompatibilidad de la API.
+   */
+  kpi?: BalanzasNodeKpi;
 };
+
+// Re-export para que consumidores del barrel `postcosecha-balanzas` puedan
+// usar el tipo sin tener que importar el módulo KPI directamente.
+export type { BalanzasNodeKpi } from "@/lib/postcosecha-balanzas-kpi";
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
@@ -153,6 +180,20 @@ type BalanzasDetailColumnConfig = {
   format: BalanzasDetailColumnFormat;
   aggregateMode: BalanzasDetailAggregateMode;
   aggregateSources?: BalanzasDetailAggregateSources;
+};
+
+/**
+ * Configuración declarativa de KPIs (Hidratación / Desperdicio / Ajuste)
+ * por nodo. Cada flag opcional indica las columnas de la MV a usar
+ * para ese KPI; si el nodo no soporta un KPI determinado, simplemente
+ * se omite el flag y el loader no lo computa.
+ *
+ * Ver `src/lib/postcosecha-balanzas-kpi.ts` para la lógica de cómputo.
+ */
+type BalanzasKpiSupport = {
+  hydration?: HydrationColumnConfig;
+  waste?: WasteColumnConfig;
+  adjustment?: AdjustmentColumnConfig;
 };
 
 type BalanzasNodeDef = {
@@ -179,6 +220,14 @@ type BalanzasNodeDef = {
    * Cuando está presente, el cliente genera 3 overlays virtuales en lugar de 1.
    */
   bpmnByDestination?: BalanzasBpmnByDestination;
+  /**
+   * Si está presente, el loader `loadNodeDetail()` computa los KPIs
+   * Hidratación / Desperdicio / Ajuste correspondientes y los expone en
+   * `BalanzasNodeDetail.kpi`. Solo aplica a nodos APERTURA inicialmente
+   * (los nodos GV/PRECLASIF se habilitarán incrementalmente cuando se
+   * validen sus metas en `db_admin`).
+   */
+  kpiSupport?: BalanzasKpiSupport;
 };
 
 const B2_B2A_WEIGHT_SUMMARY_METRICS: SummaryMetricDef[] = [
@@ -1331,6 +1380,21 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasGrade: true,
     hasGradeGroup: false,
     bpmnBinding: { elementId: "Task_B2_Apertura_Directo", overlayOffsetLeft: 172 },
+    kpiSupport: {
+      hydration: {
+        b1cKey: "weight_b1c_estimated_kg",
+        b2Key: "weight_b2_kg",
+        gradeKey: "grade",
+      },
+      adjustment: {
+        weightPerStemKey: "weight_per_stem_kg",
+        b1cKey: "weight_b1c_estimated_kg",
+        lotDateKey: "lot_date",
+        workDateKey: "work_date",
+        gradeKey: "grade",
+        destinationKey: "destination",
+      },
+    },
   },
   {
     key: "apertura-b2-b2a-weight",
@@ -1355,6 +1419,13 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
       blanco: "Task_B2A_Apertura_Directo_Blanco",
       tinturado: "Task_B2A_Apertura_Directo_Tinturado",
     },
+    kpiSupport: {
+      waste: {
+        b2Key: "weight_b2_kg",
+        b2aKey: "weight_b2a_kg",
+        destinationKey: "destination",
+      },
+    },
   },
   {
     key: "apertura-b1c-b2a-ideal",
@@ -1374,6 +1445,16 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasGrade: false,
     hasGradeGroup: false,
     bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 0 },
+    kpiSupport: {
+      // Esta MV tiene destination + weight_b2a/weight_b2 → soporta Desperdicio.
+      // No tiene `grade` ni `lot_date`, así que Hidratación KPI y Ajuste se omiten
+      // (Hidratación KPI necesita `grade` para ponderar la meta).
+      waste: {
+        b2Key: "weight_b2_kg",
+        b2aKey: "weight_b2a_kg",
+        destinationKey: "destination",
+      },
+    },
   },
   {
     key: "apertura-b2a-ideal-grade",
@@ -1732,6 +1813,8 @@ export async function loadNodeDetail(
     return { col: m.col, label: m.label, value: raw, formatted: formatMetricValue(raw, m.format) };
   });
 
+  const kpi = await computeNodeKpi(nodeDef, rows, filters);
+
   return {
     nodeKey: nodeDef.key,
     nodeLabel: nodeDef.label,
@@ -1747,7 +1830,82 @@ export async function loadNodeDetail(
     temporalOptions,
     rowCount: toNumber(sRow.row_count) ?? rows.length,
     metrics,
+    kpi,
   };
+}
+
+/**
+ * Computa los KPIs configurados en `nodeDef.kpiSupport` consumiendo
+ * `rows` (output del query de la MV) y consultando metas / factor ML /
+ * ventas semanales según corresponda.
+ *
+ * Devuelve `undefined` si el nodo no tiene `kpiSupport` o si no se pudo
+ * resolver `origin` (branch no canónico). Cualquier KPI individual
+ * puede salir con campos `null` si los datos no son suficientes (filas
+ * vacías, factor ML faltante, semana sin ventas).
+ *
+ * Ejecuta loaders + cómputo en paralelo con Promise.all para minimizar
+ * latencia.
+ */
+async function computeNodeKpi(
+  nodeDef: BalanzasNodeDef,
+  rows: BalanzasDetailRow[],
+  filters: BalanzasFilters,
+): Promise<BalanzasNodeKpi | undefined> {
+  const support = nodeDef.kpiSupport;
+  if (!support) return undefined;
+
+  const metaOrigin = resolveMetaOrigin(nodeDef.branch);
+  if (!metaOrigin) return undefined;
+
+  const kpi: BalanzasNodeKpi = {};
+
+  const tasks: Array<Promise<void>> = [];
+
+  if (support.hydration) {
+    const cfg = support.hydration;
+    tasks.push(
+      loadHydrationTargets().then((targets) => {
+        kpi.hydration = computeHydrationKpi(rows, cfg, targets, metaOrigin);
+      }),
+    );
+  }
+
+  if (support.waste) {
+    const cfg = support.waste;
+    tasks.push(
+      loadWasteTargets().then((targets) => {
+        kpi.waste = computeWasteKpi(rows, cfg, targets, metaOrigin);
+      }),
+    );
+  }
+
+  if (support.adjustment) {
+    const cfg = support.adjustment;
+    const dwOrigin = resolveDwOrigin(nodeDef.branch);
+    const variety = resolveVarietyFromFarm(filters.farm);
+    if (dwOrigin && variety) {
+      // Derivar ventana de fechas para los loaders externos.
+      // Si el usuario no eligió rango explícito, dejamos null y los loaders
+      // toman todo el universo (cacheado).
+      const dateFrom = filters.dateFrom || null;
+      const dateTo = filters.dateTo || null;
+
+      tasks.push(
+        Promise.all([
+          loadAdjustmentParams(),
+          loadHydrationFactorIndex({ dwOrigin, variety, dateFrom, dateTo }),
+          loadWeeklySalesIndex(),
+        ]).then(([params, factorIndex, salesIndex]) => {
+          kpi.adjustment = computeAdjustmentKpi(rows, cfg, factorIndex, salesIndex, params);
+        }),
+      );
+    }
+  }
+
+  if (tasks.length === 0) return undefined;
+  await Promise.all(tasks);
+  return Object.keys(kpi).length > 0 ? kpi : undefined;
 }
 
 /**
