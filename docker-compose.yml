@@ -17,16 +17,22 @@ services:
       TZ: UTC
       POSTHARVEST_SOLVER_PYTHON: python3
       # Ruta dentro del container donde se montó el NAS para fotos de reclamos.
-      # El bind mount de abajo (`/mnt/nas`) expone el share SMB del host Linux.
-      COMMERCIAL_CLAIMS_NAS_ROOT: /mnt/nas/comercial/img
+      # El bind mount de abajo expone el share SMB del host Linux (mismo path
+      # del host se replica adentro del container para que sea inequívoco).
+      COMMERCIAL_CLAIMS_NAS_ROOT: /mnt/nas_planificacion/lakehouse/data/nosql/comercial/img
     ports:
       - "7777:7777"
     volumes:
-      # Bind mount del NAS SMB ya montado en el HOST Linux como /mnt/nas
-      # (ver docs/despliegue.md sección "Mount del NAS para fotos de reclamos").
-      # El container hereda los permisos del mount; la cuenta de servicio del
-      # host (svc_corex) maneja la autenticación SMB, no los usuarios finales.
-      - /mnt/nas:/mnt/nas:rw
+      # Bind mount del NAS SMB ya montado en el HOST Linux como
+      # /mnt/nas_planificacion (ver docs/despliegue.md sección "Mount del NAS
+      # para fotos de reclamos"). El container hereda los permisos del mount;
+      # la cuenta de servicio del host (svc_corex) maneja la autenticación
+      # SMB, no los usuarios finales.
+      #
+      # IMPORTANTE: aunque el NAS esté montado en el host, Docker aísla el
+      # filesystem por defecto. Sin este bind mount el container no ve la
+      # ruta y los uploads/reads de fotos fallan con ENOENT.
+      - /mnt/nas_planificacion:/mnt/nas_planificacion:rw
     stop_grace_period: 20s
     logging:
       driver: json-file
