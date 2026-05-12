@@ -16,23 +16,34 @@ services:
       HOSTNAME: 0.0.0.0
       TZ: UTC
       POSTHARVEST_SOLVER_PYTHON: python3
-      # Ruta dentro del container donde se montó el NAS para fotos de reclamos.
-      # El bind mount de abajo expone el share SMB del host Linux (mismo path
-      # del host se replica adentro del container para que sea inequívoco).
+      # Ruta DENTRO del container para fotos de reclamos. El bind mount de
+      # abajo expone el share SMB del host (real en /srv/postgres/...) con
+      # alias /mnt/nas_planificacion para que el código no dependa del
+      # layout del host.
       COMMERCIAL_CLAIMS_NAS_ROOT: /mnt/nas_planificacion/lakehouse/data/nosql/comercial/img
     ports:
       - "7777:7777"
     volumes:
-      # Bind mount del NAS SMB ya montado en el HOST Linux como
-      # /mnt/nas_planificacion (ver docs/despliegue.md sección "Mount del NAS
-      # para fotos de reclamos"). El container hereda los permisos del mount;
-      # la cuenta de servicio del host (svc_corex) maneja la autenticación
-      # SMB, no los usuarios finales.
+      # Bind mount del NAS SMB. En el host Linux, el share está montado en
+      # /srv/postgres/nas_planificacion vía autofs (CIFS, _netdev,
+      # x-systemd.automount). Lo exponemos al container como
+      # /mnt/nas_planificacion para que el path adentro sea agnóstico al
+      # layout del host.
       #
       # IMPORTANTE: aunque el NAS esté montado en el host, Docker aísla el
       # filesystem por defecto. Sin este bind mount el container no ve la
       # ruta y los uploads/reads de fotos fallan con ENOENT.
-      - /mnt/nas_planificacion:/mnt/nas_planificacion:rw
+      #
+      # `propagation: rshared` es CLAVE porque el mount del host es autofs
+      # (se activa/desactiva on-demand). Sin rshared el container tomaría
+      # un snapshot al arranque y vería carpeta vacía si autofs aún no
+      # disparó el SMB. Con rshared, cualquier (re)mount del host se
+      # propaga al container en vivo.
+      - type: bind
+        source: /srv/postgres/nas_planificacion
+        target: /mnt/nas_planificacion
+        bind:
+          propagation: rshared
     stop_grace_period: 20s
     logging:
       driver: json-file
