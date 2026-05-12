@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ACTIVE_MODULES, ALL_MANAGED_MODULES } from "@/config/module-catalog";
 import {
   ACCESS_RESOURCES,
+  RESTRICTED_FROM_VIEWER_DEFAULTS,
   getApiAccessRule,
   getBaseAllowedResources,
   matchesApiPrefix,
@@ -48,8 +49,12 @@ describe("access control", () => {
 
   it("derives viewer resources from active non-admin modules", () => {
     const viewerResources = getBaseAllowedResources("viewer");
+    // Viewer = modulos activos non-admin MENOS los listados en
+    // RESTRICTED_FROM_VIEWER_DEFAULTS (e.g. reclamos — el usuario asigna
+    // acceso manualmente desde Admin · Seguridad · Usuarios).
     const activeNonAdmin = ACTIVE_MODULES
       .filter((module) => module.navigationGroup !== "Administracion")
+      .filter((module) => !RESTRICTED_FROM_VIEWER_DEFAULTS.has(module.href))
       .map((module) => module.href);
 
     expect(viewerResources.filter((resource) => resource.startsWith("/dashboard")).sort()).toEqual(activeNonAdmin.sort());
@@ -59,6 +64,10 @@ describe("access control", () => {
       "panel:person-sheet.medical",
     ]));
     expect(viewerResources).not.toContain("/dashboard/admin/seguridad/usuarios");
+    // Los del set restringido NO deben estar en viewer por defecto.
+    for (const restrictedKey of RESTRICTED_FROM_VIEWER_DEFAULTS) {
+      expect(viewerResources).not.toContain(restrictedKey);
+    }
   });
 
   it("keeps active catalog resources visible in RBAC", () => {

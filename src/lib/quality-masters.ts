@@ -285,27 +285,32 @@ async function ensureSimpleMasterTables(client?: PoolClient) {
       )
     `);
 
+    // Hoist split una sola vez: el nombre simple de la tabla se usa 4x abajo
+    // para los nombres de índices. Evita re-evaluar `split` en cada query.
+    const refTableShort = config.refTable.split(".")[1];
+    const dimTableShort = config.dimTable.split(".")[1];
+
     await runQuery(`
-      create unique index if not exists ${config.refTable.split(".")[1]}_current_idx
+      create unique index if not exists ${refTableShort}_current_idx
         on ${config.refTable} (entity_id)
         where is_current
     `);
 
     await runQuery(`
-      create unique index if not exists ${config.dimTable.split(".")[1]}_current_idx
+      create unique index if not exists ${dimTableShort}_current_idx
         on ${config.dimTable} (entity_id)
         where is_current
     `);
 
     await runQuery(`
-      create unique index if not exists ${config.dimTable.split(".")[1]}_current_code_unique_idx
+      create unique index if not exists ${dimTableShort}_current_code_unique_idx
         on ${config.dimTable} (lower(regexp_replace(trim(entity_code), '\\s+', ' ', 'g')))
         where is_current = true
           and is_valid = true
     `);
 
     await runQuery(`
-      create index if not exists ${config.dimTable.split(".")[1]}_name_idx
+      create index if not exists ${dimTableShort}_name_idx
         on ${config.dimTable} (lower(regexp_replace(trim(entity_name), '\\s+', ' ', 'g')))
     `);
   }

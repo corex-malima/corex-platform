@@ -357,6 +357,10 @@ const AREA_ALIAS_SQL = `
   end
 `;
 
+// Collator canon (es-EC, numeric). Hoist a módulo para no reconstruirlo
+// en cada llamada de `loadFenogramaFilterOptions`.
+const ES_NUMERIC_COLLATOR = new Intl.Collator("es-EC", { numeric: true, sensitivity: "base" });
+
 const FENOGRAMA_SOURCE = "gld.mv_prod_fenograma_cur";
 const FENOGRAMA_DAY_SOURCE = "gld.mv_prod_fenograma_day_cur";
 const BED_PLANTS_SOURCE = "gld.mv_camp_kardex_bed_plants_cur";
@@ -803,7 +807,7 @@ function summarizeValves(valves: ValveProfileCard[]) {
 async function loadFenogramaFilterOptions(): Promise<FenogramaFilterOptions> {
   const result = await query<FenogramaOptionsRow>(FENOGRAMA_OPTIONS_QUERY);
   const row = result.rows[0];
-  const collator = new Intl.Collator("es-EC", { numeric: true, sensitivity: "base" });
+  const collator = ES_NUMERIC_COLLATOR;
 
   return {
     areas: Array.from(new Set((row?.areas ?? []).map((value) => normalizeAreaDisplayName(value))))

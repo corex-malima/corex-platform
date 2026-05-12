@@ -22,16 +22,16 @@ export function ThemeProvider({
   storageKey = "vite-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = React.useState<Theme>("system")
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-
+  // Lazy init: lee localStorage solo en cliente. El server siempre arranca
+  // con `defaultTheme` porque `typeof window === "undefined"`. Esto elimina
+  // la cadena de useEffects (no-effect-chain): antes había un effect que
+  // leía localStorage y seteaba `theme`, y otro que reaccionaba a `theme`
+  // para tocar el DOM. Ahora un solo effect aplica el className.
+  const [theme, setTheme] = React.useState<Theme>(() => {
+    if (typeof window === "undefined") return defaultTheme
     const storedTheme = localStorage.getItem(storageKey)
-    const nextTheme = isTheme(storedTheme) ? storedTheme : defaultTheme
-
-    setTheme((currentTheme) => (currentTheme === nextTheme ? currentTheme : nextTheme))
-  }, [defaultTheme, storageKey])
+    return isTheme(storedTheme) ? storedTheme : defaultTheme
+  })
 
   React.useEffect(() => {
     if (typeof window === "undefined") return

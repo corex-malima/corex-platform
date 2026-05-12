@@ -260,7 +260,11 @@ function QueueCard({
           </div>
         </div>
         {actions ? (
+          // Wrapper sin rol semántico: los handlers solo paran la propagación
+          // del click del card padre. `role="presentation"` le dice al a11y
+          // que ignore este nodo (no es un control).
           <div
+            role="presentation"
             onClick={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
           >

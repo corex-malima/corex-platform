@@ -9,6 +9,7 @@ import { parseDateOnly } from "@/shared/lib/format";
 import { roundValue, toNumber } from "@/shared/lib/number-utils";
 
 // ── Fuente de datos ──────────────────────────────────────────────────────────
+const ES_NUMERIC_COLLATOR    = new Intl.Collator("es-EC", { numeric: true, sensitivity: "base" });
 const PROD_HOURS_SOURCE      = "gld.mv_prod_hours_cycle_person_cur";
 const KARDEX_CYCLE_SOURCE    = "gld.mv_camp_kardex_cycle_plants_cur";
 const FENOGRAMA_SOURCE       = "gld.mv_prod_fenograma_cur";               // stems_count
@@ -584,7 +585,7 @@ export async function getProductividadDashboardData(
     });
 
     // ── Build filter options from ALL rows ───────────────────────────────────
-    const collator = new Intl.Collator("es-EC", { numeric: true, sensitivity: "base" });
+    const collator = ES_NUMERIC_COLLATOR;
 
     const years = Array.from(new Set(
       allRows.map((r) => String(r.harvestYear ?? "")).filter(Boolean),

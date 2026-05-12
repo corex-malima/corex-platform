@@ -248,6 +248,9 @@ const hugeFileAllowlist = new Set([
   "src/lib/comparacion.ts",
   "src/lib/laboratory-masters.ts",
   "src/lib/postcosecha-clasificacion-en-blanco-runner.ts",
+  // Productividad loader: dominio Campo con múltiples queries cruzadas (hours,
+  // boxes, kardex, fenograma) + targets ponderados. Está al límite (~700 lns).
+  "src/lib/productividad.ts",
   "src/modules/admin-masters/components/admin-goal-target-editor.tsx",
   "src/modules/admin-masters/components/admin-goal-targets-page.tsx",
   "src/modules/bodega/components/bodega-categorias-page.tsx",
