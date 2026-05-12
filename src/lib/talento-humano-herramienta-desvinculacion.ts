@@ -212,8 +212,12 @@ async function loadDesvinculacionWindow(
       ORDER BY person_id, valid_from DESC NULLS LAST
     ),
     rend_window AS (
+      -- IMPORTANTE: NO trimear person_id aqui. El JOIN con
+      -- slv.tthh_asgn_person_area_event_scd2.person_id espera el valor
+      -- crudo (ambas tablas tienen el mismo padding/format en produccion).
+      -- Trimar solo un lado del = rompe el match y deja la tabla vacia.
       SELECT
-        trim(r.person_id::text)                  AS person_id,
+        r.person_id                              AS person_id,
         r.iso_week_id::text                      AS iso_week_id,
         SUM(r.actual_hours_rend)                 AS actual_hours_rend,
         SUM(r.actual_hours_hn)                   AS actual_hours_hn,
@@ -223,7 +227,7 @@ async function loadDesvinculacionWindow(
       FROM gld.prod_rend_adj_cur r
       WHERE r.iso_week_id::text BETWEEN $1 AND $2
         AND r.iso_week_id IS NOT NULL
-      GROUP BY trim(r.person_id::text), r.iso_week_id
+      GROUP BY r.person_id, r.iso_week_id
     )
     SELECT
       ap.person_id,
