@@ -1074,7 +1074,7 @@ export function ComercialReclamosPage({
             <div className="max-h-[calc(92vh-5rem)] overflow-y-auto px-6 py-5">
               {isLoadingClaimDetail || !selectedClaimDetail ? (
                 <div className="rounded-[20px] border border-dashed border-border/70 bg-background/80 px-4 py-10 text-center text-sm text-muted-foreground">
-                  Cargando detalle del reclamo...
+                  Cargando detalle del reclamo…
                 </div>
               ) : (
                 <div className="space-y-5">

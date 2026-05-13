@@ -450,6 +450,17 @@ Reporte completo en
 (TIER 1 — correctness/perf/a11y, TIER 2 — tipografía/shorthand). Lo
 siguiente queda como deuda registrada:
 
+> **Run 3 (mayo 2026)** — corrió tras los 8 commits del módulo
+> Balanzas KPI (R1–R8, hasta `979ce15`) + fix TTHH Seguimientos.
+> Conteos casi idénticos al run 2 → confirma que las sesiones de
+> Balanzas **no introdujeron regresiones**. Únicos cambios:
+> **−16 ellipsis** (acumulado de limpieza R2 + 2 finales aplicados en
+> `comparison-explorer:260` y `reclamos-page:1077`), **−1 em-dash**
+> (`runtime-marker` fix R2), **+1 `no-static-element-interactions`**
+> falso positivo en `reclamos-page:224` (atributos `role`/`tabIndex`/
+> `onKeyDown` condicionales que el linter no entiende).
+
+
 | Rule | Count | Razón para skip |
 | --- | --- | --- |
 | `no-derived-useState` | 21 | Patrón canon `useState(initialData)` + SWR `fallbackData`. Tocarlo rompería la sincronización con SWR. |

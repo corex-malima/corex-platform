@@ -257,7 +257,7 @@ function CycleSelectorPanel({
       {isValidating ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
-          Buscando...
+          Buscando…
         </div>
       ) : null}
 
