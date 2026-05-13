@@ -459,6 +459,20 @@ siguiente queda como deuda registrada:
 > (`runtime-marker` fix R2), **+1 `no-static-element-interactions`**
 > falso positivo en `reclamos-page:224` (atributos `role`/`tabIndex`/
 > `onKeyDown` condicionales que el linter no entiende).
+>
+> **Run 4 (mayo 2026, segunda pasada)** — corrió tras el fix R3.
+> Conteos TIER 1 **EXACTAMENTE iguales a R3** → confirma cero
+> regresión post-Balanzas KPI. Ellipsis quedó en 0 (fix R3 efectivo).
+> Score: 78 / 100 "Great".
+>
+> Intenté aplicar 5 fixes `js-tosorted-immutable` en archivos del
+> Balanzas KPI (R1–R8 propios) — `[...arr].sort()` → `.toSorted()`.
+> **Bloqueado**: `tsconfig.json` no tiene `lib: "es2023"` y `.toSorted()`
+> requiere esa lib. Cambiar config global es riesgo de afectar otros
+> módulos; revertido. **Deuda registrada**: si en el futuro se sube
+> el `lib` a `es2023`, aplicar los 5 fixes:
+> `postcosecha-balanzas-kpi.ts:338, 895` y
+> `postcosecha-balanzas-core.ts:2673-2675`.
 
 
 | Rule | Count | Razón para skip |
