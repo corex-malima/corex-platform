@@ -1550,11 +1550,12 @@ const BALANZAS_NODES: BalanzasNodeDef[] = [
     hasGradeGroup: false,
     bpmnBinding: { elementId: "Task_General_Apertura_Directo", overlayOffsetLeft: 0 },
     kpiSupport: {
-      // Hidratación KPI (R3): vía cross-MV porque esta MV no tiene `grade`
-      // row-by-row. computeNodeKpi detecta `hasGrade=false` + kpiSupport.hydration
-      // y llama a loadHydrationKpiSourceRows para leer desde b1c_vs_b2_weight.
+      // Hidratación KPI (R3/R5): la MV LOCAL del Peso ideal tiene
+      // `weight_b1c_kg` (no `_estimated_`). El cross-MV `b1c_vs_b2_weight`
+      // sí tiene `_estimated_kg`; el loader cross hace alias a `weight_b1c_kg`
+      // para que las rows del cross y del local compartan la misma clave.
       hydration: {
-        b1cKey: "weight_b1c_estimated_kg",
+        b1cKey: "weight_b1c_kg",
         b2Key: "weight_b2_kg",
         gradeKey: "grade",
       },

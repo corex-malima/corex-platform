@@ -392,8 +392,15 @@ export async function loadHydrationKpiSourceRows(args: {
 
   return cachedAsync(cacheKey, FACTOR_INDEX_TTL_MS, async () => {
     try {
+      // Alias: la MV cross usa `weight_b1c_estimated_kg`, pero el caller
+      // espera la clave `weight_b1c_kg` (porque la MV LOCAL del Peso ideal
+      // — donde se mostrará el KPI — usa esa columna). Sin el AS, el
+      // computer no encontraría b1c en las rows.
       const { rows } = await query<BalanzasComputeRow>(
-        `SELECT grade, destination, weight_b1c_estimated_kg, weight_b2_kg
+        `SELECT grade,
+                destination,
+                weight_b1c_estimated_kg AS weight_b1c_kg,
+                weight_b2_kg
          FROM ${viewName} ${args.whereSql}
          LIMIT 100000`,
         args.whereParams,
