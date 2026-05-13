@@ -40,8 +40,8 @@ import { formatDecimal, formatPercent } from "@/shared/lib/format";
  *     accent warning cuando el final toca el borde de censura.
  */
 export function BalanzasKpiMetaSection({ kpi }: { kpi: BalanzasNodeKpi }) {
-  const { hydration, waste, adjustment } = kpi;
-  if (!hydration && !waste && !adjustment) return null;
+  const { hydration, waste, adjustment, utilization } = kpi;
+  if (!hydration && !waste && !adjustment && !utilization) return null;
 
   return (
     <section className="space-y-4 rounded-2xl border border-border/60 bg-card/60 p-5">
@@ -96,6 +96,27 @@ export function BalanzasKpiMetaSection({ kpi }: { kpi: BalanzasNodeKpi }) {
             value={formatPercent(waste.cumplimiento, { input: "ratio" })}
             hint="Más alto = mejor desempeño."
             accent={cumplimientoAccentInverso(waste.cumplimiento)}
+          />
+        </KpiBlock>
+      ) : null}
+
+      {utilization ? (
+        <KpiBlock title="Aprovechamiento">
+          <MetricTile
+            label="Valor real"
+            value={formatPercent(utilization.real, { input: "ratio" })}
+            hint="Fracción del peso B1C que termina vendible (B2A)."
+          />
+          <MetricTile
+            label="Meta"
+            value={formatPercent(utilization.meta, { input: "ratio" })}
+            hint="(1 + meta hidr.) × (1 − meta desp.). Promedio ponderado."
+          />
+          <MetricTile
+            label="Cumplimiento"
+            value={formatPercent(utilization.cumplimiento, { input: "ratio" })}
+            hint="Más alto = mejor desempeño."
+            accent={cumplimientoAccent(utilization.cumplimiento)}
           />
         </KpiBlock>
       ) : null}

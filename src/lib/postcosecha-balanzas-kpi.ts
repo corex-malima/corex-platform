@@ -164,10 +164,34 @@ export type BalanzasAdjustmentKpiResult = {
   weeksCovered: string[];
 };
 
+/**
+ * KPI Aprovechamiento (uso en vs Peso ideal).
+ *
+ * Fórmula canon (Excel del usuario):
+ *   real         = (1 + hidratación_real) × (1 − desperdicio_real)
+ *                  = peso_b2a / peso_b1c (matemáticamente equivalente)
+ *   meta         = (1 + meta_hidratación) × (1 − meta_desperdicio)
+ *   cumplimiento = real / meta            (mayor es mejor)
+ *
+ * Semántica: fracción del peso B1C inicial que termina vendible (B2A).
+ * Combina hidratación (gana peso al hidratar) y desperdicio (pierde peso
+ * en clasificación). Valor típico cercano a 1.0 (lo que entra ≈ lo que sale).
+ */
+export type BalanzasUtilizationKpiResult = {
+  real: number | null;
+  meta: number | null;
+  cumplimiento: number | null;
+};
+
 export type BalanzasNodeKpi = {
   hydration?: BalanzasKpiResult;
   waste?: BalanzasKpiResult;
   adjustment?: BalanzasAdjustmentKpiResult;
+  /**
+   * Aprovechamiento KPI (vs Peso ideal). Solo se llena si el nodo tiene
+   * AMBOS hydration y waste configurados — porque depende de los dos.
+   */
+  utilization?: BalanzasUtilizationKpiResult;
 };
 
 // ─── Loaders catálogo (db_admin) ──────────────────────────────────────────────

@@ -2042,52 +2042,71 @@ type DynamicColumnEntry = {
 
 /**
  * Para el caso vs Peso ideal (nodo sin `grade` row-by-row), calcula la
- * meta de hidratación ponderada por destino vía cross-MV `b1c_vs_b2_weight`:
+ * meta de hidratación ponderada por **(work_date, destination)** vía
+ * cross-MV `b1c_vs_b2_weight`:
  *
- *   meta_dest = SUM(meta_grade × b1c) / SUM(b1c)   por destination.
+ *   meta_(dia, dest) = SUM(meta_grade × b1c) / SUM(b1c)
+ *                       agrupado por (work_date, destination).
  *
- * Devuelve Map<destination, meta>. Si la cross-MV falla o no hay metas,
- * devuelve Map vacío y la caller no inyecta columnas.
+ * Devuelve Map con key `"<YYYY-MM-DD>|<destination>"`. La caller hace
+ * lookup row-by-row con esa key. Si una row del Peso ideal no tiene
+ * match exacto (por ej. el cross-MV no cubre ese día), el lookup cae
+ * a un fallback solo por destino (calculado dentro del mismo loop).
  */
-async function computeHydrationMetaByDestination(
+async function computeHydrationMetaByDayDestination(
   branch: BalanzasBranch,
   farm: BalanzasFarm,
   whereSql: string,
   whereParams: unknown[],
   metaOrigin: string,
-): Promise<Map<string, number>> {
-  if (branch !== "apertura") return new Map();
+): Promise<{ byDayDest: Map<string, number>; byDestFallback: Map<string, number> }> {
+  if (branch !== "apertura") return { byDayDest: new Map(), byDestFallback: new Map() };
   const viewName = `gld.mv_camp_ind_bal_apertura_b1c_vs_b2_weight_${farm}_np_cur`;
   try {
     const targets = await loadHydrationTargets();
-    const { rows } = await query<{ grade: string | null; destination: string | null; b1c: string | number | null }>(
-      `SELECT grade, destination, SUM(weight_b1c_estimated_kg::numeric) AS b1c
+    const { rows } = await query<{
+      work_date_text: string | null;
+      grade: string | null;
+      destination: string | null;
+      b1c: string | number | null;
+    }>(
+      `SELECT work_date::text AS work_date_text,
+              grade,
+              destination,
+              SUM(weight_b1c_estimated_kg::numeric) AS b1c
        FROM ${viewName} ${whereSql}
-       GROUP BY grade, destination`,
+       GROUP BY work_date, grade, destination`,
       whereParams,
     );
 
-    // Por destino: SUM(meta_grade × b1c) / SUM(b1c)
+    // Acumular por (date, dest) y también por (dest) para fallback.
+    const accByDayDest = new Map<string, { num: number; den: number }>();
     const accByDest = new Map<string, { num: number; den: number }>();
     for (const r of rows) {
-      if (!r.grade || !r.destination) continue;
+      if (!r.grade || !r.destination || !r.work_date_text) continue;
       const meta = targets.get(`${metaOrigin}|${r.grade}`);
       if (meta === undefined) continue;
       const b1c = toNumber(r.b1c) ?? 0;
       if (b1c <= 0) continue;
-      const acc = accByDest.get(r.destination) ?? { num: 0, den: 0 };
-      acc.num += meta * b1c;
-      acc.den += b1c;
-      accByDest.set(r.destination, acc);
+      const dateKey = r.work_date_text.slice(0, 10);
+      const composed = `${dateKey}|${r.destination}`;
+      const acc1 = accByDayDest.get(composed) ?? { num: 0, den: 0 };
+      acc1.num += meta * b1c;
+      acc1.den += b1c;
+      accByDayDest.set(composed, acc1);
+      const acc2 = accByDest.get(r.destination) ?? { num: 0, den: 0 };
+      acc2.num += meta * b1c;
+      acc2.den += b1c;
+      accByDest.set(r.destination, acc2);
     }
 
-    const out = new Map<string, number>();
-    for (const [d, a] of accByDest) {
-      if (a.den > 0) out.set(d, a.num / a.den);
-    }
-    return out;
+    const byDayDest = new Map<string, number>();
+    for (const [k, a] of accByDayDest) if (a.den > 0) byDayDest.set(k, a.num / a.den);
+    const byDestFallback = new Map<string, number>();
+    for (const [k, a] of accByDest) if (a.den > 0) byDestFallback.set(k, a.num / a.den);
+    return { byDayDest, byDestFallback };
   } catch {
-    return new Map();
+    return { byDayDest: new Map(), byDestFallback: new Map() };
   }
 }
 
@@ -2119,36 +2138,47 @@ async function injectKpiTableColumns(
   const entries: DynamicColumnEntry[] = [];
 
   // ── Hidratación caso cross-MV (vs Peso ideal: nodo sin grade row-by-row) ──
-  // Calculamos meta ponderada POR DESTINO desde la MV cross b1c_vs_b2_weight:
-  //   meta_dest = SUM(meta_grade × b1c) / SUM(b1c)   agrupado por destination.
-  // Cada row del nodo (con su destino) recibe la meta del destino que le toca.
-  // El header del header derived-quotient agrupa correctamente con `_hyd_meta_x_b1c`
-  // que en este caso vale `meta_dest × b2_row` (ponderación por b2 disponible
-  // en el nodo). El cumplimiento usa real_row / meta_row.
+  // Para cada row (work_date, destination), buscamos la meta ponderada
+  // calculada a ese MISMO grano desde la MV cross b1c_vs_b2_weight.
+  // Si no hay match exacto en el día, fallback a la meta del destino.
+  // Así la fila del Peso ideal de cada día muestra la meta REAL de ese día,
+  // no un promedio global del período.
   if (support.hydration && !nodeDef.hasGrade && nodeDef.hasDestination) {
     const { b2Key } = support.hydration;
-    const metaByDest = await computeHydrationMetaByDestination(
+    const { byDayDest, byDestFallback } = await computeHydrationMetaByDayDestination(
       nodeDef.branch as BalanzasBranch,
       filters.farm as BalanzasFarm,
       whereSql,
       whereParams,
       metaOrigin,
     );
-    if (metaByDest.size > 0) {
+    if (byDayDest.size > 0 || byDestFallback.size > 0) {
       for (const r of rows) {
         const dest = r.destination;
+        const workDateRaw = r.work_date;
+        const dateKey =
+          workDateRaw instanceof Date
+            ? workDateRaw.toISOString().slice(0, 10)
+            : typeof workDateRaw === "string"
+            ? workDateRaw.slice(0, 10)
+            : "";
         const realRatio = toNumber(r.hydration_pct);
         const b2 = toNumber(r[b2Key]) ?? 0;
         let metaValue: number | null = null;
         if (typeof dest === "string" && dest) {
-          metaValue = metaByDest.get(dest) ?? null;
+          // Preferir lookup por (date, dest); fallback solo por dest.
+          if (dateKey) {
+            metaValue = byDayDest.get(`${dateKey}|${dest}`) ?? null;
+          }
+          if (metaValue === null) {
+            metaValue = byDestFallback.get(dest) ?? null;
+          }
         }
         (r as Record<string, unknown>).hydration_target = metaValue;
         (r as Record<string, unknown>).hydration_cumplimiento =
           realRatio !== null && metaValue !== null && metaValue > 0
             ? realRatio / metaValue
             : null;
-        // ponderador por b2 (no hay b1c row-by-row en esta MV)
         (r as Record<string, unknown>)._hyd_meta_x_b2 =
           metaValue !== null ? metaValue * b2 : null;
       }
@@ -2270,6 +2300,64 @@ async function injectKpiTableColumns(
           aggregateSources: { numeratorKey: "dispatch_target", denominatorKey: "dispatch_pct" },
         },
         accentRule: "cumplimiento-inverso",
+      },
+    );
+  }
+
+  // ── Aprovechamiento (solo nodos con hydration_target + dispatch_target) ────
+  // Real:        b2a_to_b1c_ratio (ya viene en la MV).
+  // Meta:        (1 + hydration_target) × (1 − dispatch_target) por row.
+  // Cumplim.:    real / meta — mayor es mejor.
+  //
+  // Para que el agregado por semana sea correcto, el meta se computa row-by-row
+  // y se agrega como derived-quotient sobre helper `_aprov_meta_x_b1c`.
+  const supportHydration = support.hydration;
+  const supportWaste = support.waste;
+  const utilizationApplies =
+    supportHydration
+    && supportWaste
+    && rows.some((r) => "b2a_to_b1c_ratio" in r);
+  if (utilizationApplies && supportHydration && supportWaste) {
+    // El ponderador para el agregado depende de la MV: prefer b1c si está, else b2.
+    const ponderadorKey =
+      supportHydration.b1cKey in (rows[0] ?? {})
+        ? supportHydration.b1cKey
+        : supportWaste.b2Key;
+
+    for (const r of rows) {
+      const hr = toNumber(r.hydration_target);
+      const wr = toNumber(r.dispatch_target);
+      const real = toNumber(r.b2a_to_b1c_ratio);
+      const meta = hr !== null && wr !== null ? (1 + hr) * (1 - wr) : null;
+      (r as Record<string, unknown>).utilization_meta = meta;
+      (r as Record<string, unknown>).utilization_cumplimiento =
+        real !== null && meta !== null && meta !== 0 ? real / meta : null;
+      // Helper para que el agregado por semana use SUM(meta × b1c) / SUM(b1c).
+      const pesoForAgg = toNumber(r[ponderadorKey]) ?? 0;
+      (r as Record<string, unknown>)._aprov_meta_x_b1c =
+        meta !== null ? meta * pesoForAgg : null;
+    }
+
+    entries.push(
+      {
+        key: "utilization_meta",
+        insertAfterKey: "b2a_to_b1c_ratio",
+        config: {
+          format: "pct",
+          aggregateMode: "derived-quotient",
+          aggregateSources: { numeratorKey: "_aprov_meta_x_b1c", denominatorKey: ponderadorKey },
+        },
+        accentRule: null,
+      },
+      {
+        key: "utilization_cumplimiento",
+        insertAfterKey: "utilization_meta",
+        config: {
+          format: "pct",
+          aggregateMode: "derived-from-aggregates",
+          aggregateSources: { numeratorKey: "b2a_to_b1c_ratio", denominatorKey: "utilization_meta" },
+        },
+        accentRule: "cumplimiento",
       },
     );
   }
@@ -2406,6 +2494,7 @@ export async function loadNodeDetail(
     { key: "_hyd_meta_x_b1c",      rowKey: "_hyd_meta_x_b1c" },
     { key: "_hyd_meta_x_b2",       rowKey: "_hyd_meta_x_b2" },
     { key: "_dispatch_meta_x_b2",  rowKey: "_dispatch_meta_x_b2" },
+    { key: "_aprov_meta_x_b1c",    rowKey: "_aprov_meta_x_b1c" },
   ];
   for (const helper of hiddenHelperKeys) {
     if (helper.rowKey in sampleRow) {
@@ -2505,18 +2594,49 @@ async function computeNodeKpi(
         }),
       );
     } else {
-      // MV no tiene grade (caso apertura-b1c-b2a-vs-ideal) → cross-MV.
+      // MV no tiene grade (caso apertura-b1c-b2a-vs-ideal):
+      //   - REAL viene de la MV LOCAL (sin grade): SUM(b2)/SUM(b1c) − 1.
+      //     Así coincide EXACTAMENTE con el header del modal.
+      //   - META viene del CROSS-MV (b1c_vs_b2_weight, que sí tiene grade)
+      //     ponderada por b1c.
       tasks.push(
         Promise.all([
           loadHydrationTargets(),
+          // Query LOCAL para el real (1 fila con SUMs)
+          query<Record<string, unknown>>(
+            `SELECT SUM(${cfg.b1cKey}::numeric) AS b1c,
+                    SUM(${cfg.b2Key}::numeric) AS b2
+             FROM ${nodeDef.viewName} ${whereSql}`,
+            whereParams,
+          ),
+          // Cross-MV para el computo de meta ponderada por grade
           loadHydrationKpiSourceRows({
             branch: nodeDef.branch as BalanzasBranch,
             farm: filters.farm as BalanzasFarm,
             whereSql,
             whereParams,
           }),
-        ]).then(([targets, sourceRows]) => {
-          kpi.hydration = computeHydrationKpi(sourceRows, cfg, targets, metaOrigin);
+        ]).then(([targets, localResult, sourceRows]) => {
+          const localRow = localResult.rows[0] ?? {};
+          const localB1c = toNumber(localRow.b1c) ?? 0;
+          const localB2 = toNumber(localRow.b2) ?? 0;
+          // Real de la MV local — idéntico al header.
+          const real = localB1c > 0 ? localB2 / localB1c - 1 : null;
+          // Meta ponderada cross-MV.
+          const cross = computeHydrationKpi(sourceRows, cfg, targets, metaOrigin);
+          const cumplimiento =
+            real !== null && cross.meta !== null && cross.meta !== 0
+              ? real / cross.meta
+              : null;
+          kpi.hydration = {
+            real,
+            meta: cross.meta,
+            cumplimiento,
+            num: localB2,
+            den: localB1c,
+            rowsCount: cross.rowsCount,
+            rowsMissingMeta: cross.rowsMissingMeta,
+          };
         }),
       );
     }
@@ -2579,6 +2699,21 @@ async function computeNodeKpi(
 
   if (tasks.length === 0) return undefined;
   await Promise.all(tasks);
+
+  // Aprovechamiento se deriva de hidratación + desperdicio una vez resueltos.
+  // real = (1 + hidr) × (1 − desp)   meta = (1 + meta_hidr) × (1 − meta_desp)
+  if (kpi.hydration && kpi.waste) {
+    const hr = kpi.hydration.real;
+    const wr = kpi.waste.real;
+    const hm = kpi.hydration.meta;
+    const wm = kpi.waste.meta;
+    const real = hr !== null && wr !== null ? (1 + hr) * (1 - wr) : null;
+    const meta = hm !== null && wm !== null ? (1 + hm) * (1 - wm) : null;
+    const cumplimiento =
+      real !== null && meta !== null && meta !== 0 ? real / meta : null;
+    kpi.utilization = { real, meta, cumplimiento };
+  }
+
   return Object.keys(kpi).length > 0 ? kpi : undefined;
 }
 
@@ -2634,6 +2769,8 @@ const COLUMN_LABELS: Record<string, string> = {
   hydration_cumplimiento: "Cumplim. hidr.",
   dispatch_target: "Meta desperdicio",
   dispatch_cumplimiento: "Cumplim. desp.",
+  utilization_meta: "Meta aprov.",
+  utilization_cumplimiento: "Cumplim. aprov.",
   dispatch_pct: "Despacho %",
   dispatch_pct_stems: "Despacho tallos %",
   dispatch_pct_weight: "Despacho peso %",
