@@ -198,11 +198,17 @@ export type BalanzasNodeSummary = {
   bpmnElementId: string | null;
   overlayOffsetLeft: number;
   /**
-   * Badge KPI opcional con cumplimiento del nodo (visible en el BPMN
-   * overlay sin abrir el modal). Solo se llena si el nodo tiene
-   * `kpiSupport.hydration` o `kpiSupport.waste`.
+   * Badge KPI global del nodo (visible en el BPMN overlay sin abrir el modal).
+   * Solo se llena si el nodo tiene `kpiSupport.hydration` o `kpiSupport.waste`.
    */
   kpiBadge?: BalanzasNodeSummaryKpiBadge;
+  /**
+   * Badge KPI por destino cuando el nodo tiene `bpmnByDestination` split
+   * (Arcoíris / Blanco / Tinturado). Cada overlay split muestra su propio
+   * cumplimiento en lugar de replicar el global. Key = `destination` raw
+   * de la MV (uppercase: "ARCOIRIS", "BLANCO", "TINTURADO").
+   */
+  kpiBadgeByDestination?: Record<string, BalanzasNodeSummaryKpiBadge>;
   /**
    * Cuando está definido, el explorer genera 3 overlays virtuales (uno por
    * destino: Arcoíris / Blanco / Tinturado) en lugar de 1 sobre el
@@ -880,7 +886,9 @@ function buildSummaryMetricSelects(summaryMetrics: SummaryMetricDef[]) {
 
   for (const metric of summaryMetrics) {
     if (
-      (metric.aggregateMode === "derived-ratio" || metric.aggregateMode === "derived-quotient")
+      (metric.aggregateMode === "derived-ratio"
+        || metric.aggregateMode === "derived-quotient"
+        || metric.aggregateMode === "derived-loss-ratio")
       && metric.aggregateSources
     ) {
       const numeratorAlias = `__sum_${metric.aggregateSources.numeratorKey}`;
@@ -1739,44 +1747,86 @@ function loadFilterOptions(farm: string): Promise<BalanzasFilterOptions> {
  * obtener la meta ponderada y el cumplimiento. Si no hay metas
  * cargadas o no hay rows, devuelve undefined.
  */
+/**
+ * Resultado del badge KPI computado para un nodo:
+ *   - `global`: cumplimiento total del nodo (todos los destinos juntos).
+ *   - `byDestination`: cumplimiento por destino, solo si el nodo tiene
+ *     `bpmnByDestination` split. Permite que cada overlay (Arcoíris /
+ *     Blanco / Tinturado) muestre su propio valor en lugar de replicar
+ *     el global en los 3.
+ */
+type SummaryKpiBadgeResult = {
+  global: BalanzasNodeSummaryKpiBadge | undefined;
+  byDestination: Record<string, BalanzasNodeSummaryKpiBadge> | undefined;
+};
+
 async function computeSummaryKpiBadge(
   nodeDef: BalanzasNodeDef,
   whereSql: string,
   whereParams: unknown[],
-): Promise<BalanzasNodeSummaryKpiBadge | undefined> {
+): Promise<SummaryKpiBadgeResult> {
   const support = nodeDef.kpiSupport;
-  if (!support) return undefined;
+  if (!support) return { global: undefined, byDestination: undefined };
   const metaOrigin = resolveMetaOrigin(nodeDef.branch);
-  if (!metaOrigin) return undefined;
+  if (!metaOrigin) return { global: undefined, byDestination: undefined };
+
+  const wantsByDestination = Boolean(nodeDef.bpmnByDestination);
 
   // Hidratación tiene prioridad si ambos están definidos.
   if (support.hydration) {
     const { gradeKey, b1cKey, b2Key } = support.hydration;
     try {
+      const targets = await loadHydrationTargets();
+      // Si la MV tiene destination y hay split BPMN, agrupamos por
+      // (destination, grade) para poder calcular global + por destino
+      // en una sola query.
+      const groupCols = wantsByDestination && nodeDef.hasDestination
+        ? `${gradeKey}, destination`
+        : gradeKey;
+      const selectCols = wantsByDestination && nodeDef.hasDestination
+        ? `${gradeKey} AS grade, destination, SUM(${b1cKey}::numeric) AS b1c, SUM(${b2Key}::numeric) AS b2`
+        : `${gradeKey} AS grade, SUM(${b1cKey}::numeric) AS b1c, SUM(${b2Key}::numeric) AS b2`;
       const { rows } = await query<Record<string, unknown>>(
-        `SELECT ${gradeKey} AS grade,
-                SUM(${b1cKey}::numeric) AS b1c,
-                SUM(${b2Key}::numeric) AS b2
+        `SELECT ${selectCols}
          FROM ${nodeDef.viewName} ${whereSql}
-         GROUP BY ${gradeKey}`,
+         GROUP BY ${groupCols}`,
         whereParams,
       );
-      const computeRows = rows.map((r) => ({
+
+      const allRows = rows.map((r) => ({
         [gradeKey]: r.grade,
         [b1cKey]: r.b1c,
         [b2Key]: r.b2,
+        destination: r.destination,
       }));
-      const targets = await loadHydrationTargets();
-      const k = computeHydrationKpi(computeRows, support.hydration, targets, metaOrigin);
-      return buildKpiBadge("hydration", k.real, k.meta, k.cumplimiento);
+      const globalK = computeHydrationKpi(allRows, support.hydration, targets, metaOrigin);
+      const global = buildKpiBadge("hydration", globalK.real, globalK.meta, globalK.cumplimiento);
+
+      let byDestination: Record<string, BalanzasNodeSummaryKpiBadge> | undefined;
+      if (wantsByDestination && nodeDef.hasDestination) {
+        byDestination = {};
+        const byDestRows = new Map<string, typeof allRows>();
+        for (const r of allRows) {
+          const d = typeof r.destination === "string" ? r.destination : "";
+          if (!d) continue;
+          if (!byDestRows.has(d)) byDestRows.set(d, []);
+          byDestRows.get(d)!.push(r);
+        }
+        for (const [d, subset] of byDestRows) {
+          const k = computeHydrationKpi(subset, support.hydration, targets, metaOrigin);
+          byDestination[d] = buildKpiBadge("hydration", k.real, k.meta, k.cumplimiento);
+        }
+      }
+      return { global, byDestination };
     } catch {
-      return undefined;
+      return { global: undefined, byDestination: undefined };
     }
   }
 
   if (support.waste) {
     const { destinationKey, b2Key, b2aKey } = support.waste;
     try {
+      const targets = await loadWasteTargets();
       const { rows } = await query<Record<string, unknown>>(
         `SELECT ${destinationKey} AS destination,
                 SUM(${b2Key}::numeric) AS b2,
@@ -1785,20 +1835,31 @@ async function computeSummaryKpiBadge(
          GROUP BY ${destinationKey}`,
         whereParams,
       );
-      const computeRows = rows.map((r) => ({
+      const allRows = rows.map((r) => ({
         [destinationKey]: r.destination,
         [b2Key]: r.b2,
         [b2aKey]: r.b2a,
       }));
-      const targets = await loadWasteTargets();
-      const k = computeWasteKpi(computeRows, support.waste, targets, metaOrigin);
-      return buildKpiBadge("waste", k.real, k.meta, k.cumplimiento);
+      const globalK = computeWasteKpi(allRows, support.waste, targets, metaOrigin);
+      const global = buildKpiBadge("waste", globalK.real, globalK.meta, globalK.cumplimiento);
+
+      let byDestination: Record<string, BalanzasNodeSummaryKpiBadge> | undefined;
+      if (wantsByDestination) {
+        byDestination = {};
+        for (const r of allRows) {
+          const d = typeof r[destinationKey] === "string" ? (r[destinationKey] as string) : "";
+          if (!d) continue;
+          const k = computeWasteKpi([r], support.waste, targets, metaOrigin);
+          byDestination[d] = buildKpiBadge("waste", k.real, k.meta, k.cumplimiento);
+        }
+      }
+      return { global, byDestination };
     } catch {
-      return undefined;
+      return { global: undefined, byDestination: undefined };
     }
   }
 
-  return undefined;
+  return { global: undefined, byDestination: undefined };
 }
 
 function buildKpiBadge(
@@ -1842,7 +1903,7 @@ async function loadNodeSummary(
   `;
 
   try {
-    const [result, kpiBadge] = await Promise.all([
+    const [result, kpiResult] = await Promise.all([
       query<Record<string, unknown>>(sql, values),
       computeSummaryKpiBadge(nodeDef, where, values),
     ]);
@@ -1865,7 +1926,8 @@ async function loadNodeSummary(
       bpmnElementId: nodeDef.bpmnBinding?.elementId ?? null,
       overlayOffsetLeft: nodeDef.bpmnBinding?.overlayOffsetLeft ?? 0,
       bpmnByDestination: nodeDef.bpmnByDestination,
-      kpiBadge,
+      kpiBadge: kpiResult.global,
+      kpiBadgeByDestination: kpiResult.byDestination,
     };
   } catch {
     return {
@@ -1979,6 +2041,57 @@ type DynamicColumnEntry = {
 };
 
 /**
+ * Para el caso vs Peso ideal (nodo sin `grade` row-by-row), calcula la
+ * meta de hidratación ponderada por destino vía cross-MV `b1c_vs_b2_weight`:
+ *
+ *   meta_dest = SUM(meta_grade × b1c) / SUM(b1c)   por destination.
+ *
+ * Devuelve Map<destination, meta>. Si la cross-MV falla o no hay metas,
+ * devuelve Map vacío y la caller no inyecta columnas.
+ */
+async function computeHydrationMetaByDestination(
+  branch: BalanzasBranch,
+  farm: BalanzasFarm,
+  whereSql: string,
+  whereParams: unknown[],
+  metaOrigin: string,
+): Promise<Map<string, number>> {
+  if (branch !== "apertura") return new Map();
+  const viewName = `gld.mv_camp_ind_bal_apertura_b1c_vs_b2_weight_${farm}_np_cur`;
+  try {
+    const targets = await loadHydrationTargets();
+    const { rows } = await query<{ grade: string | null; destination: string | null; b1c: string | number | null }>(
+      `SELECT grade, destination, SUM(weight_b1c_estimated_kg::numeric) AS b1c
+       FROM ${viewName} ${whereSql}
+       GROUP BY grade, destination`,
+      whereParams,
+    );
+
+    // Por destino: SUM(meta_grade × b1c) / SUM(b1c)
+    const accByDest = new Map<string, { num: number; den: number }>();
+    for (const r of rows) {
+      if (!r.grade || !r.destination) continue;
+      const meta = targets.get(`${metaOrigin}|${r.grade}`);
+      if (meta === undefined) continue;
+      const b1c = toNumber(r.b1c) ?? 0;
+      if (b1c <= 0) continue;
+      const acc = accByDest.get(r.destination) ?? { num: 0, den: 0 };
+      acc.num += meta * b1c;
+      acc.den += b1c;
+      accByDest.set(r.destination, acc);
+    }
+
+    const out = new Map<string, number>();
+    for (const [d, a] of accByDest) {
+      if (a.den > 0) out.set(d, a.num / a.den);
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
  * Inyecta campos virtuales row-by-row para Meta + Cumplimiento de
  * Hidratación y Desperdicio, según el `kpiSupport` declarado en el nodo.
  *
@@ -1994,6 +2107,9 @@ type DynamicColumnEntry = {
 async function injectKpiTableColumns(
   nodeDef: BalanzasNodeDef,
   rows: BalanzasDetailRow[],
+  filters: BalanzasFilters,
+  whereSql: string,
+  whereParams: unknown[],
 ): Promise<DynamicColumnEntry[]> {
   const support = nodeDef.kpiSupport;
   if (!support) return [];
@@ -2002,10 +2118,66 @@ async function injectKpiTableColumns(
 
   const entries: DynamicColumnEntry[] = [];
 
-  // ── Hidratación ────────────────────────────────────────────────────────────
-  // Solo si el nodo tiene `grade` row-by-row. Si es cross-MV (caso
-  // apertura-b1c-b2a-vs-ideal), las metas se muestran solo en el KPI tile,
-  // no en la tabla detalle (las rows de este nodo no tienen grade).
+  // ── Hidratación caso cross-MV (vs Peso ideal: nodo sin grade row-by-row) ──
+  // Calculamos meta ponderada POR DESTINO desde la MV cross b1c_vs_b2_weight:
+  //   meta_dest = SUM(meta_grade × b1c) / SUM(b1c)   agrupado por destination.
+  // Cada row del nodo (con su destino) recibe la meta del destino que le toca.
+  // El header del header derived-quotient agrupa correctamente con `_hyd_meta_x_b1c`
+  // que en este caso vale `meta_dest × b2_row` (ponderación por b2 disponible
+  // en el nodo). El cumplimiento usa real_row / meta_row.
+  if (support.hydration && !nodeDef.hasGrade && nodeDef.hasDestination) {
+    const { b2Key } = support.hydration;
+    const metaByDest = await computeHydrationMetaByDestination(
+      nodeDef.branch as BalanzasBranch,
+      filters.farm as BalanzasFarm,
+      whereSql,
+      whereParams,
+      metaOrigin,
+    );
+    if (metaByDest.size > 0) {
+      for (const r of rows) {
+        const dest = r.destination;
+        const realRatio = toNumber(r.hydration_pct);
+        const b2 = toNumber(r[b2Key]) ?? 0;
+        let metaValue: number | null = null;
+        if (typeof dest === "string" && dest) {
+          metaValue = metaByDest.get(dest) ?? null;
+        }
+        (r as Record<string, unknown>).hydration_target = metaValue;
+        (r as Record<string, unknown>).hydration_cumplimiento =
+          realRatio !== null && metaValue !== null && metaValue > 0
+            ? realRatio / metaValue
+            : null;
+        // ponderador por b2 (no hay b1c row-by-row en esta MV)
+        (r as Record<string, unknown>)._hyd_meta_x_b2 =
+          metaValue !== null ? metaValue * b2 : null;
+      }
+      entries.push(
+        {
+          key: "hydration_target",
+          insertAfterKey: "hydration_pct",
+          config: {
+            format: "pct",
+            aggregateMode: "derived-quotient",
+            aggregateSources: { numeratorKey: "_hyd_meta_x_b2", denominatorKey: b2Key },
+          },
+          accentRule: null,
+        },
+        {
+          key: "hydration_cumplimiento",
+          insertAfterKey: "hydration_target",
+          config: {
+            format: "pct",
+            aggregateMode: "derived-from-aggregates",
+            aggregateSources: { numeratorKey: "hydration_pct", denominatorKey: "hydration_target" },
+          },
+          accentRule: "cumplimiento",
+        },
+      );
+    }
+  }
+
+  // ── Hidratación caso local (la MV tiene grade row-by-row) ──────────────────
   if (support.hydration && nodeDef.hasGrade) {
     const { gradeKey, b1cKey } = support.hydration;
     const targets = await loadHydrationTargets();
@@ -2194,7 +2366,7 @@ export async function loadNodeDetail(
   // Inyectar campos virtuales Meta + Cumplimiento por row (para que se vean
   // en la tabla detalle y se agreguen correctamente al expandir por semana).
   // Lookup de metas en paralelo; si no hay kpiSupport, no se cargan.
-  const dynamicConfigEntries = await injectKpiTableColumns(nodeDef, rows);
+  const dynamicConfigEntries = await injectKpiTableColumns(nodeDef, rows, filters, where, values);
 
   const sampleRow = rows[0] ?? {};
   // Merge config base del nodo + entries dinámicas (Meta/Cumplimiento) inyectadas
@@ -2232,6 +2404,7 @@ export async function loadNodeDetail(
   // numerador del derived-quotient → meta_agg sale null en headers.
   const hiddenHelperKeys: Array<{ key: string; rowKey: string }> = [
     { key: "_hyd_meta_x_b1c",      rowKey: "_hyd_meta_x_b1c" },
+    { key: "_hyd_meta_x_b2",       rowKey: "_hyd_meta_x_b2" },
     { key: "_dispatch_meta_x_b2",  rowKey: "_dispatch_meta_x_b2" },
   ];
   for (const helper of hiddenHelperKeys) {
@@ -2294,6 +2467,8 @@ async function computeNodeKpi(
   whereSql: string,
   whereParams: unknown[],
 ): Promise<BalanzasNodeKpi | undefined> {
+  void rows; // las rows del detail traen LIMIT 2000 — los KPI tiles usan
+             // queries agregadas sin LIMIT para matchear el header del modal.
   const support = nodeDef.kpiSupport;
   if (!support) return undefined;
 
@@ -2307,10 +2482,26 @@ async function computeNodeKpi(
   if (support.hydration) {
     const cfg = support.hydration;
     if (nodeDef.hasGrade) {
-      // MV del nodo tiene grade row-by-row → cómputo local.
+      // Query SUM por grade desde la MV del nodo (sin LIMIT) → totales
+      // exactos. Coincide con el header `(SUM(b2)/SUM(b1c)) − 1`.
       tasks.push(
-        loadHydrationTargets().then((targets) => {
-          kpi.hydration = computeHydrationKpi(rows, cfg, targets, metaOrigin);
+        Promise.all([
+          loadHydrationTargets(),
+          query<Record<string, unknown>>(
+            `SELECT ${cfg.gradeKey} AS grade,
+                    SUM(${cfg.b1cKey}::numeric) AS b1c,
+                    SUM(${cfg.b2Key}::numeric) AS b2
+             FROM ${nodeDef.viewName} ${whereSql}
+             GROUP BY ${cfg.gradeKey}`,
+            whereParams,
+          ),
+        ]).then(([targets, result]) => {
+          const aggregatedRows = result.rows.map((r) => ({
+            [cfg.gradeKey]: r.grade,
+            [cfg.b1cKey]: r.b1c,
+            [cfg.b2Key]: r.b2,
+          }));
+          kpi.hydration = computeHydrationKpi(aggregatedRows, cfg, targets, metaOrigin);
         }),
       );
     } else {
@@ -2333,9 +2524,25 @@ async function computeNodeKpi(
 
   if (support.waste) {
     const cfg = support.waste;
+    // Query SUM por destination desde la MV del nodo (sin LIMIT).
     tasks.push(
-      loadWasteTargets().then((targets) => {
-        kpi.waste = computeWasteKpi(rows, cfg, targets, metaOrigin);
+      Promise.all([
+        loadWasteTargets(),
+        query<Record<string, unknown>>(
+          `SELECT ${cfg.destinationKey} AS destination,
+                  SUM(${cfg.b2Key}::numeric) AS b2,
+                  SUM(${cfg.b2aKey}::numeric) AS b2a
+           FROM ${nodeDef.viewName} ${whereSql}
+           GROUP BY ${cfg.destinationKey}`,
+          whereParams,
+        ),
+      ]).then(([targets, result]) => {
+        const aggregatedRows = result.rows.map((r) => ({
+          [cfg.destinationKey]: r.destination,
+          [cfg.b2Key]: r.b2,
+          [cfg.b2aKey]: r.b2a,
+        }));
+        kpi.waste = computeWasteKpi(aggregatedRows, cfg, targets, metaOrigin);
       }),
     );
   }

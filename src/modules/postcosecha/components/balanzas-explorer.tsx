@@ -101,14 +101,22 @@ type ProcessKpiBadge = {
   accent: "success" | "warning" | "danger" | "default";
 };
 
-function toProcessKpiBadge(n: BalanzasNodeSummary): ProcessKpiBadge | undefined {
-  if (!n.kpiBadge) return undefined;
+function toProcessKpiBadge(
+  n: BalanzasNodeSummary,
+  destinationValue?: string,
+): ProcessKpiBadge | undefined {
+  // Si hay split por destino y el summary devolvió `kpiBadgeByDestination`,
+  // usar el badge específico de ese destino. Caer al global si no está.
+  const source = destinationValue && n.kpiBadgeByDestination?.[destinationValue]
+    ? n.kpiBadgeByDestination[destinationValue]
+    : n.kpiBadge;
+  if (!source) return undefined;
   return {
-    kind: n.kpiBadge.kind,
-    cumplimientoLabel: n.kpiBadge.cumplimientoLabel,
-    realLabel: n.kpiBadge.realLabel,
-    metaLabel: n.kpiBadge.metaLabel,
-    accent: n.kpiBadge.accent,
+    kind: source.kind,
+    cumplimientoLabel: source.cumplimientoLabel,
+    realLabel: source.realLabel,
+    metaLabel: source.metaLabel,
+    accent: source.accent,
   };
 }
 
@@ -127,13 +135,13 @@ function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) 
   for (const n of nodes) {
     if (!nodeMatchesMetricMode(n.key, mode)) continue;
 
-    const kpiBadge = toProcessKpiBadge(n);
-
-    // Caso especial: nodo con split por destino → 3 overlays virtuales
+    // Caso especial: nodo con split por destino → 3 overlays virtuales,
+    // cada uno con su badge KPI específico (cumplimiento del destino).
     if (n.bpmnByDestination) {
       for (const split of DESTINATION_SPLITS) {
         const elementId = n.bpmnByDestination[split.key];
         if (!elementId) continue;
+        const kpiBadge = toProcessKpiBadge(n, split.value);
         out.push({
           key: encodeProcessNodeKey(n.key, split.key),
           label: `${n.shortLabel} · ${split.label}`,
@@ -148,14 +156,14 @@ function toProcessNodes(nodes: BalanzasNodeSummary[], mode: BalanzasMetricMode) 
       continue;
     }
 
-    // Caso normal: 1 overlay sobre bpmnElementId
+    // Caso normal: 1 overlay sobre bpmnElementId, badge global.
     if (n.bpmnElementId === null) continue;
     out.push({
       key: n.key,
       label: n.label,
       overlayOffsetLeft: n.overlayOffsetLeft,
       metrics: n.metrics.map((m) => ({ label: m.label, formatted: m.formatted })),
-      kpiBadge,
+      kpiBadge: toProcessKpiBadge(n),
       status: (n.rowCount > 0 ? "ready" : "unavailable") as "ready" | "unavailable",
       processBindings: [{ elementId: n.bpmnElementId }],
       destinationBreakdown: [],

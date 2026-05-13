@@ -52,15 +52,15 @@ export const cumplimientoAccentInverso = cumplimientoAccent;
 /**
  * Accent específico para el KPI Ajuste de Balanzas.
  *
- * Convención: `ajuste_final` está censurado al rango `[0.98, 1.02]`. Si
- * el valor toca el borde inferior o superior, significa que el modelo
- * predictivo se desvía del peso real de ventas más de lo aceptable —
- * estado de atención (`warning`). Si cae en el interior del rango, el
- * modelo está bien calibrado (`success`).
+ * Convención R3+: `ajuste_final` está limitado solo por abajo a 0.96
+ * (sin techo). Si el valor tocó el piso (0.96), significa que el modelo
+ * predictivo se desvía demasiado del peso real de ventas — estado de
+ * atención (`warning`). Si está por encima del piso, el modelo es
+ * confiable (`success`).
  */
 export function ajusteAccent(value: number | null): AjusteAccent {
   if (value === null || !Number.isFinite(value)) return "default";
   const TOLERANCE = 1e-6;
-  if (value <= 0.98 + TOLERANCE || value >= 1.02 - TOLERANCE) return "warning";
+  if (value <= 0.96 + TOLERANCE) return "warning";
   return "success";
 }

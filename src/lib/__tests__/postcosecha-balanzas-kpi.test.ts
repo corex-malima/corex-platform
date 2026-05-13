@@ -382,10 +382,12 @@ describe("cumplimientoAccent / ajusteAccent", () => {
     expect(cumplimientoAccentInverso(0.5)).toBe("danger");
   });
 
-  it("ajusteAccent: tocó borde 0.98 o 1.02 → warning; interior → success", () => {
+  it("ajusteAccent R3+: solo censura abajo a 0.96 → warning; por encima → success", () => {
     expect(ajusteAccent(1.0)).toBe("success");
-    expect(ajusteAccent(0.98)).toBe("warning");
-    expect(ajusteAccent(1.02)).toBe("warning");
+    expect(ajusteAccent(0.96)).toBe("warning");
+    expect(ajusteAccent(0.97)).toBe("success");
+    expect(ajusteAccent(1.05)).toBe("success");
+    expect(ajusteAccent(1.50)).toBe("success"); // no hay techo
     expect(ajusteAccent(null)).toBe("default");
   });
 });

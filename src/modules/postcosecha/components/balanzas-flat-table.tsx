@@ -16,7 +16,14 @@ export function BalanzasFlatTable({ detail }: { detail: BalanzasNodeDetail }) {
         <thead className="sticky top-0 z-10 bg-card">
           <tr className="border-b border-border/70">
             {visibleColumns.map((column) => (
-              <StandardTh key={column.key} align={column.numeric ? "right" : "left"}>
+              <StandardTh
+                key={column.key}
+                align={column.numeric ? "right" : "left"}
+                // Permitir multilínea en labels largos (Meta hidratación,
+                // Cumplim. desp., Aprovechamiento %, etc.) para que las
+                // columnas numéricas no se ensanchen forzosamente.
+                className="whitespace-normal align-bottom max-w-[120px] leading-tight"
+              >
                 {column.label}
               </StandardTh>
             ))}

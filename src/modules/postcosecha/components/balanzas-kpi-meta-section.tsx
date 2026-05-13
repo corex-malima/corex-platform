@@ -44,32 +44,32 @@ export function BalanzasKpiMetaSection({ kpi }: { kpi: BalanzasNodeKpi }) {
   if (!hydration && !waste && !adjustment) return null;
 
   return (
-    <section className="space-y-3 rounded-2xl border border-border/60 bg-card/60 p-4">
+    <section className="space-y-4 rounded-2xl border border-border/60 bg-card/60 p-5">
       <header className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-foreground">Indicadores con meta</h3>
-        <span className="text-xs text-muted-foreground">Meta canon SCD2 · `db_admin`</span>
+        <h3 className="text-base font-semibold text-foreground">Indicadores con meta</h3>
+        <span className="text-xs text-muted-foreground">Metas administradas en Admin · Maestros</span>
       </header>
 
       {hydration ? (
         <KpiBlock title="Hidratación">
           <MetricTile
-            label="Hidratación real"
+            label="Valor real"
             value={formatPercent(hydration.real, { input: "ratio" })}
-            hint="SUM(B2) / SUM(B1C) − 1. Mismo número que el header HIDR%."
+            hint="Cuánto peso ganó el lote entre B1C y B2."
           />
           <MetricTile
-            label="Meta hidratación"
+            label="Meta"
             value={formatPercent(hydration.meta, { input: "ratio" })}
             hint={
               hydration.rowsMissingMeta > 0
-                ? `Ponderada por peso B1C. ${hydration.rowsMissingMeta} fila(s) sin meta de grado.`
-                : "Ponderada por peso B1C."
+                ? `Promedio ponderado por peso. ${hydration.rowsMissingMeta} fila(s) sin meta.`
+                : "Promedio ponderado por peso."
             }
           />
           <MetricTile
             label="Cumplimiento"
             value={formatPercent(hydration.cumplimiento, { input: "ratio" })}
-            hint="real / meta — mayor es mejor"
+            hint="Más alto = mejor desempeño."
             accent={cumplimientoAccent(hydration.cumplimiento)}
           />
         </KpiBlock>
@@ -78,23 +78,23 @@ export function BalanzasKpiMetaSection({ kpi }: { kpi: BalanzasNodeKpi }) {
       {waste ? (
         <KpiBlock title="Desperdicio">
           <MetricTile
-            label="Desperdicio real"
+            label="Valor real"
             value={formatPercent(waste.real, { input: "ratio" })}
-            hint="1 − SUM(B2A) / SUM(B2). Fracción de pérdida de peso."
+            hint="Fracción de peso perdido entre B2 y B2A."
           />
           <MetricTile
-            label="Meta desperdicio"
+            label="Meta"
             value={formatPercent(waste.meta, { input: "ratio" })}
             hint={
               waste.rowsMissingMeta > 0
-                ? `Ponderada por peso B2. ${waste.rowsMissingMeta} fila(s) sin meta de destino.`
-                : "Ponderada por peso B2 (máximo aceptable)."
+                ? `Máximo aceptable por destino. ${waste.rowsMissingMeta} fila(s) sin meta.`
+                : "Máximo aceptable por destino (ponderado por peso)."
             }
           />
           <MetricTile
             label="Cumplimiento"
             value={formatPercent(waste.cumplimiento, { input: "ratio" })}
-            hint="meta / real — menor es mejor (>1 sobre meta)"
+            hint="Más alto = mejor desempeño."
             accent={cumplimientoAccentInverso(waste.cumplimiento)}
           />
         </KpiBlock>
@@ -105,20 +105,20 @@ export function BalanzasKpiMetaSection({ kpi }: { kpi: BalanzasNodeKpi }) {
           <MetricTile
             label="Razón ajuste"
             value={formatDecimal(adjustment.razonAjuste, 4)}
-            hint={`α = ${formatDecimal(adjustment.alpha, 2)} · β = ${formatDecimal(adjustment.beta, 2)}`}
+            hint="Relación entre el peso estimado y el peso real de ventas."
           />
           <MetricTile
             label="Ajuste bruto"
             value={formatDecimal(adjustment.ajusteBruto, 4)}
-            hint="α + β · razón"
+            hint="Resultado del modelo antes de aplicar el límite operativo."
           />
           <MetricTile
             label="Ajuste final"
             value={formatDecimal(adjustment.ajusteFinal, 4)}
             hint={
               adjustment.weeksCovered.length > 0
-                ? `Censurado [0.98 – 1.02]. Semanas: ${adjustment.weeksCovered.join(", ")}.`
-                : "Censurado [0.98 – 1.02]."
+                ? `Limitado al rango operativo. Cubre ${adjustment.weeksCovered.length} semana(s).`
+                : "Limitado al rango operativo."
             }
             accent={ajusteAccent(adjustment.ajusteFinal)}
           />

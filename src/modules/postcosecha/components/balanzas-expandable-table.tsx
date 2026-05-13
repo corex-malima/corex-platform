@@ -231,6 +231,8 @@ export function BalanzasExpandableTable({
         key: col.key,
         label: col.label,
         align: "right",
+        // Permitir wrap del label en columnas largas (Meta hidratación, etc.).
+        headerClassName: "whitespace-normal max-w-[120px] leading-tight align-bottom",
         render: (node, level) => {
           const value = node.data.metrics[col.key] ?? null;
           const accent = balanzasCellAccentClass(value, col);
