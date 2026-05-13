@@ -94,7 +94,7 @@ export function decodeProcessNodeKey(encoded: string): { nodeKey: string; destin
 }
 
 type ProcessKpiBadge = {
-  kind: "hydration" | "waste";
+  kind: "hydration" | "waste" | "utilization";
   cumplimientoLabel: string;
   realLabel: string;
   metaLabel: string;

@@ -24,7 +24,7 @@ import {
 type BalanzasViewStatus = "ready" | "unavailable";
 type BalanzasProcessBinding = { elementId: string };
 type BalanzasProcessKpiBadge = {
-  kind: "hydration" | "waste";
+  kind: "hydration" | "waste" | "utilization";
   cumplimientoLabel: string;
   realLabel: string;
   metaLabel: string;
@@ -348,7 +348,11 @@ export function BalanzasProcessSvgViewer({ nodes, selectedNodeKey, onNodeSelect 
                       title={`Real ${node.kpiBadge.realLabel} · Meta ${node.kpiBadge.metaLabel}`}
                     >
                       <span className="uppercase tracking-wider">
-                        {node.kpiBadge.kind === "hydration" ? "Cumpl. HIDR" : "Cumpl. DESP"}
+                        {node.kpiBadge.kind === "hydration"
+                          ? "Cumpl. HIDR"
+                          : node.kpiBadge.kind === "waste"
+                            ? "Cumpl. DESP"
+                            : "Aprov. ideal"}
                       </span>
                       <span>{node.kpiBadge.cumplimientoLabel}</span>
                     </div>

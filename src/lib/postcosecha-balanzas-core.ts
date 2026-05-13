@@ -168,7 +168,7 @@ export type BalanzasBpmnByDestination = Record<BalanzasDestinationKey, string>;
  *   accent          "success" | "warning" | "danger" | "default".
  */
 export type BalanzasNodeSummaryKpiBadge = {
-  kind: "hydration" | "waste";
+  kind: "hydration" | "waste" | "utilization";
   real: number | null;
   realLabel: string;
   meta: number | null;
@@ -1773,6 +1773,50 @@ async function computeSummaryKpiBadge(
 
   const wantsByDestination = Boolean(nodeDef.bpmnByDestination);
 
+  // Prioridad MÁXIMA: si el nodo tiene la columna `ideal_weight_kg` en
+  // summaryMetrics → es un nodo vs Peso Ideal y el badge debe mostrar
+  // Aprovechamiento (b2a/peso_ideal). Meta = 1.0 (100% = ideal logrado).
+  const hasIdealWeight = nodeDef.summaryMetrics.some((m) => m.col === "ideal_weight_kg");
+  if (hasIdealWeight) {
+    try {
+      const selectCols = nodeDef.hasDestination
+        ? `destination, SUM(weight_b2a_kg::numeric) AS b2a, SUM(ideal_weight_kg::numeric) AS ideal`
+        : `SUM(weight_b2a_kg::numeric) AS b2a, SUM(ideal_weight_kg::numeric) AS ideal`;
+      const groupCols = nodeDef.hasDestination ? `GROUP BY destination` : "";
+      const { rows } = await query<Record<string, unknown>>(
+        `SELECT ${selectCols} FROM ${nodeDef.viewName} ${whereSql} ${groupCols}`,
+        whereParams,
+      );
+
+      let totalB2a = 0;
+      let totalIdeal = 0;
+      const byDestAcc = new Map<string, { b2a: number; ideal: number }>();
+      for (const r of rows) {
+        const b2a = toNumber(r.b2a) ?? 0;
+        const ideal = toNumber(r.ideal) ?? 0;
+        totalB2a += b2a;
+        totalIdeal += ideal;
+        if (typeof r.destination === "string" && r.destination) {
+          byDestAcc.set(r.destination, { b2a, ideal });
+        }
+      }
+      const realGlobal = totalIdeal > 0 ? totalB2a / totalIdeal : null;
+      const global = buildKpiBadge("utilization", realGlobal, 1.0, realGlobal);
+
+      let byDestination: Record<string, BalanzasNodeSummaryKpiBadge> | undefined;
+      if (wantsByDestination && byDestAcc.size > 0) {
+        byDestination = {};
+        for (const [d, acc] of byDestAcc) {
+          const r = acc.ideal > 0 ? acc.b2a / acc.ideal : null;
+          byDestination[d] = buildKpiBadge("utilization", r, 1.0, r);
+        }
+      }
+      return { global, byDestination };
+    } catch {
+      // Caer a hydration/waste si falla.
+    }
+  }
+
   // Hidratación tiene prioridad si ambos están definidos.
   if (support.hydration) {
     const { gradeKey, b1cKey, b2Key } = support.hydration;
@@ -1864,7 +1908,7 @@ async function computeSummaryKpiBadge(
 }
 
 function buildKpiBadge(
-  kind: "hydration" | "waste",
+  kind: "hydration" | "waste" | "utilization",
   real: number | null,
   meta: number | null,
   cumplimiento: number | null,
@@ -2305,48 +2349,33 @@ async function injectKpiTableColumns(
     );
   }
 
-  // ── Aprovechamiento (solo nodos con hydration_target + dispatch_target) ────
-  // Real:        b2a_to_b1c_ratio (ya viene en la MV).
-  // Meta:        (1 + hydration_target) × (1 − dispatch_target) por row.
-  // Cumplim.:    real / meta — mayor es mejor.
+  // ── Aprovechamiento vs Peso Ideal (solo nodos con b2a_to_ideal_ratio) ─────
+  // Real:        b2a_to_ideal_ratio (ya viene en la MV, = b2a/peso_ideal).
+  // Meta:        1.0 fija (100% = lograr exactamente el peso ideal).
+  // Cumplim.:    real / 1.0 = real.
   //
-  // Para que el agregado por semana sea correcto, el meta se computa row-by-row
-  // y se agrega como derived-quotient sobre helper `_aprov_meta_x_b1c`.
-  const supportHydration = support.hydration;
-  const supportWaste = support.waste;
-  const utilizationApplies =
-    supportHydration
-    && supportWaste
-    && rows.some((r) => "b2a_to_b1c_ratio" in r);
-  if (utilizationApplies && supportHydration && supportWaste) {
-    // El ponderador para el agregado depende de la MV: prefer b1c si está, else b2.
-    const ponderadorKey =
-      supportHydration.b1cKey in (rows[0] ?? {})
-        ? supportHydration.b1cKey
-        : supportWaste.b2Key;
-
+  // Para el agregado por semana, el meta agregado también queda en 1.0
+  // (SUM(1×b2a)/SUM(b2a) = 1.0). El cumplim agregado = derived-from-aggregates
+  // sobre (b2a_to_ideal_ratio_agg / utilization_meta_agg) = b2a_to_ideal_ratio_agg / 1.0.
+  const utilizationApplies = rows.some((r) => "b2a_to_ideal_ratio" in r);
+  if (utilizationApplies) {
     for (const r of rows) {
-      const hr = toNumber(r.hydration_target);
-      const wr = toNumber(r.dispatch_target);
-      const real = toNumber(r.b2a_to_b1c_ratio);
-      const meta = hr !== null && wr !== null ? (1 + hr) * (1 - wr) : null;
-      (r as Record<string, unknown>).utilization_meta = meta;
-      (r as Record<string, unknown>).utilization_cumplimiento =
-        real !== null && meta !== null && meta !== 0 ? real / meta : null;
-      // Helper para que el agregado por semana use SUM(meta × b1c) / SUM(b1c).
-      const pesoForAgg = toNumber(r[ponderadorKey]) ?? 0;
-      (r as Record<string, unknown>)._aprov_meta_x_b1c =
-        meta !== null ? meta * pesoForAgg : null;
+      const real = toNumber(r.b2a_to_ideal_ratio);
+      const b2a = toNumber(r.weight_b2a_kg) ?? 0;
+      (r as Record<string, unknown>).utilization_meta = 1.0;
+      (r as Record<string, unknown>).utilization_cumplimiento = real;
+      // Helper para que el agregado meta sea constante 1.0 (ponderado por b2a).
+      (r as Record<string, unknown>)._aprov_meta_x_b2a = b2a;
     }
 
     entries.push(
       {
         key: "utilization_meta",
-        insertAfterKey: "b2a_to_b1c_ratio",
+        insertAfterKey: "b2a_to_ideal_ratio",
         config: {
           format: "pct",
           aggregateMode: "derived-quotient",
-          aggregateSources: { numeratorKey: "_aprov_meta_x_b1c", denominatorKey: ponderadorKey },
+          aggregateSources: { numeratorKey: "_aprov_meta_x_b2a", denominatorKey: "weight_b2a_kg" },
         },
         accentRule: null,
       },
@@ -2356,7 +2385,7 @@ async function injectKpiTableColumns(
         config: {
           format: "pct",
           aggregateMode: "derived-from-aggregates",
-          aggregateSources: { numeratorKey: "b2a_to_b1c_ratio", denominatorKey: "utilization_meta" },
+          aggregateSources: { numeratorKey: "b2a_to_ideal_ratio", denominatorKey: "utilization_meta" },
         },
         accentRule: "cumplimiento",
       },
@@ -2495,7 +2524,7 @@ export async function loadNodeDetail(
     { key: "_hyd_meta_x_b1c",      rowKey: "_hyd_meta_x_b1c" },
     { key: "_hyd_meta_x_b2",       rowKey: "_hyd_meta_x_b2" },
     { key: "_dispatch_meta_x_b2",  rowKey: "_dispatch_meta_x_b2" },
-    { key: "_aprov_meta_x_b1c",    rowKey: "_aprov_meta_x_b1c" },
+    { key: "_aprov_meta_x_b2a",    rowKey: "_aprov_meta_x_b2a" },
   ];
   for (const helper of hiddenHelperKeys) {
     if (helper.rowKey in sampleRow) {
@@ -2516,7 +2545,7 @@ export async function loadNodeDetail(
     return { col: m.col, label: m.label, value: raw, formatted: formatMetricValue(raw, m.format) };
   });
 
-  const kpi = await computeNodeKpi(nodeDef, rows, filters, where, values);
+  const kpi = await computeNodeKpi(nodeDef, rows, filters, where, values, sRow);
 
   return {
     nodeKey: nodeDef.key,
@@ -2556,6 +2585,7 @@ async function computeNodeKpi(
   filters: BalanzasFilters,
   whereSql: string,
   whereParams: unknown[],
+  summaryRow: Record<string, unknown>,
 ): Promise<BalanzasNodeKpi | undefined> {
   void rows; // las rows del detail traen LIMIT 2000 — los KPI tiles usan
              // queries agregadas sin LIMIT para matchear el header del modal.
@@ -2569,11 +2599,27 @@ async function computeNodeKpi(
 
   const tasks: Array<Promise<void>> = [];
 
+  // El REAL de hidratación/desperdicio se LEE DIRECTAMENTE del summary row
+  // (mismas SUMs que el header del modal). El header usa
+  // `__sum_<b2>`/`__sum_<b1c>` calculadas en buildSummaryMetricSelects.
+  // Así garantizamos coincidencia EXACTA entre KPI tile y header — sin
+  // riesgo de perder filas con destination/grade NULL que tienen b2=NULL
+  // pero b2a>0 (descartadas erróneamente en R5 al hacer GROUP BY).
+  const sumFromHeader = (col: string): number | null => {
+    return toNumber(summaryRow[`__sum_${col}`]);
+  };
+
   if (support.hydration) {
     const cfg = support.hydration;
+    // REAL desde header (matchea exacto).
+    const sumB2 = sumFromHeader(cfg.b2Key);
+    const sumB1c = sumFromHeader(cfg.b1cKey);
+    const real = sumB1c !== null && sumB2 !== null && sumB1c > 0
+      ? sumB2 / sumB1c - 1
+      : null;
+
     if (nodeDef.hasGrade) {
-      // Query SUM por grade desde la MV del nodo (sin LIMIT) → totales
-      // exactos. Coincide con el header `(SUM(b2)/SUM(b1c)) − 1`.
+      // META ponderada por grade desde una query GROUP BY (solo para meta).
       tasks.push(
         Promise.all([
           loadHydrationTargets(),
@@ -2591,50 +2637,40 @@ async function computeNodeKpi(
             [cfg.b1cKey]: r.b1c,
             [cfg.b2Key]: r.b2,
           }));
-          kpi.hydration = computeHydrationKpi(aggregatedRows, cfg, targets, metaOrigin);
+          const k = computeHydrationKpi(aggregatedRows, cfg, targets, metaOrigin);
+          // Sobrescribir el real con el del header.
+          const cumplim = real !== null && k.meta !== null && k.meta !== 0 ? real / k.meta : null;
+          kpi.hydration = {
+            real,
+            meta: k.meta,
+            cumplimiento: cumplim,
+            num: sumB2 ?? 0,
+            den: sumB1c ?? 0,
+            rowsCount: k.rowsCount,
+            rowsMissingMeta: k.rowsMissingMeta,
+          };
         }),
       );
     } else {
-      // MV no tiene grade (caso apertura-b1c-b2a-vs-ideal):
-      //   - REAL viene de la MV LOCAL (sin grade): SUM(b2)/SUM(b1c) − 1.
-      //     Así coincide EXACTAMENTE con el header del modal.
-      //   - META viene del CROSS-MV (b1c_vs_b2_weight, que sí tiene grade)
-      //     ponderada por b1c.
+      // Cross-MV solo para la META.
       tasks.push(
         Promise.all([
           loadHydrationTargets(),
-          // Query LOCAL para el real (1 fila con SUMs)
-          query<Record<string, unknown>>(
-            `SELECT SUM(${cfg.b1cKey}::numeric) AS b1c,
-                    SUM(${cfg.b2Key}::numeric) AS b2
-             FROM ${nodeDef.viewName} ${whereSql}`,
-            whereParams,
-          ),
-          // Cross-MV para el computo de meta ponderada por grade
           loadHydrationKpiSourceRows({
             branch: nodeDef.branch as BalanzasBranch,
             farm: filters.farm as BalanzasFarm,
             whereSql,
             whereParams,
           }),
-        ]).then(([targets, localResult, sourceRows]) => {
-          const localRow = localResult.rows[0] ?? {};
-          const localB1c = toNumber(localRow.b1c) ?? 0;
-          const localB2 = toNumber(localRow.b2) ?? 0;
-          // Real de la MV local — idéntico al header.
-          const real = localB1c > 0 ? localB2 / localB1c - 1 : null;
-          // Meta ponderada cross-MV.
+        ]).then(([targets, sourceRows]) => {
           const cross = computeHydrationKpi(sourceRows, cfg, targets, metaOrigin);
-          const cumplimiento =
-            real !== null && cross.meta !== null && cross.meta !== 0
-              ? real / cross.meta
-              : null;
+          const cumplim = real !== null && cross.meta !== null && cross.meta !== 0 ? real / cross.meta : null;
           kpi.hydration = {
             real,
             meta: cross.meta,
-            cumplimiento,
-            num: localB2,
-            den: localB1c,
+            cumplimiento: cumplim,
+            num: sumB2 ?? 0,
+            den: sumB1c ?? 0,
             rowsCount: cross.rowsCount,
             rowsMissingMeta: cross.rowsMissingMeta,
           };
@@ -2645,7 +2681,14 @@ async function computeNodeKpi(
 
   if (support.waste) {
     const cfg = support.waste;
-    // Query SUM por destination desde la MV del nodo (sin LIMIT).
+    // REAL desde header (matchea exacto, sin perder filas con b2=NULL).
+    const sumB2 = sumFromHeader(cfg.b2Key);
+    const sumB2a = sumFromHeader(cfg.b2aKey);
+    const realWaste = sumB2 !== null && sumB2a !== null && sumB2 > 0
+      ? 1 - sumB2a / sumB2
+      : null;
+
+    // META ponderada por destino desde GROUP BY.
     tasks.push(
       Promise.all([
         loadWasteTargets(),
@@ -2663,7 +2706,17 @@ async function computeNodeKpi(
           [cfg.b2Key]: r.b2,
           [cfg.b2aKey]: r.b2a,
         }));
-        kpi.waste = computeWasteKpi(aggregatedRows, cfg, targets, metaOrigin);
+        const k = computeWasteKpi(aggregatedRows, cfg, targets, metaOrigin);
+        const cumplim = realWaste !== null && k.meta !== null && realWaste > 0 ? k.meta / realWaste : null;
+        kpi.waste = {
+          real: realWaste,
+          meta: k.meta,
+          cumplimiento: cumplim,
+          num: sumB2a ?? 0,
+          den: sumB2 ?? 0,
+          rowsCount: k.rowsCount,
+          rowsMissingMeta: k.rowsMissingMeta,
+        };
       }),
     );
   }
@@ -2701,18 +2754,23 @@ async function computeNodeKpi(
   if (tasks.length === 0) return undefined;
   await Promise.all(tasks);
 
-  // Aprovechamiento se deriva de hidratación + desperdicio una vez resueltos.
-  // real = (1 + hidr) × (1 − desp)   meta = (1 + meta_hidr) × (1 − meta_desp)
-  if (kpi.hydration && kpi.waste) {
-    const hr = kpi.hydration.real;
-    const wr = kpi.waste.real;
-    const hm = kpi.hydration.meta;
-    const wm = kpi.waste.meta;
-    const real = hr !== null && wr !== null ? (1 + hr) * (1 - wr) : null;
-    const meta = hm !== null && wm !== null ? (1 + hm) * (1 - wm) : null;
-    const cumplimiento =
-      real !== null && meta !== null && meta !== 0 ? real / meta : null;
-    kpi.utilization = { real, meta, cumplimiento };
+  // ── Aprovechamiento vs Peso Ideal ──
+  // Real         = SUM(b2a) / SUM(peso_ideal)  (matchea Dif_Peso% del header)
+  // Meta         = 1.0   (100% es lograr exactamente el peso ideal)
+  // Cumplimiento = real / 1.0 = real
+  //
+  // Aplica solo a nodos con la columna `ideal_weight_kg` en summaryMetrics
+  // (es decir, los nodos *_vs_ideal). El cómputo lee desde summary row
+  // para garantizar coincidencia con el header.
+  const sumB2aForAprov = toNumber(summaryRow.__sum_weight_b2a_kg);
+  const sumIdealForAprov = toNumber(summaryRow.__sum_ideal_weight_kg);
+  if (sumB2aForAprov !== null && sumIdealForAprov !== null && sumIdealForAprov > 0) {
+    const real = sumB2aForAprov / sumIdealForAprov;
+    kpi.utilization = {
+      real,
+      meta: 1.0,
+      cumplimiento: real, // real / 1.0
+    };
   }
 
   return Object.keys(kpi).length > 0 ? kpi : undefined;
@@ -2771,7 +2829,7 @@ const COLUMN_LABELS: Record<string, string> = {
   dispatch_target: "Meta desperdicio",
   dispatch_cumplimiento: "Cumplim. desp.",
   utilization_meta: "Meta aprov.",
-  utilization_cumplimiento: "Cumplim. aprov.",
+  utilization_cumplimiento: "Cumplim. aprov. ideal",
   dispatch_pct: "Despacho %",
   dispatch_pct_stems: "Despacho tallos %",
   dispatch_pct_weight: "Despacho peso %",

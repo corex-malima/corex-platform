@@ -101,21 +101,21 @@ export function BalanzasKpiMetaSection({ kpi }: { kpi: BalanzasNodeKpi }) {
       ) : null}
 
       {utilization ? (
-        <KpiBlock title="Aprovechamiento">
+        <KpiBlock title="Aprovechamiento vs Peso ideal">
           <MetricTile
             label="Valor real"
             value={formatPercent(utilization.real, { input: "ratio" })}
-            hint="Fracción del peso B1C que termina vendible (B2A)."
+            hint="Cuánto del peso ideal estimado se logró vendible (B2A)."
           />
           <MetricTile
             label="Meta"
             value={formatPercent(utilization.meta, { input: "ratio" })}
-            hint="(1 + meta hidr.) × (1 − meta desp.). Promedio ponderado."
+            hint="100% es alcanzar exactamente el peso ideal."
           />
           <MetricTile
             label="Cumplimiento"
             value={formatPercent(utilization.cumplimiento, { input: "ratio" })}
-            hint="Más alto = mejor desempeño."
+            hint="Más alto = más cerca del peso ideal."
             accent={cumplimientoAccent(utilization.cumplimiento)}
           />
         </KpiBlock>
