@@ -393,6 +393,43 @@ Casos especiales del catálogo de orígenes:
 
 El editor de Metas (`/dashboard/admin/administracion-maestros/metas-objetivos`) admite caminos heterogéneos vía `target_scope_jsonb.filters` libres (cualquier dimensión, no fija). Hay autogeneración de `target_code` cuando se omite y carga bulk transaccional vía `POST /api/admin/administracion-maestros/metas-objetivos/bulk`. Schema canon: `src/lib/admin-masters-schemas.ts`.
 
+## Balanzas KPI — Hidratación, Desperdicio, Aprovechamiento, Ajuste
+
+El módulo Postcosecha / Balanzas (`/dashboard/postcosecha/balanzas`) expone 4 KPIs con meta + cumplimiento en los modales clickeables del BPMN. Toda la lógica de cómputo vive en `src/lib/postcosecha-balanzas-kpi.ts` (funciones puras + loaders cacheados); la integración con la UI es `src/lib/postcosecha-balanzas-core.ts` (`computeNodeKpi` + `injectKpiTableColumns`).
+
+**Fórmulas canon** (validadas contra DB real):
+
+| KPI | Real | Meta | Cumplim |
+| --- | --- | --- | --- |
+| Hidratación | `SUM(b2)/SUM(b1c) − 1` | `Σ(meta_grade × b1c) / Σ(b1c)` ponderada | `real / meta` |
+| Desperdicio | `1 − SUM(b2a)/SUM(b2)` | `Σ(meta_dest × b2) / Σ(b2)` positiva | `meta / real` |
+| Ajuste | `α + β · razón` con `razón = peso_tallo_est_ponderado / peso_tallo_venta` | (sin meta — es el factor en sí) | censurado piso `0.96` |
+| Aprovechamiento | `SUM(peso_ideal) / SUM(b1c)` | `(1 + meta_hidr) × (1 − meta_desp) × ajuste_final` | `real / meta` |
+
+**Reglas de match al modelo ML** (`mdl.prod_fact_ml2_operational_subset_cur`):
+- Destino BLANCO → match único por `work_date + grade + destination` (lot_date no fiable).
+- Otros destinos → cascada `lot_date + work_date + grade + destination` → `work_date + grade + destination` → `grade + destination`.
+
+**Cross-MV pattern**: las MVs de cierre (`b2-vs-b2a`, `b1c-vs-b2a-vs-ideal`) no tienen `grade`/`weight_per_stem_kg` row-by-row. Los loaders `loadHydrationKpiSourceRows` y `loadAdjustmentSourceRows` leen desde `b1c_vs_b2_weight_<farm>_np_cur` con el mismo `whereSql` del nodo origen.
+
+**REAL desde summary row**: los KPI tiles del modal leen las SUMs `__sum_*` del query del header (`buildSummaryMetricSelects`) para garantizar coincidencia EXACTA con los headers superiores del modal. No re-hacen `GROUP BY` (eso descartaba filas con destination=NULL → buckets con b2=NULL pero b2a>0).
+
+**Metas SCD2** en `db_admin.public.adm_dim_goal_target_profile_scd2`:
+- `hydration_target` (14 filas: opening × {BQT, 15..75}) — ratio "ganancia de peso".
+- `waste_target` (3 filas: opening × {BLANCO, TINTURADO, ARCOIRIS}) — ratio positivo de pérdida.
+- `adjustment_alpha` = 0.80, `adjustment_beta` = 0.19 — globales.
+- Editables desde Admin · Maestros · Metas y objetivos.
+
+**Helpers ocultos en tabla**: `_hyd_meta_x_b1c`, `_hyd_meta_x_b2`, `_dispatch_meta_x_b2`, `_aprov_meta_x_b1c` se inyectan row-by-row con `BalanzasDetailColumn.isHidden=true` para que el agregado por semana use `Σ(meta × peso) / Σ(peso)` (ponderado correcto). Las tablas y CSV/XLSX export los filtran al renderizar/exportar.
+
+**BPMN overlay**: el badge clickeable prioriza Aprovechamiento > Hidratación > Desperdicio. Para nodos con `bpmnByDestination` split (B2→B2A), se computa un badge por destino (no se replica el global).
+
+**Tabla con accent semáforo**: columnas `*_cumplimiento` usan `BalanzasDetailColumn.accentRule = "cumplimiento" | "cumplimiento-inverso"` mapeado a className Tailwind por `balanzasCellAccentClass` en `balanzas-table-metrics.ts`.
+
+**Exportable XLSX nativo**: el modal del nodo exporta a `.xlsx` con SheetJS (`xlsx`) preservando tipos numéricos. Columnas helper ocultas se omiten.
+
+Aplicar metas + scripts: `node scripts/apply-balances-kpi-targets-sql.mjs` (idempotente, contra `db_admin`).
+
 ## Deuda arquitectónica conocida
 
 - `src/components/dashboard/` queda reducido a `module-placeholder.tsx`. No crear archivos nuevos allí.

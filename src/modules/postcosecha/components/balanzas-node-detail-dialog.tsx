@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, LoaderCircle } from "lucide-react";
 import useSWR from "swr";
+import * as XLSX from "xlsx";
 
 import type { BalanzasFilters, BalanzasNodeDetail, BalanzasNodeSummary } from "@/lib/postcosecha-balanzas";
 import { fetchJson } from "@/lib/fetch-json";
@@ -94,31 +95,45 @@ function buildDetailUrl(nodeKey: string, filters: BalanzasFilters, local: LocalF
   return `/api/postcosecha/balanzas/${nodeKey}?${params.toString()}`;
 }
 
-function downloadCsv(detail: BalanzasNodeDetail) {
-  // Excluir columnas helper (isHidden) del export — son campos internos.
+/**
+ * Exporta el detail del nodo como archivo XLSX nativo de Excel.
+ * Columnas helper (isHidden) se omiten — son campos internos.
+ * Valores numéricos mantienen su tipo (no string), así Excel los formatea
+ * y permite operar con ellos.
+ */
+function downloadXlsx(detail: BalanzasNodeDetail) {
   const exportColumns = detail.columns.filter((c) => !c.isHidden);
-  const header = exportColumns.map((column) => column.label).join(",");
-  const rows = detail.rows.map((row) =>
-    exportColumns
-      .map((column) => {
-        const value = row[column.key];
-        if (value === null || value === undefined) return "";
-        const stringValue = String(value);
-        return stringValue.includes(",") || stringValue.includes('"')
-          ? `"${stringValue.replace(/"/g, '""')}"`
-          : stringValue;
-      })
-      .join(","),
-  );
 
-  const csv = [header, ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `balanzas-${detail.nodeKey}-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  // Array de arrays: primera fila headers, resto data.
+  const aoa: (string | number | null)[][] = [
+    exportColumns.map((column) => column.label),
+    ...detail.rows.map((row) =>
+      exportColumns.map((column) => {
+        const value = row[column.key];
+        if (value === null || value === undefined) return null;
+        if (typeof value === "number") return Number.isFinite(value) ? value : null;
+        if (typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value)) {
+          const n = Number(value);
+          return Number.isFinite(n) ? n : value;
+        }
+        return String(value);
+      }),
+    ),
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // Auto-ajustar ancho de columnas a contenido (aprox).
+  ws["!cols"] = exportColumns.map((c) => ({
+    wch: Math.max(c.label.length + 2, 14),
+  }));
+
+  const wb = XLSX.utils.book_new();
+  // Sheet name no admite ciertos caracteres; sanear.
+  const sheetName = detail.nodeKey.replace(/[\\/?*[\]:]/g, "_").slice(0, 31) || "Balanzas";
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `balanzas-${detail.nodeKey}-${stamp}.xlsx`);
 }
 
 export function BalanzasNodeDetailDialog({ node, filters, open, presetDestination, onClose }: Props) {
@@ -173,10 +188,10 @@ export function BalanzasNodeDetailDialog({ node, filters, open, presetDestinatio
             variant="outline"
             size="sm"
             className="rounded-xl"
-            onClick={() => downloadCsv(detail)}
+            onClick={() => downloadXlsx(detail)}
           >
             <Download className="size-4" aria-hidden="true" />
-            CSV
+            XLSX
           </Button>
         ) : undefined
       }

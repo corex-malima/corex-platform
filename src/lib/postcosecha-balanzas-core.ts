@@ -1773,42 +1773,142 @@ async function computeSummaryKpiBadge(
 
   const wantsByDestination = Boolean(nodeDef.bpmnByDestination);
 
-  // Prioridad MÁXIMA: si el nodo tiene la columna `ideal_weight_kg` en
-  // summaryMetrics → es un nodo vs Peso Ideal y el badge debe mostrar
-  // Aprovechamiento (b2a/peso_ideal). Meta = 1.0 (100% = ideal logrado).
+  // Prioridad MÁXIMA: nodo vs Peso Ideal → badge muestra Aprovechamiento
+  // con la fórmula canon R7:
+  //   real  = SUM(peso_ideal) / SUM(b1c)
+  //   meta  = (1 + meta_hidr_ponderada) × (1 − meta_desp_ponderada) × ajuste_final
+  //   cumpl = real / meta
+  //
+  // El ajuste se calcula desde el cross-MV de hidratación + factor ML + ventas.
+  // Meta hidr. cross-MV (porque la MV ideal no tiene grade row-by-row).
+  // Meta desp. local (la MV ideal sí tiene destination).
   const hasIdealWeight = nodeDef.summaryMetrics.some((m) => m.col === "ideal_weight_kg");
-  if (hasIdealWeight) {
+  if (hasIdealWeight && support.hydration && support.waste && support.adjustment) {
     try {
-      const selectCols = nodeDef.hasDestination
-        ? `destination, SUM(weight_b2a_kg::numeric) AS b2a, SUM(ideal_weight_kg::numeric) AS ideal`
-        : `SUM(weight_b2a_kg::numeric) AS b2a, SUM(ideal_weight_kg::numeric) AS ideal`;
-      const groupCols = nodeDef.hasDestination ? `GROUP BY destination` : "";
-      const { rows } = await query<Record<string, unknown>>(
-        `SELECT ${selectCols} FROM ${nodeDef.viewName} ${whereSql} ${groupCols}`,
-        whereParams,
-      );
+      const hCfg = support.hydration;
+      const wCfg = support.waste;
+      const aCfg = support.adjustment;
+      const dwOrigin = resolveDwOrigin(nodeDef.branch);
+      const variety = resolveVarietyFromFarm("xl"); // farm del nodo summary
 
-      let totalB2a = 0;
-      let totalIdeal = 0;
-      const byDestAcc = new Map<string, { b2a: number; ideal: number }>();
-      for (const r of rows) {
+      // Necesitamos: totales por destino (b1c, b2, b2a, ideal),
+      // metas hidratación + desperdicio, factor ML, ventas semanales,
+      // alpha/beta para el ajuste.
+      const [
+        totalsRes,
+        hydTargets,
+        wasteTargets,
+        adjParams,
+        salesIndex,
+        factorIndex,
+        hydCrossRows,
+      ] = await Promise.all([
+        query<Record<string, unknown>>(
+          `SELECT destination,
+                  SUM(${hCfg.b1cKey}::numeric) AS b1c,
+                  SUM(${hCfg.b2Key}::numeric) AS b2,
+                  SUM(${wCfg.b2aKey}::numeric) AS b2a,
+                  SUM(ideal_weight_kg::numeric) AS ideal
+           FROM ${nodeDef.viewName} ${whereSql}
+           ${nodeDef.hasDestination ? "GROUP BY destination" : ""}`,
+          whereParams,
+        ),
+        loadHydrationTargets(),
+        loadWasteTargets(),
+        loadAdjustmentParams(),
+        loadWeeklySalesIndex(),
+        dwOrigin && variety
+          ? loadHydrationFactorIndex({ dwOrigin, variety, dateFrom: null, dateTo: null })
+          : Promise.resolve({ byFull: new Map(), byWorkDate: new Map(), byGradeDest: new Map() }),
+        loadHydrationKpiSourceRows({
+          branch: nodeDef.branch as BalanzasBranch,
+          farm: "xl",
+          whereSql,
+          whereParams,
+        }),
+      ]);
+
+      // Aggregate totals globales y por destino
+      let g_b1c = 0, g_ideal = 0;
+      const byDestTotals = new Map<string, { b1c: number; b2: number; b2a: number; ideal: number }>();
+      for (const r of totalsRes.rows) {
+        const b1c = toNumber(r.b1c) ?? 0;
+        const b2 = toNumber(r.b2) ?? 0;
         const b2a = toNumber(r.b2a) ?? 0;
         const ideal = toNumber(r.ideal) ?? 0;
-        totalB2a += b2a;
-        totalIdeal += ideal;
+        g_b1c += b1c;
+        g_ideal += ideal;
         if (typeof r.destination === "string" && r.destination) {
-          byDestAcc.set(r.destination, { b2a, ideal });
+          byDestTotals.set(r.destination, { b1c, b2, b2a, ideal });
         }
       }
-      const realGlobal = totalIdeal > 0 ? totalB2a / totalIdeal : null;
-      const global = buildKpiBadge("utilization", realGlobal, 1.0, realGlobal);
 
+      // Meta hidratación global (cross-MV ponderada por b1c)
+      const hydK = computeHydrationKpi(hydCrossRows, hCfg, hydTargets, metaOrigin);
+      const hydMetaGlobal = hydK.meta;
+
+      // Meta desperdicio global (ponderada por b2)
+      let wasteMetaNumGlobal = 0, wasteMetaDenGlobal = 0;
+      const wasteMetaByDest = new Map<string, number>();
+      for (const [dest, acc] of byDestTotals) {
+        if (acc.b2 <= 0) continue;
+        const m = wasteTargets.get(`${metaOrigin}|${dest}`);
+        if (m === undefined) continue;
+        wasteMetaNumGlobal += m * acc.b2;
+        wasteMetaDenGlobal += acc.b2;
+        wasteMetaByDest.set(dest, m);
+      }
+      const wasteMetaGlobal = wasteMetaDenGlobal > 0 ? wasteMetaNumGlobal / wasteMetaDenGlobal : null;
+
+      // Ajuste global — usar source rows del cross-MV (mismo cómputo que el modal)
+      const adjSourceRows = await loadAdjustmentSourceRows({
+        branch: nodeDef.branch as BalanzasBranch,
+        farm: "xl",
+        whereSql,
+        whereParams,
+      });
+      const adjK = computeAdjustmentKpi(adjSourceRows, aCfg, factorIndex, salesIndex, adjParams);
+      const ajusteFinal = adjK.ajusteFinal;
+
+      // Utilization global
+      const realG = g_b1c > 0 ? g_ideal / g_b1c : null;
+      const metaG =
+        hydMetaGlobal !== null && wasteMetaGlobal !== null && ajusteFinal !== null
+          ? (1 + hydMetaGlobal) * (1 - wasteMetaGlobal) * ajusteFinal
+          : null;
+      const cumplG = realG !== null && metaG !== null && metaG !== 0 ? realG / metaG : null;
+      const global = buildKpiBadge("utilization", realG, metaG, cumplG);
+
+      // Por destino — reutiliza meta hidratación cross-MV agrupada por destino
       let byDestination: Record<string, BalanzasNodeSummaryKpiBadge> | undefined;
-      if (wantsByDestination && byDestAcc.size > 0) {
+      if (wantsByDestination && byDestTotals.size > 0) {
         byDestination = {};
-        for (const [d, acc] of byDestAcc) {
-          const r = acc.ideal > 0 ? acc.b2a / acc.ideal : null;
-          byDestination[d] = buildKpiBadge("utilization", r, 1.0, r);
+        // Meta hidratación por destino desde cross
+        const hydByDest = new Map<string, { num: number; den: number }>();
+        for (const r of hydCrossRows) {
+          const grade = typeof r[hCfg.gradeKey] === "string" ? (r[hCfg.gradeKey] as string) : "";
+          const dest = typeof r.destination === "string" ? r.destination : "";
+          if (!grade || !dest) continue;
+          const m = hydTargets.get(`${metaOrigin}|${grade}`);
+          if (m === undefined) continue;
+          const b1c = toNumber(r[hCfg.b1cKey]) ?? 0;
+          if (b1c <= 0) continue;
+          const acc = hydByDest.get(dest) ?? { num: 0, den: 0 };
+          acc.num += m * b1c;
+          acc.den += b1c;
+          hydByDest.set(dest, acc);
+        }
+
+        for (const [d, t] of byDestTotals) {
+          const realD = t.b1c > 0 ? t.ideal / t.b1c : null;
+          const hydMetaD = hydByDest.has(d) ? hydByDest.get(d)!.num / hydByDest.get(d)!.den : null;
+          const wasteMetaD = wasteMetaByDest.get(d) ?? null;
+          const metaD =
+            hydMetaD !== null && wasteMetaD !== null && ajusteFinal !== null
+              ? (1 + hydMetaD) * (1 - wasteMetaD) * ajusteFinal
+              : null;
+          const cumplD = realD !== null && metaD !== null && metaD !== 0 ? realD / metaD : null;
+          byDestination[d] = buildKpiBadge("utilization", realD, metaD, cumplD);
         }
       }
       return { global, byDestination };
