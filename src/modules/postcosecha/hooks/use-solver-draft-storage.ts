@@ -68,15 +68,14 @@ function sanitizeOrders(
       return row;
     }
 
-    return {
+    const normalized = {
       ...row,
       sku: typeof draft.sku === "string" && draft.sku.trim() ? draft.sku : row.sku,
-      fecha_1: sanitizeInteger(draft.fecha_1),
-      fecha_2: sanitizeInteger(draft.fecha_2),
-      fecha_3: sanitizeInteger(draft.fecha_3),
-      fecha_4: sanitizeInteger(draft.fecha_4),
-      fecha_5: sanitizeInteger(draft.fecha_5),
-    };
+    } as PoscosechaClasificacionOrderRow;
+    for (const key of SOLVER_DATE_KEYS) {
+      normalized[key] = sanitizeInteger(draft[key]);
+    }
+    return normalized;
   });
 }
 
@@ -102,15 +101,14 @@ function sanitizeAvailability(
       return row;
     }
 
-    return {
+    const normalized = {
       ...row,
       pesoTalloSeed: Math.round(sanitizeFloat(draft.pesoTalloSeed) * 100) / 100,
-      fecha_1: sanitizeInteger(draft.fecha_1),
-      fecha_2: sanitizeInteger(draft.fecha_2),
-      fecha_3: sanitizeInteger(draft.fecha_3),
-      fecha_4: sanitizeInteger(draft.fecha_4),
-      fecha_5: sanitizeInteger(draft.fecha_5),
-    };
+    } as PoscosechaClasificacionAvailabilityRow;
+    for (const key of SOLVER_DATE_KEYS) {
+      normalized[key] = sanitizeInteger(draft[key]);
+    }
+    return normalized;
   });
 }
 

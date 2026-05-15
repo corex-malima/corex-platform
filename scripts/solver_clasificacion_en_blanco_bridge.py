@@ -507,14 +507,25 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
     if not candidates:
         raise RuntimeError("No se encontraron combinaciones posibles para construir la receta.")
 
+    valid_candidates = [
+        candidate
+        for candidate in candidates
+        if float(candidate["range_penalty"]) <= RECIPE_OBJECTIVE_TOLERANCE
+    ]
+
+    if not valid_candidates:
+        raise RuntimeError(
+            "No existe una receta valida dentro del rango objetivo para el SKU seleccionado."
+        )
+
     problem = pulp.LpProblem("postharvest_recipe", pulp.LpMinimize)
     recipe_vars = {
         index: pulp.LpVariable(f"recipe_{index}", lowBound=0, cat="Integer")
-        for index in range(len(candidates))
+        for index in range(len(valid_candidates))
     }
     use_vars = {
         index: pulp.LpVariable(f"use_{index}", lowBound=0, upBound=1, cat="Binary")
-        for index in range(len(candidates))
+        for index in range(len(valid_candidates))
     }
     max_deviation_var = pulp.LpVariable("max_recipe_deviation", lowBound=0)
 
@@ -529,7 +540,7 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
 
     for grade_position, grade_data in enumerate(grade_values):
         assigned_expr = pulp.lpSum(
-            candidates[index]["counts"][grade_position] * recipe_vars[index]
+            valid_candidates[index]["counts"][grade_position] * recipe_vars[index]
             for index in recipe_vars
         )
         problem += (
@@ -542,15 +553,15 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
         ), f"recipe_use_link_{index}"
         problem += (
             max_deviation_var
-            >= float(candidates[index]["deviation_abs"]) - float(candidates[index]["deviation_abs"]) * (1 - use_vars[index])
+            >= float(valid_candidates[index]["deviation_abs"]) - float(valid_candidates[index]["deviation_abs"]) * (1 - use_vars[index])
         ), f"recipe_max_deviation_{index}"
 
     range_penalty_expr = pulp.lpSum(
-        float(candidates[index]["range_penalty"]) * recipe_vars[index]
+        float(valid_candidates[index]["range_penalty"]) * recipe_vars[index]
         for index in recipe_vars
     )
     deviation_expr = pulp.lpSum(
-        float(candidates[index]["deviation_abs"]) * recipe_vars[index]
+        float(valid_candidates[index]["deviation_abs"]) * recipe_vars[index]
         for index in recipe_vars
     )
     distinct_expr = pulp.lpSum(use_vars[index] for index in use_vars)
@@ -569,7 +580,7 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
             peso_min_objetivo=peso_min_objetivo,
             peso_max_objetivo=peso_max_objetivo,
             grade_values=grade_values,
-            candidates=candidates,
+            candidates=valid_candidates,
         )
 
     unassigned_opt = float(pulp.value(unassigned_expr) or 0.0)
@@ -641,7 +652,7 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
         if quantity <= 0:
             continue
 
-        candidate = candidates[index]
+        candidate = valid_candidates[index]
         composition = []
         for grade_position, grade_data in enumerate(grade_values):
             stems = int(candidate["counts"][grade_position])
@@ -679,6 +690,11 @@ def build_recipe_result(payload: dict[str, Any]) -> dict[str, Any]:
     final_rows.sort(
         key=lambda row: (-int(row["cantidad"]), float(row["difIdeal"]), row["recetaId"])
     )
+
+    if any(row["estadoPeso"] != "Dentro de objetivo" for row in final_rows):
+        raise RuntimeError(
+            "La receta resultante contiene combinaciones fuera del rango objetivo."
+        )
 
     bunches_resueltos = int(sum(int(row["cantidad"]) for row in final_rows))
     peso_promedio_real = (

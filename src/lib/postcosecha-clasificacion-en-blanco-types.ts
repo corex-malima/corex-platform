@@ -6,6 +6,11 @@ export const SOLVER_DATE_KEYS = [
   "fecha_3",
   "fecha_4",
   "fecha_5",
+  "fecha_6",
+  "fecha_7",
+  "fecha_8",
+  "fecha_9",
+  "fecha_10",
 ] as const;
 
 export type SolverDateKey = (typeof SOLVER_DATE_KEYS)[number];

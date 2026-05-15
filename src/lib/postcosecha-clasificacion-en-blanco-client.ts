@@ -38,15 +38,14 @@ function sanitizeDateValue(value: unknown) {
 function sanitizeAvailabilityRow(
   row: PoscosechaClasificacionAvailabilityRow,
 ): PoscosechaClasificacionAvailabilityRow {
-  return {
+  const normalized = {
     grado: Math.max(toInteger(row.grado, 0), 1),
     pesoTalloSeed: Math.max(toNumber(row.pesoTalloSeed, 0), 0),
-    fecha_1: sanitizeDateValue(row.fecha_1),
-    fecha_2: sanitizeDateValue(row.fecha_2),
-    fecha_3: sanitizeDateValue(row.fecha_3),
-    fecha_4: sanitizeDateValue(row.fecha_4),
-    fecha_5: sanitizeDateValue(row.fecha_5),
-  };
+  } as PoscosechaClasificacionAvailabilityRow;
+  for (const key of SOLVER_DATE_KEYS) {
+    normalized[key] = sanitizeDateValue(row[key]);
+  }
+  return normalized;
 }
 
 export function buildClasificacionAvailabilityDerived(
@@ -221,14 +220,13 @@ export function buildClasificacionFlexiblePrecheck(
   }
 
   const tallosDisponibles = buildClasificacionAvailabilityDerived(
-    availability.map((row) => ({
-      ...row,
-      fecha_1: lotKeys.has("fecha_1") ? row.fecha_1 : 0,
-      fecha_2: lotKeys.has("fecha_2") ? row.fecha_2 : 0,
-      fecha_3: lotKeys.has("fecha_3") ? row.fecha_3 : 0,
-      fecha_4: lotKeys.has("fecha_4") ? row.fecha_4 : 0,
-      fecha_5: lotKeys.has("fecha_5") ? row.fecha_5 : 0,
-    })),
+    availability.map((row) => {
+      const normalized = { ...row } as PoscosechaClasificacionAvailabilityRow;
+      for (const key of SOLVER_DATE_KEYS) {
+        normalized[key] = lotKeys.has(key) ? row[key] : 0;
+      }
+      return normalized;
+    }),
     desperdicio,
   ).reduce((accumulator, row) => accumulator + row.tallosNetos, 0);
 

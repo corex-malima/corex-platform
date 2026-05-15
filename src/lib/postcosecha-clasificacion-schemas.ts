@@ -1,6 +1,17 @@
 import { z } from "zod";
 
-const SolverDateKey = z.enum(["fecha_1", "fecha_2", "fecha_3", "fecha_4", "fecha_5"]);
+const SolverDateKey = z.enum([
+  "fecha_1",
+  "fecha_2",
+  "fecha_3",
+  "fecha_4",
+  "fecha_5",
+  "fecha_6",
+  "fecha_7",
+  "fecha_8",
+  "fecha_9",
+  "fecha_10",
+]);
 const Origin = z.enum(["GV", "APERTURA", "PRECLASIFICACION"]);
 
 const orderRowSchema = z

@@ -2,7 +2,7 @@ import "server-only";
 
 import { existsSync } from "fs";
 import { resolve } from "path";
-import { spawn } from "child_process";
+import { execFile, spawn } from "child_process";
 
 import { listCurrentPostharvestSkus } from "@/lib/postcosecha-skus";
 import type { PoscosechaSkuRecord } from "@/lib/postcosecha-sku-types";
@@ -21,6 +21,7 @@ import type {
 } from "@/lib/postcosecha-clasificacion-en-blanco-types";
 import {
   POSCOSECHA_CLASIFICACION_RUN_MODES,
+  SOLVER_DATE_KEYS,
 } from "@/lib/postcosecha-clasificacion-en-blanco-types";
 import {
   toNumber,
@@ -54,13 +55,13 @@ const LEGACY_SOLVER_PYTHON = resolve(
 
 const SOFT_MODE_MIN_COMPLIANCE = 0.97;
 const SOFT_SKU_TARGET_MIN_PCT = -0.03;
-const SOLVER_BRIDGE_TIMEOUT_MS = 300_000;
+const SOLVER_BRIDGE_TIMEOUT_MS = 120_000;
 const MAX_SOLVE_ATTEMPTS_PER_MODE = 6;
-const MAX_SKU_REBALANCE_PASSES = 1;
-const MAX_UNDER_TARGET_SKUS_PER_PASS = 1;
-const MAX_DONOR_SKUS_PER_PASS = 0;
-const MAX_DONOR_AMOUNTS_PER_SKU = 0;
-const MAX_SELF_REDUCTION_OPTIONS = 1;
+const MAX_SKU_REBALANCE_PASSES = 2;
+const MAX_UNDER_TARGET_SKUS_PER_PASS = 2;
+const MAX_DONOR_SKUS_PER_PASS = 1;
+const MAX_DONOR_AMOUNTS_PER_SKU = 2;
+const MAX_SELF_REDUCTION_OPTIONS = 3;
 
 function ensureSolverEngineAvailable() {
   if (!existsSync(BRIDGE_SCRIPT_PATH)) {
@@ -91,6 +92,21 @@ function ensureSolverEngineAvailable() {
   );
 }
 
+function killProcessTree(pid: number) {
+  if (!Number.isFinite(pid) || pid <= 0) {
+    return;
+  }
+
+  if (process.platform === "win32") {
+    execFile("taskkill", ["/PID", String(pid), "/T", "/F"], () => {});
+    return;
+  }
+
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {}
+}
+
 export async function runBridge<T>(
   command: "defaults" | "solve" | "recipe",
   payload?: unknown,
@@ -104,7 +120,7 @@ export async function runBridge<T>(
       stdio: ["pipe", "pipe", "pipe"],
     });
     const timeout = setTimeout(() => {
-      child.kill();
+      killProcessTree(child.pid ?? 0);
       rejectPromise(
         new Error("El solver de clasificacion en blanco excedio el tiempo maximo de ejecucion."),
       );
@@ -183,14 +199,11 @@ function mapOrdersForBridge(
       const masterRecord = masterBySkuId.get(row.skuId);
       if (!masterRecord) return null;
 
-      return {
-        sku: masterRecord.sku,
-        fecha_1: sanitizeDateValue(row.fecha_1),
-        fecha_2: sanitizeDateValue(row.fecha_2),
-        fecha_3: sanitizeDateValue(row.fecha_3),
-        fecha_4: sanitizeDateValue(row.fecha_4),
-        fecha_5: sanitizeDateValue(row.fecha_5),
-      };
+      const mapped = { sku: masterRecord.sku } as Record<string, string | number>;
+      for (const key of SOLVER_DATE_KEYS) {
+        mapped[key] = sanitizeDateValue(row[key]);
+      }
+      return mapped;
     })
     .filter(Boolean);
 }
@@ -202,15 +215,14 @@ function mapAvailabilityForBridge(
     .map((row) => {
       const sanitizedRow = sanitizeAvailabilityRow(row);
 
-      return {
+      const mapped = {
         grado: sanitizedRow.grado,
-        fecha_1: sanitizedRow.fecha_1,
-        fecha_2: sanitizedRow.fecha_2,
-        fecha_3: sanitizedRow.fecha_3,
-        fecha_4: sanitizedRow.fecha_4,
-        fecha_5: sanitizedRow.fecha_5,
         peso_tallo_seed: sanitizedRow.pesoTalloSeed,
-      };
+      } as Record<string, number>;
+      for (const key of SOLVER_DATE_KEYS) {
+        mapped[key] = sanitizedRow[key];
+      }
+      return mapped;
     })
     .filter((row) => row.grado > 0);
 }
@@ -254,11 +266,7 @@ function filterOrdersByMode(
 
   return orders.map((row) => ({
     ...row,
-    fecha_1: canUseKey("fecha_1") ? row.fecha_1 : 0,
-    fecha_2: canUseKey("fecha_2") ? row.fecha_2 : 0,
-    fecha_3: canUseKey("fecha_3") ? row.fecha_3 : 0,
-    fecha_4: canUseKey("fecha_4") ? row.fecha_4 : 0,
-    fecha_5: canUseKey("fecha_5") ? row.fecha_5 : 0,
+    ...Object.fromEntries(SOLVER_DATE_KEYS.map((key) => [key, canUseKey(key) ? row[key] : 0])),
   }));
 }
 
@@ -268,7 +276,7 @@ function pickDateKeysByMode(
   predicate: (slot: PoscosechaClasificacionOrderSlot | undefined) => boolean,
 ) {
   const slotMeta = new Map(orderSlots.map((slot) => [slot.key, slot]));
-  return (["fecha_1", "fecha_2", "fecha_3", "fecha_4", "fecha_5"] as SolverDateKey[]).filter((key) =>
+  return SOLVER_DATE_KEYS.filter((key) =>
     predicate(slotMeta.get(key)) && slotCanBeSolvedByMode(slotMeta.get(key), mode as PoscosechaClasificacionRunMode),
   );
 }
@@ -284,11 +292,9 @@ function buildStrictOrdersByMode(
 
   return orders.map((row) => ({
     ...row,
-    fecha_1: strictKeys.has("fecha_1") ? row.fecha_1 : 0,
-    fecha_2: strictKeys.has("fecha_2") ? row.fecha_2 : 0,
-    fecha_3: strictKeys.has("fecha_3") ? row.fecha_3 : 0,
-    fecha_4: strictKeys.has("fecha_4") ? row.fecha_4 : 0,
-    fecha_5: strictKeys.has("fecha_5") ? row.fecha_5 : 0,
+    ...Object.fromEntries(
+      SOLVER_DATE_KEYS.map((key) => [key, strictKeys.has(key) ? row[key] : 0]),
+    ),
   }));
 }
 
@@ -303,23 +309,15 @@ function buildSoftOrdersByMode(
 
   return orders.map((row) => ({
     ...row,
-    fecha_1: softKeys.has("fecha_1") ? row.fecha_1 : 0,
-    fecha_2: softKeys.has("fecha_2") ? row.fecha_2 : 0,
-    fecha_3: softKeys.has("fecha_3") ? row.fecha_3 : 0,
-    fecha_4: softKeys.has("fecha_4") ? row.fecha_4 : 0,
-    fecha_5: softKeys.has("fecha_5") ? row.fecha_5 : 0,
+    ...Object.fromEntries(
+      SOLVER_DATE_KEYS.map((key) => [key, softKeys.has(key) ? row[key] : 0]),
+    ),
   }));
 }
 
 function countOrderDemand(rows: PoscosechaClasificacionOrderRow[]) {
   return rows.reduce(
-    (total, row) =>
-      total
-      + sanitizeDateValue(row.fecha_1)
-      + sanitizeDateValue(row.fecha_2)
-      + sanitizeDateValue(row.fecha_3)
-      + sanitizeDateValue(row.fecha_4)
-      + sanitizeDateValue(row.fecha_5),
+    (total, row) => total + SOLVER_DATE_KEYS.reduce((rowTotal, key) => rowTotal + sanitizeDateValue(row[key]), 0),
     0,
   );
 }
@@ -330,11 +328,9 @@ function mergeOrderDemand(
 ) {
   return strictOrders.map((row, index) => ({
     ...row,
-    fecha_1: sanitizeDateValue(row.fecha_1) + sanitizeDateValue(softOrders[index]?.fecha_1),
-    fecha_2: sanitizeDateValue(row.fecha_2) + sanitizeDateValue(softOrders[index]?.fecha_2),
-    fecha_3: sanitizeDateValue(row.fecha_3) + sanitizeDateValue(softOrders[index]?.fecha_3),
-    fecha_4: sanitizeDateValue(row.fecha_4) + sanitizeDateValue(softOrders[index]?.fecha_4),
-    fecha_5: sanitizeDateValue(row.fecha_5) + sanitizeDateValue(softOrders[index]?.fecha_5),
+    ...Object.fromEntries(
+      SOLVER_DATE_KEYS.map((key) => [key, sanitizeDateValue(row[key]) + sanitizeDateValue(softOrders[index]?.[key])]),
+    ),
   }));
 }
 
@@ -345,7 +341,7 @@ function clampSoftDemand(
   const nextRows = softOrders.map((row) => ({ ...row }));
   let excess = Math.max(countOrderDemand(nextRows) - Math.max(keepDemand, 0), 0);
 
-  for (const key of ["fecha_5", "fecha_4", "fecha_3", "fecha_2", "fecha_1"] as SolverDateKey[]) {
+  for (const key of [...SOLVER_DATE_KEYS].reverse()) {
     for (let rowIndex = nextRows.length - 1; rowIndex >= 0 && excess > 0; rowIndex -= 1) {
       const captured = sanitizeDateValue(nextRows[rowIndex][key]);
       if (captured <= 0) continue;
@@ -359,13 +355,7 @@ function clampSoftDemand(
 }
 
 function countRowDemand(row: PoscosechaClasificacionOrderRow) {
-  return (
-    sanitizeDateValue(row.fecha_1)
-    + sanitizeDateValue(row.fecha_2)
-    + sanitizeDateValue(row.fecha_3)
-    + sanitizeDateValue(row.fecha_4)
-    + sanitizeDateValue(row.fecha_5)
-  );
+  return SOLVER_DATE_KEYS.reduce((total, key) => total + sanitizeDateValue(row[key]), 0);
 }
 
 function reduceDemandForSku(
@@ -380,7 +370,7 @@ function reduceDemandForSku(
   const rowIndex = nextRows.findIndex((row) => row.sku === sku);
   if (rowIndex < 0) return null;
 
-  for (const key of ["fecha_5", "fecha_4", "fecha_3", "fecha_2", "fecha_1"] as SolverDateKey[]) {
+  for (const key of [...SOLVER_DATE_KEYS].reverse()) {
     if (remaining <= 0) break;
     const captured = sanitizeDateValue(nextRows[rowIndex][key]);
     if (captured <= 0) continue;
@@ -449,29 +439,57 @@ function getResolvedSkuMetrics(result: PoscosechaClasificacionResult | null) {
     }));
 }
 
+function getResolvedSkuMetric(
+  result: PoscosechaClasificacionResult | null,
+  sku: string,
+) {
+  return result?.orderRows.find((row) => row.sku === sku) ?? null;
+}
+
 function getSkuDeviationScore(result: PoscosechaClasificacionResult | null) {
   if (!result) {
     return {
       maxAbsPct: Number.POSITIVE_INFINITY,
       sumAbsPct: Number.POSITIVE_INFINITY,
+      macroComplianceDistance: Number.POSITIVE_INFINITY,
     };
   }
 
   const rows = result.orderRows.filter((row) => Number(row.pedidoResuelto ?? 0) > 0);
   if (rows.length === 0) {
-    return { maxAbsPct: 0, sumAbsPct: 0 };
+    return { maxAbsPct: 0, sumAbsPct: 0, macroComplianceDistance: 0 };
   }
 
   const deviations = rows.map((row) => Math.abs(Number(row.sobrepesoPct ?? 0)));
+  const macroComplianceDistance = Math.abs(getMacroCompliance(result) - 1);
   return {
     maxAbsPct: Math.max(...deviations),
     sumAbsPct: deviations.reduce((total, value) => total + value, 0),
+    macroComplianceDistance,
   };
 }
 
 function getMacroCompliance(result: PoscosechaClasificacionResult | null) {
   const value = Number(result?.stage2Summary?.cumplimiento_peso_macro ?? 1);
   return Number.isFinite(value) ? value : 1;
+}
+
+function isBetterWeightFirstScore(
+  candidateScore: ReturnType<typeof getSkuDeviationScore>,
+  currentScore: ReturnType<typeof getSkuDeviationScore>,
+) {
+  return (
+    candidateScore.maxAbsPct + 1e-9 < currentScore.maxAbsPct
+    || (
+      Math.abs(candidateScore.maxAbsPct - currentScore.maxAbsPct) <= 1e-9
+      && candidateScore.sumAbsPct + 1e-9 < currentScore.sumAbsPct
+    )
+    || (
+      Math.abs(candidateScore.maxAbsPct - currentScore.maxAbsPct) <= 1e-9
+      && Math.abs(candidateScore.sumAbsPct - currentScore.sumAbsPct) <= 1e-9
+      && candidateScore.macroComplianceDistance + 1e-9 < currentScore.macroComplianceDistance
+    )
+  );
 }
 
 function isSolverTimeoutError(error: unknown) {
@@ -532,9 +550,6 @@ async function solveModeWithSoftGuardrails(
   const strictOrders = buildStrictOrdersByMode(orders, orderSlots, mode);
   const softOrders = buildSoftOrdersByMode(orders, orderSlots, mode);
   const totalSoftDemand = countOrderDemand(softOrders);
-  if (totalSoftDemand <= 0) {
-    return fullResult;
-  }
 
   const strictDemand = countOrderDemand(strictOrders);
   let bestDemand = 0;
@@ -544,7 +559,7 @@ async function solveModeWithSoftGuardrails(
   let selectedSoftOrders = softOrders.map((row) => ({ ...row }));
   let currentStrictOrders = strictOrders.map((row) => ({ ...row }));
 
-  if (hasFutureMode && fullCompliance < SOFT_MODE_MIN_COMPLIANCE) {
+  if (totalSoftDemand > 0 && hasFutureMode && fullCompliance < SOFT_MODE_MIN_COMPLIANCE) {
     if (strictDemand > 0) {
       const strictOnlyResult = await trySolveModeOnce(strictOrders, availability, true);
       if (!strictOnlyResult) {
@@ -554,7 +569,10 @@ async function solveModeWithSoftGuardrails(
         return fullResult;
       }
       bestResult = strictOnlyResult;
-      bestSoftOrders = softOrders.map((row) => ({ ...row, fecha_1: 0, fecha_2: 0, fecha_3: 0, fecha_4: 0, fecha_5: 0 }));
+      bestSoftOrders = softOrders.map((row) => ({
+        ...row,
+        ...Object.fromEntries(SOLVER_DATE_KEYS.map((key) => [key, 0])),
+      }));
     }
 
     let low = 0;
@@ -608,7 +626,7 @@ async function solveModeWithSoftGuardrails(
   }
 
   let selectedOrders = mergeOrderDemand(currentStrictOrders, selectedSoftOrders);
-  let skuRebalanceIterations = countOrderDemand(selectedSoftOrders);
+  let skuRebalanceIterations = countOrderDemand(selectedOrders);
   let skuRebalancePass = 0;
   while (skuRebalanceIterations > 0 && skuRebalancePass < MAX_SKU_REBALANCE_PASSES) {
     skuRebalancePass += 1;
@@ -674,17 +692,8 @@ async function solveModeWithSoftGuardrails(
           if (!candidateResult) {
             break;
           }
-          if (getMacroCompliance(candidateResult) < SOFT_MODE_MIN_COMPLIANCE) {
-            continue;
-          }
-
           const candidateScore = getSkuDeviationScore(candidateResult);
-          const isBetter =
-            candidateScore.maxAbsPct + 1e-9 < currentScore.maxAbsPct
-            || (
-              Math.abs(candidateScore.maxAbsPct - currentScore.maxAbsPct) <= 1e-9
-              && candidateScore.sumAbsPct + 1e-9 < currentScore.sumAbsPct
-            );
+          const isBetter = isBetterWeightFirstScore(candidateScore, currentScore);
 
           if (!isBetter) {
             continue;
@@ -716,6 +725,12 @@ async function solveModeWithSoftGuardrails(
       const maxResolvableAtIdealWeight = underTargetSku.pesoIdealBunch > 0
         ? Math.floor(underTargetSku.pesoRealTotal / underTargetSku.pesoIdealBunch)
         : underTargetSku.pedidoResuelto;
+      const targetFloorWeight = underTargetSku.pesoIdealBunch > 0
+        ? underTargetSku.pesoIdealBunch * (1 + SOFT_SKU_TARGET_MIN_PCT)
+        : 0;
+      const maxResolvableAtTargetFloor = targetFloorWeight > 0
+        ? Math.floor(underTargetSku.pesoRealTotal / targetFloorWeight)
+        : underTargetSku.pedidoResuelto;
       const maxResolvableAtMinWeight = underTargetSku.pesoMinObjetivo > 0
         ? Math.floor(underTargetSku.pesoRealTotal / underTargetSku.pesoMinObjetivo)
         : underTargetSku.pedidoResuelto;
@@ -726,23 +741,87 @@ async function solveModeWithSoftGuardrails(
           1,
         )
         : 1;
+      const currentDemand = countRowDemand(selectedOrders.find((row) => row.sku === underTargetSku.sku) ?? {
+        skuId: "",
+        sku: underTargetSku.sku,
+        ...Object.fromEntries(SOLVER_DATE_KEYS.map((key) => [key, 0])),
+      });
       const fallbackReductionCandidates = Array.from(new Set([
         stemsDrivenReduction,
+        Math.max(underTargetSku.pedidoResuelto - maxResolvableAtTargetFloor, 1),
         Math.max(underTargetSku.pedidoResuelto - maxResolvableAtIdealWeight, 1),
         Math.max(underTargetSku.pedidoResuelto - maxResolvableAtMinWeight, 1),
       ]))
-        .map((amount) => Math.min(amount, countRowDemand(selectedOrders.find((row) => row.sku === underTargetSku.sku) ?? {
-          skuId: "",
-          sku: underTargetSku.sku,
-          fecha_1: 0,
-          fecha_2: 0,
-          fecha_3: 0,
-          fecha_4: 0,
-          fecha_5: 0,
-        })))
+        .map((amount) => Math.min(amount, currentDemand))
         .filter((amount) => amount > 0)
         .sort((left, right) => right - left)
         .slice(0, MAX_SELF_REDUCTION_OPTIONS);
+
+      const directedKeepCandidates = Array.from(new Set([
+        Math.max(Math.min(maxResolvableAtTargetFloor, currentDemand - 1), 0),
+        Math.max(Math.min(maxResolvableAtIdealWeight, currentDemand - 1), 0),
+        Math.max(Math.min(maxResolvableAtMinWeight, currentDemand - 1), 0),
+        Math.max(Math.floor((currentDemand + Math.max(maxResolvableAtTargetFloor, 0)) / 2), 0),
+        Math.max(currentDemand - 1, 0),
+      ]))
+        .filter((keep) => keep >= 0 && keep < currentDemand)
+        .sort((left, right) => left - right);
+
+      for (const keepDemand of directedKeepCandidates) {
+        const reductionAmount = currentDemand - keepDemand;
+        if (reductionAmount <= 0) {
+          continue;
+        }
+
+        const reducedOrders = reduceDemandAcrossOrderSets(
+          currentStrictOrders,
+          selectedSoftOrders,
+          underTargetSku.sku,
+          reductionAmount,
+        );
+        if (!reducedOrders) {
+          continue;
+        }
+
+        const candidateOrders = mergeOrderDemand(reducedOrders.strictOrders, reducedOrders.softOrders);
+        if (countOrderDemand(candidateOrders) <= 0) {
+          continue;
+        }
+
+        const candidateResult = await trySolveModeOnce(candidateOrders, availability, true);
+        if (!candidateResult) {
+          break;
+        }
+
+        const currentScore = getSkuDeviationScore(selectedResult);
+        const candidateScore = getSkuDeviationScore(candidateResult);
+        const currentMetric = getResolvedSkuMetric(selectedResult, underTargetSku.sku);
+        const candidateMetric = getResolvedSkuMetric(candidateResult, underTargetSku.sku);
+        const currentPct = Math.abs(Number(currentMetric?.sobrepesoPct ?? Number.POSITIVE_INFINITY));
+        const candidatePct = Math.abs(Number(candidateMetric?.sobrepesoPct ?? Number.POSITIVE_INFINITY));
+        const isBetter =
+          candidatePct + 1e-9 < currentPct
+          || (
+            Math.abs(candidatePct - currentPct) <= 1e-9
+            && isBetterWeightFirstScore(candidateScore, currentScore)
+          );
+
+        if (!isBetter) {
+          continue;
+        }
+
+        currentStrictOrders = reducedOrders.strictOrders;
+        selectedSoftOrders = reducedOrders.softOrders;
+        selectedOrders = candidateOrders;
+        selectedResult = candidateResult;
+        skuRebalanceIterations = Math.max(skuRebalanceIterations - reductionAmount, 0);
+        improved = true;
+        break;
+      }
+
+      if (improved) {
+        break;
+      }
 
       for (const reductionAmount of fallbackReductionCandidates) {
         const reducedOrders = reduceDemandAcrossOrderSets(
@@ -764,18 +843,9 @@ async function solveModeWithSoftGuardrails(
         if (!candidateResult) {
           break;
         }
-        if (getMacroCompliance(candidateResult) < SOFT_MODE_MIN_COMPLIANCE) {
-          continue;
-        }
-
         const currentScore = getSkuDeviationScore(selectedResult);
         const candidateScore = getSkuDeviationScore(candidateResult);
-        const isBetter =
-          candidateScore.maxAbsPct + 1e-9 < currentScore.maxAbsPct
-          || (
-            Math.abs(candidateScore.maxAbsPct - currentScore.maxAbsPct) <= 1e-9
-            && candidateScore.sumAbsPct + 1e-9 < currentScore.sumAbsPct
-          );
+        const isBetter = isBetterWeightFirstScore(candidateScore, currentScore);
 
         if (!isBetter) {
           continue;
@@ -816,11 +886,9 @@ function filterAvailabilityByMode(
 
   return availability.map((row) => ({
     ...row,
-    fecha_1: canUseKey("fecha_1") ? row.fecha_1 : 0,
-    fecha_2: canUseKey("fecha_2") ? row.fecha_2 : 0,
-    fecha_3: canUseKey("fecha_3") ? row.fecha_3 : 0,
-    fecha_4: canUseKey("fecha_4") ? row.fecha_4 : 0,
-    fecha_5: canUseKey("fecha_5") ? row.fecha_5 : 0,
+    ...Object.fromEntries(
+      SOLVER_DATE_KEYS.map((key) => [key, canUseKey(key) ? row[key] : 0]),
+    ),
   }));
 }
 
@@ -838,7 +906,7 @@ function subtractSolvedFromRemainingOrders(
     let pendingSolved = solvedBySku.get(row.sku) ?? 0;
     const nextRow = { ...row };
 
-    for (const key of (["fecha_1", "fecha_2", "fecha_3", "fecha_4", "fecha_5"] as SolverDateKey[])) {
+    for (const key of SOLVER_DATE_KEYS) {
       if (pendingSolved <= 0) break;
       const captured = sanitizeDateValue(nextRow[key]);
       const consumed = Math.min(captured, pendingSolved);

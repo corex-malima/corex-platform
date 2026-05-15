@@ -50,15 +50,14 @@ export function sanitizeDateValue(value: unknown) {
 export function sanitizeAvailabilityRow(
   row: PoscosechaClasificacionAvailabilityRow,
 ): PoscosechaClasificacionAvailabilityRow {
-  return {
+  const normalized = {
     grado: Math.max(toInteger(row.grado, 0), 1),
     pesoTalloSeed: Math.max(toNumber(row.pesoTalloSeed, 0), 0),
-    fecha_1: sanitizeDateValue(row.fecha_1),
-    fecha_2: sanitizeDateValue(row.fecha_2),
-    fecha_3: sanitizeDateValue(row.fecha_3),
-    fecha_4: sanitizeDateValue(row.fecha_4),
-    fecha_5: sanitizeDateValue(row.fecha_5),
-  };
+  } as PoscosechaClasificacionAvailabilityRow;
+  for (const key of SOLVER_DATE_KEYS) {
+    normalized[key] = sanitizeDateValue(row[key]);
+  }
+  return normalized;
 }
 
 export function sanitizeSettings(
@@ -141,15 +140,16 @@ export function sanitizeLotSlots(
 export function buildClasificacionOrdersTemplate(
   skuMaster: PoscosechaSkuRecord[],
 ): PoscosechaClasificacionOrderRow[] {
-  return skuMaster.map((record) => ({
-    skuId: record.skuId,
-    sku: record.sku,
-    fecha_1: 0,
-    fecha_2: 0,
-    fecha_3: 0,
-    fecha_4: 0,
-    fecha_5: 0,
-  }));
+  return skuMaster.map((record) => {
+    const row = {
+      skuId: record.skuId,
+      sku: record.sku,
+    } as PoscosechaClasificacionOrderRow;
+    for (const key of SOLVER_DATE_KEYS) {
+      row[key] = 0;
+    }
+    return row;
+  });
 }
 
 export function buildClasificacionOrderSlotsTemplate(): PoscosechaClasificacionOrderSlot[] {
@@ -173,15 +173,16 @@ export function buildClasificacionDateSlotsTemplate(): PoscosechaClasificacionDa
 export function buildClasificacionAvailabilityTemplate(
   seeds: PoscosechaClasificacionAvailabilitySeed[],
 ): PoscosechaClasificacionAvailabilityRow[] {
-  return seeds.map((seed) => ({
-    grado: seed.grado,
-    pesoTalloSeed: Math.round(seed.pesoTalloSeed * 100) / 100,
-    fecha_1: 0,
-    fecha_2: 0,
-    fecha_3: 0,
-    fecha_4: 0,
-    fecha_5: 0,
-  }));
+  return seeds.map((seed) => {
+    const row = {
+      grado: seed.grado,
+      pesoTalloSeed: Math.round(seed.pesoTalloSeed * 100) / 100,
+    } as PoscosechaClasificacionAvailabilityRow;
+    for (const key of SOLVER_DATE_KEYS) {
+      row[key] = 0;
+    }
+    return row;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -263,14 +264,13 @@ export function buildClasificacionPrecheck(
   }
 
   const tallosDisponibles = buildClasificacionAvailabilityDerived(
-    availability.map((row) => ({
-      ...row,
-      fecha_1: availabilityEligibleKeys.includes("fecha_1") ? row.fecha_1 : 0,
-      fecha_2: availabilityEligibleKeys.includes("fecha_2") ? row.fecha_2 : 0,
-      fecha_3: availabilityEligibleKeys.includes("fecha_3") ? row.fecha_3 : 0,
-      fecha_4: availabilityEligibleKeys.includes("fecha_4") ? row.fecha_4 : 0,
-      fecha_5: availabilityEligibleKeys.includes("fecha_5") ? row.fecha_5 : 0,
-    })),
+    availability.map((row) => {
+      const normalized = { ...row } as PoscosechaClasificacionAvailabilityRow;
+      for (const key of SOLVER_DATE_KEYS) {
+        normalized[key] = availabilityEligibleKeys.includes(key) ? row[key] : 0;
+      }
+      return normalized;
+    }),
     desperdicio,
   ).reduce((accumulator, row) => accumulator + row.tallosNetos, 0);
 

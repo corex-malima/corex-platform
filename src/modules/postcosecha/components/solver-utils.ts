@@ -9,6 +9,7 @@ import type {
   PoscosechaClasificacionResultOrderRow,
   SolverDateKey,
 } from "@/lib/postcosecha-clasificacion-en-blanco-types";
+import { buildRecipeInputFromResult } from "@/lib/postcosecha-clasificacion-recipe-input";
 import { SOLVER_DATE_KEYS } from "@/lib/postcosecha-clasificacion-en-blanco-types";
 
 export function toInteger(value: unknown) {
@@ -61,6 +62,8 @@ export function buildRecipeInput(
     grados: grades,
   };
 }
+
+export { buildRecipeInputFromResult };
 
 export type SolverOrderValueUpdater = (skuId: string, dateKey: SolverDateKey, value: string) => void;
 export type SolverAvailabilityDateUpdater = (
