@@ -37,6 +37,11 @@ const orders: PoscosechaClasificacionOrderRow[] = [
     fecha_3: 0,
     fecha_4: 0,
     fecha_5: 0,
+    fecha_6: 0,
+    fecha_7: 0,
+    fecha_8: 0,
+    fecha_9: 0,
+    fecha_10: 0,
   },
 ];
 
@@ -49,6 +54,11 @@ const availability: PoscosechaClasificacionAvailabilityRow[] = [
     fecha_3: 0,
     fecha_4: 0,
     fecha_5: 0,
+    fecha_6: 0,
+    fecha_7: 0,
+    fecha_8: 0,
+    fecha_9: 0,
+    fecha_10: 0,
   },
 ];
 

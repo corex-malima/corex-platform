@@ -257,6 +257,10 @@ const hugeFileAllowlist = new Set([
   "src/lib/comparacion.ts",
   "src/lib/laboratory-masters.ts",
   "src/lib/postcosecha-clasificacion-en-blanco-runner.ts",
+  // Builder del PDF canon del solver de clasificación en blanco —
+  // coordina Python (LaTeX) + fallback TS. ~356 líneas tras integración
+  // del commit b5a20df (solver flow refinado + canonical work PDF).
+  "src/lib/postcosecha-clasificacion-pdf-builder.ts",
   // Productividad loader: dominio Campo con múltiples queries cruzadas (hours,
   // boxes, kardex, fenograma) + targets ponderados. Está al límite (~700 lns).
   "src/lib/productividad.ts",

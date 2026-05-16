@@ -741,11 +741,11 @@ async function solveModeWithSoftGuardrails(
           1,
         )
         : 1;
-      const currentDemand = countRowDemand(selectedOrders.find((row) => row.sku === underTargetSku.sku) ?? {
+      const currentDemand = countRowDemand(selectedOrders.find((row) => row.sku === underTargetSku.sku) ?? ({
         skuId: "",
         sku: underTargetSku.sku,
         ...Object.fromEntries(SOLVER_DATE_KEYS.map((key) => [key, 0])),
-      });
+      } as PoscosechaClasificacionOrderRow));
       const fallbackReductionCandidates = Array.from(new Set([
         stemsDrivenReduction,
         Math.max(underTargetSku.pedidoResuelto - maxResolvableAtTargetFloor, 1),
