@@ -1,0 +1,2224 @@
+-- Postharvest productivity blueprint for datalakehouse.
+-- Project standard validated:
+--   - analytical CoreX modules consume gld.mv_*_cur
+--   - final explorers should not read helper vw_* directly
+--   - postharvest productivity should be materialized in layers
+--
+-- Validated sources:
+--   - slv.prod_fact_hours_cur
+--   - slv.prod_dim_activity_profile_scd2
+--   - slv.prod_fact_balanza_1_cur
+--   - slv.prod_fact_balanza_1a_cur
+--   - slv.prod_fact_balanza_1c_cur
+--   - slv.prod_fact_balanza_2_cur
+--   - slv.prod_fact_balanza_2a_cur
+--   - slv.prod_fact_balanza_3_cur
+--
+-- Notes:
+--   - KPI grain is driven by post_date, not cycle_key
+--   - B2 must be corrected by peel_type, not only by origin
+--   - productivity rules are mirrored from db_postharvest into datalakehouse
+--   - this file implements:
+--       1. gld.mv_prod_postharvest_capacity_hours_cur
+--       2. gld.mv_prod_postharvest_step_flow_cur
+--       helper table gld.prod_dim_postharvest_productivity_rule_cur
+--   - allocation-heavy layers remain intentionally pending:
+--       3. gld.mv_prod_postharvest_hours_box_detail_cur
+--       4. gld.mv_prod_postharvest_hours_box_cur
+
+create table if not exists gld.prod_dim_postharvest_productivity_rule_cur (
+  rule_id text primary key,
+  rule_scope_area text not null,
+  rule_code text not null,
+  activity_id text not null,
+  activity_name text not null,
+  baseline_actual_hours_q1 double precision null,
+  path_rule text not null,
+  variety_filter text not null,
+  destination_filter text not null,
+  methodology_code text not null,
+  applies_to text not null,
+  stage_side text not null,
+  anchor_final text not null,
+  allowed_steps text null,
+  path_split_basis text null,
+  step_split_basis text null,
+  is_misassigned boolean not null,
+  is_inactive boolean not null,
+  is_active boolean not null,
+  confidence_level text null,
+  source_kind text null,
+  notes text null,
+  group_name text null,
+  natural_key text not null,
+  source_valid_from timestamp without time zone null,
+  source_valid_to timestamp without time zone null,
+  source_loaded_at timestamp without time zone null,
+  source_run_id text null,
+  source_actor_id text null,
+  source_change_reason text null,
+  synced_at timestamp without time zone not null default now()
+);
+
+create unique index if not exists prod_dim_postharvest_productivity_rule_cur_natural_key_idx
+  on gld.prod_dim_postharvest_productivity_rule_cur (lower(regexp_replace(trim(natural_key), '\s+', ' ', 'g')));
+
+create index if not exists prod_dim_postharvest_productivity_rule_cur_scope_idx
+  on gld.prod_dim_postharvest_productivity_rule_cur (rule_scope_area, activity_id);
+
+create index if not exists prod_dim_postharvest_productivity_rule_cur_method_idx
+  on gld.prod_dim_postharvest_productivity_rule_cur (methodology_code, path_rule, anchor_final);
+
+-- Publicacion estandar CoreX:
+-- - las vw_* se actualizan con create or replace view
+-- - las mv_* se crean una sola vez y luego se refrescan
+-- - no se hace drop masivo al inicio para evitar downtime del visualizador
+
+create or replace view gld.vw_prod_postharvest_capacity_hours_cur as
+with target_areas as (
+  select unnest(array['CLS', 'EMP', 'SB'])::text as area_id
+),
+activity_dim_current as (
+  select distinct on (activity_id)
+    activity_id,
+    nullif(trim(activity_name), '') as activity_name,
+    nullif(trim(activity_type), '') as activity_type,
+    nullif(trim(cost_area), '') as cost_area,
+    nullif(trim(sub_cost_center), '') as sub_cost_center,
+    nullif(trim(unit_of_measure), '') as unit_of_measure,
+    valid_from,
+    valid_to
+  from slv.prod_dim_activity_profile_scd2
+  where is_current = true
+  order by activity_id, valid_from desc nulls last
+)
+select
+  extract(year from h.work_date)::int as work_year,
+  h.work_date,
+  h.event_id,
+  h.hours_event_id,
+  h.person_id,
+  h.area_id,
+  h.block_id,
+  h.cycle_key,
+  h.activity_id,
+  d.activity_name,
+  d.activity_type,
+  d.cost_area,
+  d.sub_cost_center,
+  d.unit_of_measure,
+  coalesce(h.actual_hours, 0)::double precision as actual_hours,
+  coalesce(h.effective_hours, 0)::double precision as effective_hours,
+  coalesce(h.units_produced, 0)::double precision as units_produced,
+  h.start_time,
+  h.end_time,
+  h.is_valid,
+  (h.cycle_key is not null) as has_cycle_key,
+  (d.activity_id is null) as is_missing_activity_dim,
+  case
+    when coalesce(d.unit_of_measure, '') = 'H NORMALES' then true
+    when abs(coalesce(h.units_produced, 0) - coalesce(h.actual_hours, 0)) <= 0.01 then true
+    else false
+  end as is_hours_like_output,
+  case
+    when d.activity_id is null then false
+    when coalesce(d.unit_of_measure, '') = '' then false
+    when coalesce(d.unit_of_measure, '') = 'H NORMALES' then false
+    when abs(coalesce(h.units_produced, 0) - coalesce(h.actual_hours, 0)) <= 0.01 then false
+    else true
+  end as is_productivity_candidate
+from slv.prod_fact_hours_cur h
+join target_areas ta
+  on ta.area_id = h.area_id
+left join activity_dim_current d
+  on d.activity_id = h.activity_id
+where coalesce(h.is_valid, true) = true
+  and h.work_date is not null
+  and extract(year from h.work_date)::int >= 2024;
+
+create materialized view if not exists gld.mv_prod_postharvest_capacity_hours_cur as
+select *
+from gld.vw_prod_postharvest_capacity_hours_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_capacity_hours_cur;
+
+create index if not exists idx_mv_prod_postharvest_capacity_hours_cur_work_date
+  on gld.mv_prod_postharvest_capacity_hours_cur (work_date);
+
+create index if not exists idx_mv_prod_postharvest_capacity_hours_cur_area_activity
+  on gld.mv_prod_postharvest_capacity_hours_cur (area_id, activity_id);
+
+create index if not exists idx_mv_prod_postharvest_capacity_hours_cur_cycle
+  on gld.mv_prod_postharvest_capacity_hours_cur (cycle_key);
+
+create or replace view gld.vw_prod_postharvest_step_flow_cur as
+with activity_dim_current as (
+  select distinct on (activity_id)
+    activity_id,
+    nullif(trim(activity_name), '') as activity_name,
+    nullif(trim(activity_type), '') as activity_type,
+    nullif(trim(cost_area), '') as cost_area,
+    nullif(trim(sub_cost_center), '') as sub_cost_center,
+    nullif(trim(unit_of_measure), '') as unit_of_measure,
+    valid_from,
+    valid_to
+  from slv.prod_dim_activity_profile_scd2
+  where is_current = true
+  order by activity_id, valid_from desc nulls last
+),
+b1 as (
+  select
+    case
+      when upper(trim(coalesce(destination, ''))) like '%GV%' then 'GV'
+      when upper(trim(coalesce(destination, ''))) = 'PRECLASIFICACION' then 'PRECLASIFICACION'
+      when upper(trim(coalesce(destination, ''))) = 'APERTURA' then 'APERTURA'
+      else 'UNKNOWN'
+    end as path_post,
+    'B1'::text as step_code,
+    work_date::date as post_date,
+    work_date::date as lot_date,
+    case
+      when upper(trim(coalesce(variety, ''))) in ('XL', 'XLE', 'GYPXLE', 'XLENCE') then 'XLE'
+      when upper(trim(coalesce(variety, ''))) in ('CLO', 'GYPCLO', 'CLOUD') then 'CLO'
+      when upper(trim(coalesce(variety, ''))) in ('ZIN', 'ZZ', 'GYPZZ', 'ZINZI') then 'ZIN'
+      when nullif(upper(trim(coalesce(variety, ''))), '') is null then 'UNKNOWN'
+      else upper(trim(variety))
+    end as variety_canon,
+    case
+      when nullif(upper(trim(coalesce(grade, ''))), '') is null then 'UNKNOWN'
+      when upper(trim(grade)) like 'BQT%' or upper(trim(grade)) like 'PET%' then upper(trim(grade))
+      when substring(upper(trim(grade)) from '([0-9]+)') is not null then substring(upper(trim(grade)) from '([0-9]+)')
+      else upper(trim(grade))
+    end as grade_code,
+    null::text as final_destination,
+    nullif(upper(trim(coalesce(destination, ''))), 'UNKNOWN') as destination_raw,
+    null::text as origin_raw,
+    null::text as sku,
+    null::text as product_type,
+    coalesce(stems_count, 0)::double precision as stems_count,
+    null::double precision as bunches_count,
+    case
+      when coalesce(camp_weight, 0) > 0 then coalesce(camp_weight, 0)::double precision
+      else coalesce(net_weight, 0)::double precision
+    end as weight_kg,
+    cycle_key,
+    nullif(trim(block_id), '') as block_id,
+    null::text as parent_block,
+    null::text as person_id,
+    null::text as activity_id,
+    null::text as activity_name,
+    'prod_fact_balanza_1_cur'::text as source_table,
+    'destination_b1'::text as path_assignment_mode
+  from slv.prod_fact_balanza_1_cur
+  where coalesce(is_valid, true) = true
+),
+b1c as (
+  select
+    case
+      when upper(trim(coalesce(destination, ''))) like '%GV%' then 'GV'
+      when upper(trim(coalesce(destination, ''))) = 'PRECLASIFICACION' then 'PRECLASIFICACION'
+      when upper(trim(coalesce(destination, ''))) = 'APERTURA' then 'APERTURA'
+      else 'UNKNOWN'
+    end as path_post,
+    'B1C'::text as step_code,
+    work_date::date as post_date,
+    coalesce(origin_date::date, work_date::date) as lot_date,
+    case
+      when upper(trim(coalesce(variety, ''))) in ('XL', 'XLE', 'GYPXLE', 'XLENCE') then 'XLE'
+      when upper(trim(coalesce(variety, ''))) in ('CLO', 'GYPCLO', 'CLOUD') then 'CLO'
+      when upper(trim(coalesce(variety, ''))) in ('ZIN', 'ZZ', 'GYPZZ', 'ZINZI') then 'ZIN'
+      when nullif(upper(trim(coalesce(variety, ''))), '') is null then 'UNKNOWN'
+      else upper(trim(variety))
+    end as variety_canon,
+    case
+      when nullif(upper(trim(coalesce(grade, ''))), '') is null then 'UNKNOWN'
+      when upper(trim(grade)) like 'BQT%' or upper(trim(grade)) like 'PET%' then upper(trim(grade))
+      when substring(upper(trim(grade)) from '([0-9]+)') is not null then substring(upper(trim(grade)) from '([0-9]+)')
+      else upper(trim(grade))
+    end as grade_code,
+    null::text as final_destination,
+    nullif(upper(trim(coalesce(destination, ''))), 'UNKNOWN') as destination_raw,
+    nullif(upper(trim(coalesce(process, ''))), 'UNKNOWN') as origin_raw,
+    null::text as sku,
+    nullif(upper(trim(coalesce(process, ''))), '') as product_type,
+    coalesce(stems_count, 0)::double precision as stems_count,
+    null::double precision as bunches_count,
+    coalesce(net_weight, 0)::double precision as weight_kg,
+    null::text as cycle_key,
+    null::text as block_id,
+    null::text as parent_block,
+    null::text as person_id,
+    nullif(trim(activity_id), '') as activity_id,
+    null::text as activity_name,
+    'prod_fact_balanza_1c_cur'::text as source_table,
+    'destination_b1c'::text as path_assignment_mode
+  from slv.prod_fact_balanza_1c_cur
+  where coalesce(is_valid, true) = true
+),
+b1a as (
+  select
+    'PRECLASIFICACION'::text as path_post,
+    'B1A'::text as step_code,
+    work_date::date as post_date,
+    work_date::date as lot_date,
+    'XLE'::text as variety_canon,
+    case
+      when upper(trim(coalesce(product_type, ''))) = 'BQT' then 'BQT'
+      when upper(trim(coalesce(product_type, ''))) like '%PETIT%'
+        or upper(trim(coalesce(grade, ''))) like '%PET%' then 'PET'
+      when coalesce(nullif(upper(trim(coalesce(grade, ''))), ''), 'UNKNOWN') in ('0', '00', '000') then 'BQT'
+      when nullif(upper(trim(coalesce(grade, ''))), '') is null then 'UNKNOWN'
+      when upper(trim(grade)) like 'BQT%' or upper(trim(grade)) like 'PET%' then upper(trim(grade))
+      when substring(upper(trim(grade)) from '([0-9]+)') is not null then substring(upper(trim(grade)) from '([0-9]+)')
+      else upper(trim(grade))
+    end as grade_code,
+    null::text as final_destination,
+    nullif(upper(trim(coalesce(destination, ''))), 'UNKNOWN') as destination_raw,
+    nullif(upper(trim(coalesce(origin, ''))), 'UNKNOWN') as origin_raw,
+    null::text as sku,
+    nullif(upper(trim(coalesce(product_type, ''))), '') as product_type,
+    coalesce(stems_count, 0)::double precision as stems_count,
+    null::double precision as bunches_count,
+    coalesce(scale_weight, 0)::double precision as weight_kg,
+    null::text as cycle_key,
+    null::text as block_id,
+    null::text as parent_block,
+    null::text as person_id,
+    null::text as activity_id,
+    null::text as activity_name,
+    'prod_fact_balanza_1a_cur'::text as source_table,
+    'preclas_bridge_b1a'::text as path_assignment_mode
+  from slv.prod_fact_balanza_1a_cur
+  where coalesce(is_valid, true) = true
+),
+b2 as (
+  select
+    case
+      when upper(trim(coalesce(peel_type, ''))) = 'PELADO' then 'PRECLASIFICACION'
+      when upper(trim(coalesce(origin, ''))) = 'APERTURA' then 'APERTURA'
+      when upper(trim(coalesce(origin, ''))) = 'GVPELADO' then 'GV'
+      when upper(trim(coalesce(origin, ''))) like '%GV%' then 'GV'
+      else 'UNKNOWN'
+    end as path_post,
+    'B2'::text as step_code,
+    delivered_date::date as post_date,
+    origin_date::date as lot_date,
+    case
+      when upper(trim(coalesce(variety, ''))) in ('XL', 'XLE', 'GYPXLE', 'XLENCE') then 'XLE'
+      when upper(trim(coalesce(variety, ''))) in ('CLO', 'GYPCLO', 'CLOUD') then 'CLO'
+      when upper(trim(coalesce(variety, ''))) in ('ZIN', 'ZZ', 'GYPZZ', 'ZINZI') then 'ZIN'
+      when nullif(upper(trim(coalesce(variety, ''))), '') is null then 'UNKNOWN'
+      else upper(trim(variety))
+    end as variety_canon,
+    case
+      when nullif(upper(trim(coalesce(grade, ''))), '') is null then 'UNKNOWN'
+      when upper(trim(grade)) like 'BQT%' or upper(trim(grade)) like 'PET%' then upper(trim(grade))
+      when substring(upper(trim(grade)) from '([0-9]+)') is not null then substring(upper(trim(grade)) from '([0-9]+)')
+      else upper(trim(grade))
+    end as grade_code,
+    case
+      when upper(trim(coalesce(destination, ''))) in ('CLASIFICACION', 'PESADO', 'GUIRNALDA') then 'BLANCO'
+      when upper(trim(coalesce(destination, ''))) = 'ARCOIRIS' then 'ARCOIRIS'
+      when upper(trim(coalesce(destination, ''))) = 'TINTURADO' then 'TINTURADO'
+      else null
+    end as final_destination,
+    nullif(upper(trim(coalesce(destination, ''))), 'UNKNOWN') as destination_raw,
+    nullif(upper(trim(coalesce(origin, ''))), 'UNKNOWN') as origin_raw,
+    null::text as sku,
+    nullif(upper(trim(coalesce(product, ''))), '') as product_type,
+    coalesce(stems_count, 0)::double precision as stems_count,
+    null::double precision as bunches_count,
+    coalesce(net_weight, 0)::double precision as weight_kg,
+    null::text as cycle_key,
+    null::text as block_id,
+    null::text as parent_block,
+    null::text as person_id,
+    null::text as activity_id,
+    null::text as activity_name,
+    'prod_fact_balanza_2_cur'::text as source_table,
+    'peel_type_b2_fix'::text as path_assignment_mode
+  from slv.prod_fact_balanza_2_cur
+  where coalesce(is_valid, true) = true
+),
+b2a as (
+  select
+    case
+      when upper(trim(coalesce(f.origin, ''))) like '%GV%' then 'GV'
+      when upper(trim(coalesce(f.origin, ''))) in ('BLANCO', 'TINTURADO', 'ARCOIRIS') then 'APERTURA'
+      when upper(trim(coalesce(f.origin, ''))) = 'APERTURA' then 'APERTURA'
+      else 'UNKNOWN'
+    end as path_post,
+    'B2A'::text as step_code,
+    f.work_date::date as post_date,
+    f.origin_date::date as lot_date,
+    case
+      when upper(trim(coalesce(f.variety, ''))) in ('XL', 'XLE', 'GYPXLE', 'XLENCE') then 'XLE'
+      when upper(trim(coalesce(f.variety, ''))) in ('CLO', 'GYPCLO', 'CLOUD') then 'CLO'
+      when upper(trim(coalesce(f.variety, ''))) in ('ZIN', 'ZZ', 'GYPZZ', 'ZINZI') then 'ZIN'
+      when nullif(upper(trim(coalesce(f.variety, ''))), '') is null then 'UNKNOWN'
+      else upper(trim(f.variety))
+    end as variety_canon,
+    case
+      when nullif(upper(trim(coalesce(f.grade, ''))), '') is null then 'UNKNOWN'
+      when upper(trim(f.grade)) like 'BQT%' or upper(trim(f.grade)) like 'PET%' then upper(trim(f.grade))
+      when substring(upper(trim(f.grade)) from '([0-9]+)') is not null then substring(upper(trim(f.grade)) from '([0-9]+)')
+      else upper(trim(f.grade))
+    end as grade_code,
+    case
+      when upper(trim(coalesce(a.activity_id, f.activity_id, ''))) ~ 'GUFDGU|GUIRN' then 'BLANCO'
+      when upper(trim(coalesce(a.activity_id, f.activity_id, ''))) ~ 'CXLTARH|CXLTAR' then 'ARCOIRIS'
+      when upper(trim(coalesce(a.activity_id, f.activity_id, ''))) ~ 'CXLTA1|CXLTA|05CTS' then 'TINTURADO'
+      when upper(trim(coalesce(a.activity_id, f.activity_id, ''))) ~ '^CB|CBX|CBM' then 'BLANCO'
+      when upper(trim(coalesce(a.activity_name, ''))) like '%GUIRNALD%'
+        or upper(trim(coalesce(a.activity_name, ''))) like '%BLANCO%'
+        or upper(trim(coalesce(a.activity_name, ''))) like '%CLASIFIC%' then 'BLANCO'
+      when upper(trim(coalesce(a.activity_name, ''))) like '%ARCO%' then 'ARCOIRIS'
+      when upper(trim(coalesce(a.activity_name, ''))) like '%TINTUR%' then 'TINTURADO'
+      else null
+    end as final_destination,
+    nullif(upper(trim(coalesce(a.activity_name, ''))), 'UNKNOWN') as destination_raw,
+    nullif(upper(trim(coalesce(f.origin, ''))), 'UNKNOWN') as origin_raw,
+    null::text as sku,
+    null::text as product_type,
+    coalesce(f.stems_count, 0)::double precision
+      * case when coalesce(f.bunches_count, 0) > 0 then coalesce(f.bunches_count, 0)::double precision else 1.0 end as stems_count,
+    coalesce(f.bunches_count, 0)::double precision as bunches_count,
+    coalesce(f.net_weight, 0)::double precision as weight_kg,
+    null::text as cycle_key,
+    null::text as block_id,
+    null::text as parent_block,
+    nullif(trim(f.person_id), '') as person_id,
+    nullif(trim(f.activity_id), '') as activity_id,
+    a.activity_name,
+    'prod_fact_balanza_2a_cur'::text as source_table,
+    'origin_b2a'::text as path_assignment_mode
+  from slv.prod_fact_balanza_2a_cur f
+  left join activity_dim_current a
+    on a.activity_id = f.activity_id
+  where coalesce(f.is_valid, true) = true
+),
+b3 as (
+  select
+    'PRECLASIFICACION'::text as path_post,
+    'B3'::text as step_code,
+    work_date::date as post_date,
+    lot::date as lot_date,
+    case
+      when upper(trim(coalesce(sku, ''))) ~ 'CLOUD|GYPCLO|\\-\\s*CLO$' then 'CLO'
+      when upper(trim(coalesce(sku, ''))) ~ 'XLENCE|GYPXLE|\\-\\s*XL$' then 'XLE'
+      when upper(trim(coalesce(sku, ''))) ~ 'ZINZI|GYPZZ|\\-\\s*ZZ$' then 'ZIN'
+      else 'UNKNOWN'
+    end as variety_canon,
+    case
+      when nullif(upper(trim(coalesce(grade, ''))), '') is null then 'UNKNOWN'
+      when upper(trim(grade)) like 'BQT%' or upper(trim(grade)) like 'PET%' then upper(trim(grade))
+      when substring(upper(trim(grade)) from '([0-9]+)') is not null then substring(upper(trim(grade)) from '([0-9]+)')
+      else upper(trim(grade))
+    end as grade_code,
+    case
+      when upper(trim(coalesce(sku, ''))) like '%TINT%' then 'TINTURADO'
+      when upper(trim(coalesce(sku, ''))) like '%ARCO%'
+        or upper(trim(coalesce(sku, ''))) like '%RAINBOW%' then 'ARCOIRIS'
+      else 'BLANCO'
+    end as final_destination,
+    case
+      when upper(trim(coalesce(sku, ''))) like '%TINT%' then 'TINTURADO'
+      when upper(trim(coalesce(sku, ''))) like '%ARCO%'
+        or upper(trim(coalesce(sku, ''))) like '%RAINBOW%' then 'ARCOIRIS'
+      else 'BLANCO'
+    end as destination_raw,
+    'PRECLASIFICACION'::text as origin_raw,
+    nullif(trim(sku), '') as sku,
+    null::text as product_type,
+    coalesce(stems_count, 0)::double precision
+      * case when coalesce(bunches_count_procona, 0) > 0 then coalesce(bunches_count_procona, 0)::double precision else 1.0 end as stems_count,
+    coalesce(bunches_count_procona, 0)::double precision as bunches_count,
+    coalesce(net_weight, 0)::double precision as weight_kg,
+    null::text as cycle_key,
+    null::text as block_id,
+    null::text as parent_block,
+    null::text as person_id,
+    null::text as activity_id,
+    null::text as activity_name,
+    'prod_fact_balanza_3_cur'::text as source_table,
+    'sku_b3'::text as path_assignment_mode
+  from slv.prod_fact_balanza_3_cur
+  where coalesce(is_valid, true) = true
+),
+unioned as (
+  select * from b1
+  union all
+  select * from b1c
+  union all
+  select * from b1a
+  union all
+  select * from b2
+  union all
+  select * from b2a
+  union all
+  select * from b3
+),
+normalized as (
+  select
+    post_date,
+    lot_date,
+    path_post,
+    step_code,
+    variety_canon,
+    case
+      when grade_code in ('0', '00', '000') then 'BQT'
+      else grade_code
+    end as grade_code,
+    case
+      when substring(
+        case when grade_code in ('0', '00', '000') then 'BQT' else grade_code end
+        from '([0-9]+)'
+      ) is not null
+      then substring(
+        case when grade_code in ('0', '00', '000') then 'BQT' else grade_code end
+        from '([0-9]+)'
+      )::int
+      else null
+    end as grade_int,
+    final_destination,
+    destination_raw,
+    origin_raw,
+    sku,
+    product_type,
+    stems_count,
+    bunches_count,
+    weight_kg,
+    case
+      when variety_canon = 'CLO' and path_post = 'APERTURA' then true
+      when variety_canon = 'CLO' then false
+      when variety_canon in ('XLE', 'ZIN')
+        and path_post in ('APERTURA', 'GV', 'PRECLASIFICACION') then true
+      when variety_canon in ('XLE', 'ZIN') then false
+      else null
+    end as is_allowed_path,
+    case
+      when final_destination is null then null
+      when variety_canon = 'CLO'
+        and path_post = 'APERTURA'
+        and final_destination = 'BLANCO' then true
+      when variety_canon = 'CLO' then false
+      when variety_canon in ('XLE', 'ZIN')
+        and path_post in ('APERTURA', 'GV', 'PRECLASIFICACION')
+        and final_destination in ('BLANCO', 'ARCOIRIS', 'TINTURADO') then true
+      when variety_canon in ('XLE', 'ZIN') then false
+      else null
+    end as is_allowed_destination,
+    case when variety_canon = 'ZIN' then true else false end as is_projected_only_variety,
+    cycle_key,
+    block_id,
+    parent_block,
+    person_id,
+    activity_id,
+    activity_name,
+    source_table,
+    path_assignment_mode
+  from unioned
+)
+select
+  post_date,
+  lot_date,
+  path_post,
+  step_code,
+  variety_canon,
+  grade_code,
+  grade_int,
+  final_destination,
+  destination_raw,
+  origin_raw,
+  sku,
+  product_type,
+  stems_count,
+  bunches_count,
+  weight_kg,
+  is_allowed_path,
+  is_allowed_destination,
+  is_projected_only_variety,
+  cycle_key,
+  block_id,
+  parent_block,
+  person_id,
+  activity_id,
+  activity_name,
+  source_table,
+  path_assignment_mode
+from normalized
+where post_date is not null
+  and path_post <> 'UNKNOWN'
+  and stems_count > 0
+  and weight_kg > 0;
+
+create materialized view if not exists gld.mv_prod_postharvest_step_flow_cur as
+select *
+from gld.vw_prod_postharvest_step_flow_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_step_flow_cur;
+
+create index if not exists idx_mv_prod_postharvest_step_flow_cur_post_date
+  on gld.mv_prod_postharvest_step_flow_cur (post_date);
+
+create index if not exists idx_mv_prod_postharvest_step_flow_cur_lot_date
+  on gld.mv_prod_postharvest_step_flow_cur (lot_date);
+
+create index if not exists idx_mv_prod_postharvest_step_flow_cur_path_destination
+  on gld.mv_prod_postharvest_step_flow_cur (path_post, final_destination);
+
+create index if not exists idx_mv_prod_postharvest_step_flow_cur_variety
+  on gld.mv_prod_postharvest_step_flow_cur (variety_canon);
+
+create index if not exists idx_mv_prod_postharvest_step_flow_cur_step
+  on gld.mv_prod_postharvest_step_flow_cur (step_code);
+
+create or replace view gld.vw_prod_postharvest_day_universe_cur as
+with base as (
+  select
+    post_date as work_date,
+    sum(case when step_code = 'B1' then stems_count else 0 end)::double precision as b1_stems,
+    sum(case when step_code = 'B1A' then stems_count else 0 end)::double precision as b1a_stems,
+    sum(case when step_code = 'B1C' then stems_count else 0 end)::double precision as b1c_stems,
+    sum(case when step_code = 'B2' then stems_count else 0 end)::double precision as b2_stems,
+    sum(case when step_code = 'B2A' then weight_kg else 0 end)::double precision as b2a_weight_kg,
+    sum(case when step_code = 'B3' then weight_kg else 0 end)::double precision as b3_weight_kg,
+    sum(case when step_code = 'B2A' then coalesce(bunches_count, 0) else 0 end)::double precision as b2a_bunches,
+    sum(case when step_code = 'B3' then coalesce(bunches_count, 0) else 0 end)::double precision as b3_bunches
+  from gld.mv_prod_postharvest_step_flow_cur
+  group by post_date
+)
+select
+  work_date,
+  b1_stems,
+  b1a_stems,
+  b1c_stems,
+  b2_stems,
+  b2a_weight_kg,
+  b3_weight_kg,
+  b2a_bunches,
+  b3_bunches,
+  (b1c_stems + b1a_stems)::double precision as cls_upstream_stems,
+  b2_stems::double precision as cls_downstream_stems,
+  b1_stems::double precision as sb_upstream_stems,
+  b2_stems::double precision as sb_downstream_stems,
+  (b2a_weight_kg + b3_weight_kg)::double precision as emp_final_weight_kg,
+  (b2a_bunches + b3_bunches)::double precision as emp_final_bunches
+from base;
+
+create materialized view if not exists gld.mv_prod_postharvest_day_universe_cur as
+select *
+from gld.vw_prod_postharvest_day_universe_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_day_universe_cur;
+
+create index if not exists idx_mv_prod_postharvest_day_universe_cur_work_date
+  on gld.mv_prod_postharvest_day_universe_cur (work_date);
+
+create or replace view gld.vw_prod_postharvest_lot_final_output_cur as
+with final_steps as (
+  select
+    lot_date,
+    post_date,
+    path_post,
+    variety_canon,
+    final_destination,
+    sum(weight_kg)::double precision as weight_kg,
+    sum(coalesce(bunches_count, 0))::double precision as bunches_count,
+    sum(stems_count)::double precision as stems_count
+  from gld.mv_prod_postharvest_step_flow_cur
+  where (step_code = 'B2A' and path_post in ('APERTURA', 'GV'))
+     or (step_code = 'B3' and path_post = 'PRECLASIFICACION')
+  group by lot_date, post_date, path_post, variety_canon, final_destination
+),
+totals as (
+  select
+    lot_date,
+    path_post,
+    variety_canon,
+    final_destination,
+    sum(weight_kg)::double precision as lot_weight_total_kg,
+    sum(bunches_count)::double precision as lot_bunches_total,
+    sum(stems_count)::double precision as lot_stems_total
+  from final_steps
+  group by lot_date, path_post, variety_canon, final_destination
+)
+select
+  f.lot_date,
+  f.post_date,
+  f.path_post,
+  f.variety_canon,
+  f.final_destination,
+  f.weight_kg,
+  f.bunches_count,
+  f.stems_count,
+  t.lot_weight_total_kg,
+  t.lot_bunches_total,
+  t.lot_stems_total,
+  case
+    when coalesce(t.lot_weight_total_kg, 0) > 0 then f.weight_kg / t.lot_weight_total_kg
+    else 0
+  end as share_kg_to_post_date
+from final_steps f
+join totals t
+  on t.lot_date = f.lot_date
+ and t.path_post = f.path_post
+ and t.variety_canon = f.variety_canon
+ and t.final_destination = f.final_destination;
+
+create materialized view if not exists gld.mv_prod_postharvest_lot_final_output_cur as
+select *
+from gld.vw_prod_postharvest_lot_final_output_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_lot_final_output_cur;
+
+create index if not exists idx_mv_prod_postharvest_lot_final_output_cur_lot_date
+  on gld.mv_prod_postharvest_lot_final_output_cur (lot_date);
+
+create index if not exists idx_mv_prod_postharvest_lot_final_output_cur_post_date
+  on gld.mv_prod_postharvest_lot_final_output_cur (post_date);
+
+create index if not exists idx_mv_prod_postharvest_lot_final_output_cur_path_destination
+  on gld.mv_prod_postharvest_lot_final_output_cur (path_post, final_destination);
+
+create or replace view gld.vw_prod_postharvest_period_universe_cur as
+with final_output as (
+  select
+    path_post,
+    final_destination,
+    sum(weight_kg)::double precision as final_weight_kg,
+    sum(bunches_count)::double precision as final_bunches
+  from gld.mv_prod_postharvest_lot_final_output_cur
+  group by path_post, final_destination
+),
+b2_output as (
+  select
+    path_post,
+    final_destination,
+    sum(stems_count)::double precision as b2_stems
+  from gld.mv_prod_postharvest_step_flow_cur
+  where step_code = 'B2'
+  group by path_post, final_destination
+),
+universe as (
+  select
+    coalesce(f.path_post, b.path_post) as path_post,
+    coalesce(f.final_destination, b.final_destination) as final_destination,
+    coalesce(f.final_weight_kg, 0)::double precision as final_weight_kg,
+    coalesce(f.final_bunches, 0)::double precision as final_bunches,
+    coalesce(b.b2_stems, 0)::double precision as b2_stems
+  from final_output f
+  full join b2_output b
+    on b.path_post = f.path_post
+   and b.final_destination = f.final_destination
+),
+totals as (
+  select
+    sum(final_weight_kg)::double precision as total_final_weight_kg,
+    sum(final_bunches)::double precision as total_final_bunches,
+    sum(b2_stems)::double precision as total_b2_stems
+  from universe
+)
+select
+  u.path_post,
+  u.final_destination,
+  u.final_weight_kg,
+  u.final_bunches,
+  u.b2_stems,
+  case when coalesce(t.total_final_weight_kg, 0) > 0 then u.final_weight_kg / t.total_final_weight_kg else 0 end as share_final_weight,
+  case when coalesce(t.total_final_bunches, 0) > 0 then u.final_bunches / t.total_final_bunches else 0 end as share_final_bunches,
+  case when coalesce(t.total_b2_stems, 0) > 0 then u.b2_stems / t.total_b2_stems else 0 end as share_b2_stems
+from universe u
+cross join totals t;
+
+create materialized view if not exists gld.mv_prod_postharvest_period_universe_cur as
+select *
+from gld.vw_prod_postharvest_period_universe_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_period_universe_cur;
+
+create index if not exists idx_mv_prod_postharvest_period_universe_cur_path_destination
+  on gld.mv_prod_postharvest_period_universe_cur (path_post, final_destination);
+
+create or replace view gld.vw_prod_postharvest_rule_hours_cur as
+select
+  h.work_date,
+  r.rule_scope_area,
+  r.rule_id,
+  r.rule_code,
+  r.activity_id,
+  r.activity_name,
+  r.baseline_actual_hours_q1,
+  r.path_rule,
+  r.variety_filter,
+  r.destination_filter,
+  r.methodology_code,
+  r.applies_to,
+  r.stage_side,
+  r.anchor_final,
+  r.allowed_steps,
+  r.path_split_basis,
+  r.step_split_basis,
+  r.is_misassigned,
+  r.is_inactive,
+  r.is_active,
+  r.confidence_level,
+  r.source_kind,
+  r.notes,
+  r.group_name,
+  h.cost_area,
+  h.sub_cost_center,
+  h.activity_type,
+  sum(h.actual_hours)::double precision as actual_hours,
+  sum(h.effective_hours)::double precision as effective_hours,
+  sum(h.units_produced)::double precision as units_produced,
+  count(*)::int as hours_event_count,
+  count(distinct h.person_id)::int as distinct_people
+from gld.mv_prod_postharvest_capacity_hours_cur h
+join gld.prod_dim_postharvest_productivity_rule_cur r
+  on r.rule_scope_area = h.area_id
+ and r.activity_id = h.activity_id
+where r.is_active = true
+  and r.is_inactive = false
+  and coalesce(r.path_rule, '') <> 'PENDING'
+group by
+  h.work_date,
+  r.rule_scope_area,
+  r.rule_id,
+  r.rule_code,
+  r.activity_id,
+  r.activity_name,
+  r.baseline_actual_hours_q1,
+  r.path_rule,
+  r.variety_filter,
+  r.destination_filter,
+  r.methodology_code,
+  r.applies_to,
+  r.stage_side,
+  r.anchor_final,
+  r.allowed_steps,
+  r.path_split_basis,
+  r.step_split_basis,
+  r.is_misassigned,
+  r.is_inactive,
+  r.is_active,
+  r.confidence_level,
+  r.source_kind,
+  r.notes,
+  r.group_name,
+  h.cost_area,
+  h.sub_cost_center,
+  h.activity_type;
+
+create materialized view if not exists gld.mv_prod_postharvest_rule_hours_cur as
+select *
+from gld.vw_prod_postharvest_rule_hours_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_rule_hours_cur;
+
+create index if not exists idx_mv_prod_postharvest_rule_hours_cur_work_date
+  on gld.mv_prod_postharvest_rule_hours_cur (work_date);
+
+create index if not exists idx_mv_prod_postharvest_rule_hours_cur_scope_activity
+  on gld.mv_prod_postharvest_rule_hours_cur (rule_scope_area, activity_id);
+
+create index if not exists idx_mv_prod_postharvest_rule_hours_cur_rule
+  on gld.mv_prod_postharvest_rule_hours_cur (rule_id);
+
+create or replace view gld.vw_prod_postharvest_rule_side_hours_cur as
+with activity_rule_counts as (
+  select
+    rule_scope_area,
+    activity_id,
+    count(*)::int as rule_count
+  from gld.prod_dim_postharvest_productivity_rule_cur
+  where is_active = true
+    and is_inactive = false
+    and coalesce(path_rule, '') <> 'PENDING'
+  group by rule_scope_area, activity_id
+),
+cls_support_activity_set as (
+  select distinct activity_id
+  from gld.prod_dim_postharvest_productivity_rule_cur
+  where rule_scope_area = 'CLS'
+    and methodology_code = 'KG_CAPACIDAD'
+    and is_active = true
+    and is_inactive = false
+    and coalesce(path_rule, '') <> 'PENDING'
+),
+cls_productive_activity_set as (
+  select distinct activity_id
+  from gld.prod_dim_postharvest_productivity_rule_cur
+  where rule_scope_area = 'CLS'
+    and is_active = true
+    and is_inactive = false
+    and is_misassigned = false
+    and methodology_code <> 'KG_CAPACIDAD'
+    and coalesce(path_rule, '') <> 'PENDING'
+),
+cls_support_empirical_m as (
+  with day_hours as (
+    select
+      h.work_date,
+      sum(case when h.activity_id in (select activity_id from cls_productive_activity_set) then h.effective_hours else 0 end)::double precision as productive_hours,
+      sum(case when h.activity_id in (select activity_id from cls_support_activity_set) then h.effective_hours else 0 end)::double precision as support_hours
+    from gld.mv_prod_postharvest_capacity_hours_cur h
+    where h.area_id = 'CLS'
+    group by h.work_date
+  ),
+  ratios as (
+    select productive_hours / support_hours as ratio
+    from day_hours
+    where productive_hours > 0
+      and support_hours > 0
+  )
+  select coalesce(percentile_cont(0.5) within group (order by ratio), 1.0)::double precision as support_m
+  from ratios
+),
+cls_segment_people as (
+  with segment_rows as (
+    select distinct
+      h.work_date,
+      h.person_id,
+      case
+        when r.stage_side in ('UPSTREAM_ONLY', 'MIXED')
+          and r.applies_to in ('UPSTREAM', 'BOTH')
+          and r.path_rule = 'PRECLAS'
+          then 'UPSTREAM_PRECLAS'
+        when r.stage_side in ('UPSTREAM_ONLY', 'MIXED')
+          and r.applies_to in ('UPSTREAM', 'BOTH')
+          and r.path_rule in ('APERTURA', 'GV', 'APERTURA_GV_SPLIT', 'ALL_PATHS_SPLIT')
+          then 'UPSTREAM_AGV'
+        when r.stage_side in ('DOWNSTREAM_ONLY', 'MIXED')
+          and r.applies_to in ('DOWNSTREAM', 'BOTH')
+          then 'DOWNSTREAM'
+        else null
+      end as segment_name
+    from gld.mv_prod_postharvest_capacity_hours_cur h
+    join gld.prod_dim_postharvest_productivity_rule_cur r
+      on r.rule_scope_area = 'CLS'
+     and r.activity_id = h.activity_id
+    where h.area_id = 'CLS'
+      and r.is_active = true
+      and r.is_inactive = false
+      and r.is_misassigned = false
+      and r.methodology_code <> 'KG_CAPACIDAD'
+      and coalesce(r.path_rule, '') <> 'PENDING'
+      and h.person_id is not null
+  )
+  select
+    work_date,
+    count(distinct person_id) filter (where segment_name = 'UPSTREAM_AGV')::int as upstream_agv_people,
+    count(distinct person_id) filter (where segment_name = 'UPSTREAM_PRECLAS')::int as upstream_preclas_people,
+    count(distinct person_id) filter (where segment_name = 'DOWNSTREAM')::int as downstream_people
+  from segment_rows
+  where segment_name is not null
+  group by work_date
+),
+cls_support_shares as (
+  select
+    d.work_date,
+    case when d.b1c_stems > 0 then 1.0 else 0.0 end as est_up_agv,
+    case when d.b1a_stems > 0 then 1.0 else 0.0 end as est_up_preclas,
+    coalesce(p.downstream_people, 0)::double precision / greatest(m.support_m, 0.000001) as est_down_pool,
+    (
+      case when d.b1c_stems > 0 then 1.0 else 0.0 end
+      + case when d.b1a_stems > 0 then 1.0 else 0.0 end
+      + coalesce(p.downstream_people, 0)::double precision / greatest(m.support_m, 0.000001)
+    ) as est_total,
+    case
+      when (
+        case when d.b1c_stems > 0 then 1.0 else 0.0 end
+        + case when d.b1a_stems > 0 then 1.0 else 0.0 end
+        + coalesce(p.downstream_people, 0)::double precision / greatest(m.support_m, 0.000001)
+      ) > 0
+      then (
+        case when d.b1c_stems > 0 then 1.0 else 0.0 end
+        + case when d.b1a_stems > 0 then 1.0 else 0.0 end
+      ) / (
+        case when d.b1c_stems > 0 then 1.0 else 0.0 end
+        + case when d.b1a_stems > 0 then 1.0 else 0.0 end
+        + coalesce(p.downstream_people, 0)::double precision / greatest(m.support_m, 0.000001)
+      )
+      else 0
+    end as share_up_support,
+    case
+      when (
+        case when d.b1c_stems > 0 then 1.0 else 0.0 end
+        + case when d.b1a_stems > 0 then 1.0 else 0.0 end
+        + coalesce(p.downstream_people, 0)::double precision / greatest(m.support_m, 0.000001)
+      ) > 0
+      then (
+        coalesce(p.downstream_people, 0)::double precision / greatest(m.support_m, 0.000001)
+      ) / (
+        case when d.b1c_stems > 0 then 1.0 else 0.0 end
+        + case when d.b1a_stems > 0 then 1.0 else 0.0 end
+        + coalesce(p.downstream_people, 0)::double precision / greatest(m.support_m, 0.000001)
+      )
+      else 0
+    end as share_down_support
+  from gld.mv_prod_postharvest_day_universe_cur d
+  cross join cls_support_empirical_m m
+  left join cls_segment_people p
+    on p.work_date = d.work_date
+),
+cls_m_tallos_productivity as (
+  with up_acts as (
+    select distinct activity_id
+    from gld.prod_dim_postharvest_productivity_rule_cur
+    where rule_scope_area = 'CLS'
+      and stage_side = 'UPSTREAM_ONLY'
+      and is_active = true
+      and is_inactive = false
+      and coalesce(path_rule, '') <> 'PENDING'
+  ),
+  down_acts as (
+    select distinct activity_id
+    from gld.prod_dim_postharvest_productivity_rule_cur
+    where rule_scope_area = 'CLS'
+      and stage_side = 'DOWNSTREAM_ONLY'
+      and is_active = true
+      and is_inactive = false
+      and coalesce(path_rule, '') <> 'PENDING'
+  ),
+  hours_totals as (
+    select
+      sum(case when activity_id in (select activity_id from up_acts) then effective_hours else 0 end)::double precision as up_hours,
+      sum(case when activity_id in (select activity_id from down_acts) then effective_hours else 0 end)::double precision as down_hours
+    from gld.mv_prod_postharvest_rule_hours_cur
+    where rule_scope_area = 'CLS'
+  ),
+  step_totals as (
+    select
+      sum(case when step_code = 'B1' and path_post = 'PRECLASIFICACION' then stems_count else 0 end)::double precision as up_stems,
+      sum(case when step_code = 'B2' then stems_count else 0 end)::double precision as down_stems
+    from gld.mv_prod_postharvest_step_flow_cur
+  )
+  select
+    case
+      when coalesce(h.up_hours, 0) > 0
+       and coalesce(h.down_hours, 0) > 0
+       and coalesce(s.up_stems, 0) > 0
+       and coalesce(s.down_stems, 0) > 0
+      then
+        (s.down_stems / h.down_hours)
+        / ((s.up_stems / h.up_hours) + (s.down_stems / h.down_hours))
+      else 0.5
+    end as share_up_m_tallos
+  from hours_totals h
+  cross join step_totals s
+),
+base_rule_side as (
+  select
+    r.work_date,
+    r.rule_scope_area,
+    r.rule_id,
+    r.rule_code,
+    r.activity_id,
+    r.activity_name,
+    r.baseline_actual_hours_q1,
+    r.path_rule,
+    r.variety_filter,
+    r.destination_filter,
+    r.methodology_code,
+    r.applies_to,
+    r.stage_side,
+    r.anchor_final,
+    r.allowed_steps,
+    r.path_split_basis,
+    r.step_split_basis,
+    r.is_misassigned,
+    r.is_inactive,
+    r.is_active,
+    r.confidence_level,
+    r.source_kind,
+    r.notes,
+    r.group_name,
+    r.cost_area,
+    r.sub_cost_center,
+    r.activity_type,
+    r.actual_hours,
+    r.effective_hours,
+    r.units_produced,
+    r.hours_event_count,
+    r.distinct_people,
+    arc.rule_count,
+    case
+      when r.rule_scope_area = 'EMP' then 'EMP_ALL_DOWNSTREAM'
+      when r.rule_scope_area = 'CLS' and r.methodology_code = 'KG_CAPACIDAD' then 'CLS_SUPPORT_STATIONS'
+      when r.rule_scope_area = 'CLS'
+        and r.stage_side = 'MIXED'
+        and r.methodology_code = 'TALLOS_CAPACIDAD'
+        and coalesce(arc.rule_count, 0) > 1 then 'CLS_M_TALLOS_PRODUCTIVITY'
+      when r.stage_side = 'UPSTREAM_ONLY' then 'UPSTREAM_ONLY'
+      when r.stage_side = 'DOWNSTREAM_ONLY' then 'DOWNSTREAM_ONLY'
+      when r.stage_side = 'MIXED' then 'DAY_UNIVERSE_SPLIT'
+      else 'UNCLASSIFIED'
+    end as split_strategy,
+    case
+      when r.rule_scope_area = 'EMP' then 0::double precision
+      when r.rule_scope_area = 'CLS' and r.methodology_code = 'KG_CAPACIDAD'
+        then coalesce(cs.share_up_support, 0)::double precision
+      when r.rule_scope_area = 'CLS'
+        and r.stage_side = 'MIXED'
+        and r.methodology_code = 'TALLOS_CAPACIDAD'
+        and coalesce(arc.rule_count, 0) > 1
+        then coalesce(mt.share_up_m_tallos, 0.5)::double precision
+      when r.stage_side = 'UPSTREAM_ONLY' then 1::double precision
+      when r.stage_side = 'DOWNSTREAM_ONLY' then 0::double precision
+      when r.rule_scope_area = 'CLS'
+        then coalesce(d.cls_upstream_stems / nullif(d.cls_upstream_stems + d.cls_downstream_stems, 0), 0)::double precision
+      when r.rule_scope_area = 'SB'
+        then coalesce(d.sb_upstream_stems / nullif(d.sb_upstream_stems + d.sb_downstream_stems, 0), 0)::double precision
+      else 0::double precision
+    end as upstream_share_raw,
+    case
+      when r.rule_scope_area = 'EMP' then 1::double precision
+      when r.rule_scope_area = 'CLS' and r.methodology_code = 'KG_CAPACIDAD'
+        then coalesce(cs.share_down_support, 0)::double precision
+      when r.rule_scope_area = 'CLS'
+        and r.stage_side = 'MIXED'
+        and r.methodology_code = 'TALLOS_CAPACIDAD'
+        and coalesce(arc.rule_count, 0) > 1
+        then (1 - coalesce(mt.share_up_m_tallos, 0.5))::double precision
+      when r.stage_side = 'UPSTREAM_ONLY' then 0::double precision
+      when r.stage_side = 'DOWNSTREAM_ONLY' then 1::double precision
+      when r.rule_scope_area = 'CLS'
+        then coalesce(d.cls_downstream_stems / nullif(d.cls_upstream_stems + d.cls_downstream_stems, 0), 0)::double precision
+      when r.rule_scope_area = 'SB'
+        then coalesce(d.sb_downstream_stems / nullif(d.sb_upstream_stems + d.sb_downstream_stems, 0), 0)::double precision
+      else 1::double precision
+    end as downstream_share_raw
+  from gld.mv_prod_postharvest_rule_hours_cur r
+  left join activity_rule_counts arc
+    on arc.rule_scope_area = r.rule_scope_area
+   and arc.activity_id = r.activity_id
+  left join gld.mv_prod_postharvest_day_universe_cur d
+    on d.work_date = r.work_date
+  left join cls_support_shares cs
+    on cs.work_date = r.work_date
+  cross join cls_m_tallos_productivity mt
+)
+select
+  b.*,
+  case
+    when coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0) > 0
+      then coalesce(b.upstream_share_raw, 0)
+        / (coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0))
+    when b.rule_scope_area = 'EMP' then 0::double precision
+    when b.stage_side = 'UPSTREAM_ONLY' then 1::double precision
+    when b.stage_side = 'DOWNSTREAM_ONLY' then 0::double precision
+    else 0.5::double precision
+  end
+  * case when b.applies_to in ('UPSTREAM', 'BOTH') then 1::double precision else 0::double precision end
+    as upstream_share,
+  case
+    when coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0) > 0
+      then coalesce(b.downstream_share_raw, 0)
+        / (coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0))
+    when b.rule_scope_area = 'EMP' then 1::double precision
+    when b.stage_side = 'UPSTREAM_ONLY' then 0::double precision
+    when b.stage_side = 'DOWNSTREAM_ONLY' then 1::double precision
+    else 0.5::double precision
+  end
+  * case when b.applies_to in ('DOWNSTREAM', 'BOTH') then 1::double precision else 0::double precision end
+    as downstream_share,
+  b.effective_hours
+  * (
+      case
+        when coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0) > 0
+          then coalesce(b.upstream_share_raw, 0)
+            / (coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0))
+        when b.rule_scope_area = 'EMP' then 0::double precision
+        when b.stage_side = 'UPSTREAM_ONLY' then 1::double precision
+        when b.stage_side = 'DOWNSTREAM_ONLY' then 0::double precision
+        else 0.5::double precision
+      end
+    )
+  * case when b.applies_to in ('UPSTREAM', 'BOTH') then 1::double precision else 0::double precision end
+    as hours_upstream,
+  b.effective_hours
+  * (
+      case
+        when coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0) > 0
+          then coalesce(b.downstream_share_raw, 0)
+            / (coalesce(b.upstream_share_raw, 0) + coalesce(b.downstream_share_raw, 0))
+        when b.rule_scope_area = 'EMP' then 1::double precision
+        when b.stage_side = 'UPSTREAM_ONLY' then 0::double precision
+        when b.stage_side = 'DOWNSTREAM_ONLY' then 1::double precision
+        else 0.5::double precision
+      end
+    )
+  * case when b.applies_to in ('DOWNSTREAM', 'BOTH') then 1::double precision else 0::double precision end
+    as hours_downstream
+from base_rule_side b;
+
+create materialized view if not exists gld.mv_prod_postharvest_rule_side_hours_cur as
+select *
+from gld.vw_prod_postharvest_rule_side_hours_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_rule_side_hours_cur;
+
+create index if not exists idx_mv_prod_postharvest_rule_side_hours_cur_work_date
+  on gld.mv_prod_postharvest_rule_side_hours_cur (work_date);
+
+create index if not exists idx_mv_prod_postharvest_rule_side_hours_cur_scope_activity
+  on gld.mv_prod_postharvest_rule_side_hours_cur (rule_scope_area, activity_id);
+
+create index if not exists idx_mv_prod_postharvest_rule_side_hours_cur_rule
+  on gld.mv_prod_postharvest_rule_side_hours_cur (rule_id);
+
+create or replace view gld.vw_prod_postharvest_hours_box_detail_cur as
+with final_day_universe as (
+  select
+    post_date as work_date,
+    lot_date,
+    variety_canon,
+    path_post,
+    final_destination,
+    sum(weight_kg)::double precision as weight_kg
+  from gld.mv_prod_postharvest_lot_final_output_cur
+  group by post_date, lot_date, variety_canon, path_post, final_destination
+),
+final_day_totals as (
+  select
+    work_date,
+    sum(weight_kg)::double precision as day_weight_kg
+  from final_day_universe
+  group by work_date
+),
+final_day_share as (
+  select
+    f.work_date,
+    f.lot_date,
+    f.variety_canon,
+    f.path_post,
+    f.final_destination,
+    f.weight_kg,
+    case
+      when coalesce(t.day_weight_kg, 0) > 0 then f.weight_kg / t.day_weight_kg
+      else 0::double precision
+    end as share_day
+  from final_day_universe f
+  join final_day_totals t
+    on t.work_date = f.work_date
+),
+lot_destination_weight as (
+  select
+    lot_date,
+    variety_canon,
+    path_post,
+    final_destination,
+    sum(weight_kg)::double precision as lot_destination_weight_kg
+  from gld.mv_prod_postharvest_lot_final_output_cur
+  group by lot_date, variety_canon, path_post, final_destination
+),
+lot_destination_totals as (
+  select
+    lot_date,
+    variety_canon,
+    path_post,
+    sum(lot_destination_weight_kg)::double precision as lot_weight_total_kg
+  from lot_destination_weight
+  group by lot_date, variety_canon, path_post
+),
+lot_destination_share as (
+  select
+    l.lot_date,
+    l.variety_canon,
+    l.path_post,
+    l.final_destination,
+    l.lot_destination_weight_kg,
+    case
+      when coalesce(t.lot_weight_total_kg, 0) > 0 then l.lot_destination_weight_kg / t.lot_weight_total_kg
+      else 0::double precision
+    end as share_destination_in_lot
+  from lot_destination_weight l
+  join lot_destination_totals t
+    on t.lot_date = l.lot_date
+   and t.variety_canon = l.variety_canon
+   and t.path_post = l.path_post
+),
+cls_upstream_raw as (
+  select
+    s.post_date as work_date,
+    s.lot_date,
+    s.variety_canon,
+    s.path_post,
+    sum(s.stems_count)::double precision as stems_count
+  from gld.mv_prod_postharvest_step_flow_cur s
+  where s.step_code in ('B1C', 'B1A')
+  group by s.post_date, s.lot_date, s.variety_canon, s.path_post
+),
+sb_upstream_raw as (
+  select
+    s.post_date as work_date,
+    s.lot_date,
+    s.variety_canon,
+    s.path_post,
+    sum(s.stems_count)::double precision as stems_count
+  from gld.mv_prod_postharvest_step_flow_cur s
+  where s.step_code = 'B1'
+  group by s.post_date, s.lot_date, s.variety_canon, s.path_post
+),
+upstream_share as (
+  select
+    'CLS'::text as area_id,
+    u.work_date,
+    u.lot_date,
+    u.variety_canon,
+    u.path_post,
+    d.final_destination,
+    u.stems_count,
+    case
+      when coalesce(day.cls_upstream_stems, 0) > 0
+        then (u.stems_count / day.cls_upstream_stems) * d.share_destination_in_lot
+      else 0::double precision
+    end as share_lote
+  from cls_upstream_raw u
+  join gld.mv_prod_postharvest_day_universe_cur day
+    on day.work_date = u.work_date
+  join lot_destination_share d
+    on d.lot_date = u.lot_date
+   and d.variety_canon = u.variety_canon
+   and d.path_post = u.path_post
+  union all
+  select
+    'SB'::text as area_id,
+    u.work_date,
+    u.lot_date,
+    u.variety_canon,
+    u.path_post,
+    d.final_destination,
+    u.stems_count,
+    case
+      when coalesce(day.sb_upstream_stems, 0) > 0
+        then (u.stems_count / day.sb_upstream_stems) * d.share_destination_in_lot
+      else 0::double precision
+    end as share_lote
+  from sb_upstream_raw u
+  join gld.mv_prod_postharvest_day_universe_cur day
+    on day.work_date = u.work_date
+  join lot_destination_share d
+    on d.lot_date = u.lot_date
+   and d.variety_canon = u.variety_canon
+   and d.path_post = u.path_post
+),
+b2_raw as (
+  select
+    s.post_date as work_date,
+    s.lot_date,
+    s.variety_canon,
+    s.path_post,
+    sum(s.stems_count)::double precision as stems_count
+  from gld.mv_prod_postharvest_step_flow_cur s
+  where s.step_code = 'B2'
+  group by s.post_date, s.lot_date, s.variety_canon, s.path_post
+),
+b2_share as (
+  select
+    'CLS'::text as area_id,
+    b.work_date,
+    b.lot_date,
+    b.variety_canon,
+    b.path_post,
+    d.final_destination,
+    b.stems_count,
+    case
+      when coalesce(day.cls_downstream_stems, 0) > 0
+        then (b.stems_count / day.cls_downstream_stems) * d.share_destination_in_lot
+      else 0::double precision
+    end as share_lote
+  from b2_raw b
+  join gld.mv_prod_postharvest_day_universe_cur day
+    on day.work_date = b.work_date
+  join lot_destination_share d
+    on d.lot_date = b.lot_date
+   and d.variety_canon = b.variety_canon
+   and d.path_post = b.path_post
+  union all
+  select
+    'SB'::text as area_id,
+    b.work_date,
+    b.lot_date,
+    b.variety_canon,
+    b.path_post,
+    d.final_destination,
+    b.stems_count,
+    case
+      when coalesce(day.sb_downstream_stems, 0) > 0
+        then (b.stems_count / day.sb_downstream_stems) * d.share_destination_in_lot
+      else 0::double precision
+    end as share_lote
+  from b2_raw b
+  join gld.mv_prod_postharvest_day_universe_cur day
+    on day.work_date = b.work_date
+  join lot_destination_share d
+    on d.lot_date = b.lot_date
+   and d.variety_canon = b.variety_canon
+   and d.path_post = b.path_post
+),
+b2a_day_totals as (
+  select
+    post_date as work_date,
+    sum(weight_kg)::double precision as day_weight_kg
+  from gld.mv_prod_postharvest_step_flow_cur
+  where step_code = 'B2A'
+  group by post_date
+),
+b2a_share as (
+  select
+    area.area_id,
+    s.post_date as work_date,
+    s.lot_date,
+    s.variety_canon,
+    s.path_post,
+    s.final_destination,
+    sum(s.weight_kg)::double precision as weight_kg,
+    case
+      when coalesce(t.day_weight_kg, 0) > 0 then sum(s.weight_kg)::double precision / t.day_weight_kg
+      else 0::double precision
+    end as share_lote
+  from gld.mv_prod_postharvest_step_flow_cur s
+  cross join (select unnest(array['CLS', 'SB'])::text as area_id) area
+  join b2a_day_totals t
+    on t.work_date = s.post_date
+  where s.step_code = 'B2A'
+  group by area.area_id, s.post_date, s.lot_date, s.variety_canon, s.path_post, s.final_destination, t.day_weight_kg
+),
+b3_day_totals as (
+  select
+    post_date as work_date,
+    sum(weight_kg)::double precision as day_weight_kg
+  from gld.mv_prod_postharvest_step_flow_cur
+  where step_code = 'B3'
+  group by post_date
+),
+b3_share as (
+  select
+    area.area_id,
+    s.post_date as work_date,
+    s.lot_date,
+    s.variety_canon,
+    s.path_post,
+    s.final_destination,
+    sum(s.weight_kg)::double precision as weight_kg,
+    case
+      when coalesce(t.day_weight_kg, 0) > 0 then sum(s.weight_kg)::double precision / t.day_weight_kg
+      else 0::double precision
+    end as share_lote
+  from gld.mv_prod_postharvest_step_flow_cur s
+  cross join (select unnest(array['CLS', 'SB'])::text as area_id) area
+  join b3_day_totals t
+    on t.work_date = s.post_date
+  where s.step_code = 'B3'
+  group by area.area_id, s.post_date, s.lot_date, s.variety_canon, s.path_post, s.final_destination, t.day_weight_kg
+),
+period_universe_method as (
+  select
+    'KG_CAPACIDAD'::text as methodology_code,
+    path_post,
+    final_destination,
+    sum(weight_kg)::double precision as magnitude,
+    case
+      when sum(sum(weight_kg)) over () > 0
+        then sum(weight_kg)::double precision / sum(sum(weight_kg)) over ()
+      else 0::double precision
+    end as share_periodo
+  from gld.mv_prod_postharvest_lot_final_output_cur
+  group by path_post, final_destination
+  union all
+  select
+    'BUNCHES'::text as methodology_code,
+    path_post,
+    final_destination,
+    sum(bunches_count)::double precision as magnitude,
+    case
+      when sum(sum(bunches_count)) over () > 0
+        then sum(bunches_count)::double precision / sum(sum(bunches_count)) over ()
+      else 0::double precision
+    end as share_periodo
+  from gld.mv_prod_postharvest_lot_final_output_cur
+  group by path_post, final_destination
+  union all
+  select
+    'TALLOS_DIRECT'::text as methodology_code,
+    path_post,
+    final_destination,
+    sum(stems_count)::double precision as magnitude,
+    case
+      when sum(sum(stems_count)) over () > 0
+        then sum(stems_count)::double precision / sum(sum(stems_count)) over ()
+      else 0::double precision
+    end as share_periodo
+  from gld.mv_prod_postharvest_step_flow_cur
+  where step_code = 'B2'
+  group by path_post, final_destination
+  union all
+  select
+    'TALLOS_CAPACIDAD'::text as methodology_code,
+    path_post,
+    final_destination,
+    sum(stems_count)::double precision as magnitude,
+    case
+      when sum(sum(stems_count)) over () > 0
+        then sum(stems_count)::double precision / sum(sum(stems_count)) over ()
+      else 0::double precision
+    end as share_periodo
+  from gld.mv_prod_postharvest_step_flow_cur
+  where step_code = 'B2'
+  group by path_post, final_destination
+),
+side_base as (
+  select
+    work_date,
+    rule_scope_area,
+    rule_id,
+    rule_code,
+    activity_id,
+    activity_name,
+    baseline_actual_hours_q1,
+    path_rule,
+    variety_filter,
+    destination_filter,
+    methodology_code,
+    applies_to,
+    stage_side,
+    anchor_final,
+    allowed_steps,
+    path_split_basis,
+    step_split_basis,
+    is_misassigned,
+    is_inactive,
+    is_active,
+    confidence_level,
+    source_kind,
+    notes,
+    group_name,
+    cost_area,
+    sub_cost_center,
+    activity_type,
+    actual_hours,
+    effective_hours,
+    units_produced,
+    hours_event_count,
+    distinct_people,
+    split_strategy,
+    'UPSTREAM'::text as side,
+    hours_upstream::double precision as hours_side
+  from gld.mv_prod_postharvest_rule_side_hours_cur
+  where coalesce(hours_upstream, 0) > 0
+  union all
+  select
+    work_date,
+    rule_scope_area,
+    rule_id,
+    rule_code,
+    activity_id,
+    activity_name,
+    baseline_actual_hours_q1,
+    path_rule,
+    variety_filter,
+    destination_filter,
+    methodology_code,
+    applies_to,
+    stage_side,
+    anchor_final,
+    allowed_steps,
+    path_split_basis,
+    step_split_basis,
+    is_misassigned,
+    is_inactive,
+    is_active,
+    confidence_level,
+    source_kind,
+    notes,
+    group_name,
+    cost_area,
+    sub_cost_center,
+    activity_type,
+    actual_hours,
+    effective_hours,
+    units_produced,
+    hours_event_count,
+    distinct_people,
+    split_strategy,
+    'DOWNSTREAM'::text as side,
+    hours_downstream::double precision as hours_side
+  from gld.mv_prod_postharvest_rule_side_hours_cur
+  where coalesce(hours_downstream, 0) > 0
+),
+specific_rule_base as (
+  select *
+  from side_base
+  where path_rule not in ('ALL_PATHS_SPLIT', 'PENDING')
+),
+period_rule_base as (
+  select *
+  from side_base
+  where path_rule in ('ALL_PATHS_SPLIT', 'PENDING')
+),
+specific_candidate_base as (
+  select
+    s.*,
+    u.lot_date,
+    u.variety_canon,
+    u.path_post,
+    u.final_destination,
+    ltp.post_date,
+    ltp.weight_kg as cell_weight_kg,
+    (u.share_lote * ltp.share_kg_to_post_date)::double precision as raw_share,
+    'TRAVEL_TO_POST'::text as allocation_method
+  from specific_rule_base s
+  join upstream_share u
+    on u.area_id = s.rule_scope_area
+   and u.work_date = s.work_date
+  join gld.mv_prod_postharvest_lot_final_output_cur ltp
+    on ltp.lot_date = u.lot_date
+   and ltp.variety_canon = u.variety_canon
+   and ltp.path_post = u.path_post
+   and ltp.final_destination = u.final_destination
+  where s.side = 'UPSTREAM'
+  union all
+  select
+    s.*,
+    b.lot_date,
+    b.variety_canon,
+    b.path_post,
+    b.final_destination,
+    ltp.post_date,
+    ltp.weight_kg as cell_weight_kg,
+    (b.share_lote * ltp.share_kg_to_post_date)::double precision as raw_share,
+    'TRAVEL_B2_TO_POST'::text as allocation_method
+  from specific_rule_base s
+  join b2_share b
+    on b.area_id = s.rule_scope_area
+   and b.work_date = s.work_date
+  join gld.mv_prod_postharvest_lot_final_output_cur ltp
+    on ltp.lot_date = b.lot_date
+   and ltp.variety_canon = b.variety_canon
+   and ltp.path_post = b.path_post
+   and ltp.final_destination = b.final_destination
+  where s.side = 'DOWNSTREAM'
+    and s.anchor_final = 'B2'
+  union all
+  select
+    s.*,
+    b.lot_date,
+    b.variety_canon,
+    b.path_post,
+    b.final_destination,
+    s.work_date as post_date,
+    b.weight_kg as cell_weight_kg,
+    b.share_lote::double precision as raw_share,
+    'ANCHOR_B2A_DAY'::text as allocation_method
+  from specific_rule_base s
+  join b2a_share b
+    on b.area_id = s.rule_scope_area
+   and b.work_date = s.work_date
+  where s.side = 'DOWNSTREAM'
+    and s.anchor_final = 'B2A'
+  union all
+  select
+    s.*,
+    b.lot_date,
+    b.variety_canon,
+    b.path_post,
+    b.final_destination,
+    s.work_date as post_date,
+    b.weight_kg as cell_weight_kg,
+    b.share_lote::double precision as raw_share,
+    'ANCHOR_B3_DAY'::text as allocation_method
+  from specific_rule_base s
+  join b3_share b
+    on b.area_id = s.rule_scope_area
+   and b.work_date = s.work_date
+  where s.side = 'DOWNSTREAM'
+    and s.anchor_final = 'B3'
+),
+specific_candidates as (
+  select *
+  from specific_candidate_base c
+  where c.raw_share > 0
+    and (
+      (c.path_rule = 'PRECLAS' and c.path_post = 'PRECLASIFICACION')
+      or (c.path_rule = 'APERTURA' and c.path_post = 'APERTURA')
+      or (c.path_rule = 'GV' and c.path_post = 'GV')
+      or (c.path_rule = 'APERTURA_GV_SPLIT' and c.path_post in ('APERTURA', 'GV'))
+    )
+    and (
+      c.variety_filter = 'ALL'
+      or (c.variety_filter = 'XLE' and c.variety_canon = 'XLE')
+      or (c.variety_filter = 'CLO' and c.variety_canon = 'CLO')
+      or (c.variety_filter = 'ZIN' and c.variety_canon = 'ZIN')
+      or (c.variety_filter = 'XLE_CLO' and c.variety_canon in ('XLE', 'CLO'))
+      or (c.variety_filter = 'XLE_ZIN' and c.variety_canon in ('XLE', 'ZIN'))
+      or (c.variety_filter = 'XLE_CLO_ZIN' and c.variety_canon in ('XLE', 'CLO', 'ZIN'))
+      or (c.variety_filter = 'DIANTHUS' and c.variety_canon = 'DIANTHUS')
+      or (c.variety_filter = 'LYSE' and c.variety_canon = 'LYSE')
+    )
+    and (
+      c.destination_filter = 'ALL'
+      or (c.destination_filter = 'BLANCO' and c.final_destination = 'BLANCO')
+      or (c.destination_filter = 'TINTURADO' and c.final_destination = 'TINTURADO')
+      or (c.destination_filter = 'ARCOIRIS' and c.final_destination = 'ARCOIRIS')
+      or (c.destination_filter = 'TINTURADO_ARCOIRIS' and c.final_destination in ('TINTURADO', 'ARCOIRIS'))
+    )
+),
+specific_detail as (
+  select
+    c.post_date,
+    c.path_post,
+    c.final_destination,
+    c.lot_date,
+    c.variety_canon,
+    c.rule_scope_area as area_id,
+    c.cost_area,
+    c.sub_cost_center,
+    c.activity_id,
+    c.activity_name,
+    c.rule_id,
+    c.rule_code,
+    c.path_rule,
+    c.methodology_code,
+    c.stage_side,
+    c.anchor_final,
+    c.side,
+    c.work_date,
+    'SPECIFIC'::text as match_kind,
+    c.allocation_method,
+    c.cell_weight_kg as weight_kg,
+    c.hours_side * (
+      c.raw_share
+      / nullif(sum(c.raw_share) over (partition by c.work_date, c.rule_id, c.side), 0)
+    ) as effective_hours_assigned
+  from specific_candidates c
+),
+specific_assigned as (
+  select
+    work_date,
+    rule_id,
+    side,
+    sum(effective_hours_assigned)::double precision as assigned_hours
+  from specific_detail
+  group by work_date, rule_id, side
+),
+residual_after_specific as (
+  select
+    s.*,
+    greatest(s.hours_side - coalesce(a.assigned_hours, 0), 0)::double precision as residual_hours
+  from specific_rule_base s
+  left join specific_assigned a
+    on a.work_date = s.work_date
+   and a.rule_id = s.rule_id
+   and a.side = s.side
+  where greatest(s.hours_side - coalesce(a.assigned_hours, 0), 0) > 0.01
+),
+period_candidate_base as (
+  select
+    p.work_date,
+    p.rule_scope_area,
+    p.rule_id,
+    p.rule_code,
+    p.activity_id,
+    p.activity_name,
+    p.path_rule,
+    p.variety_filter,
+    p.destination_filter,
+    p.methodology_code,
+    p.stage_side,
+    p.anchor_final,
+    p.cost_area,
+    p.sub_cost_center,
+    p.side,
+    p.hours_side,
+    share.path_post,
+    share.final_destination,
+    p.work_date as post_date,
+    null::double precision as cell_weight_kg,
+    share.share_periodo::double precision as raw_share,
+    'SPECIFIC_PERIOD'::text as match_kind,
+    'PERIOD_PROPORTIONAL'::text as allocation_method
+  from period_rule_base p
+  join period_universe_method share
+    on share.methodology_code = p.methodology_code
+  where (
+      p.path_rule in ('ALL_PATHS_SPLIT', 'PENDING')
+      or (p.path_rule = 'PRECLAS' and share.path_post = 'PRECLASIFICACION')
+      or (p.path_rule = 'APERTURA' and share.path_post = 'APERTURA')
+      or (p.path_rule = 'GV' and share.path_post = 'GV')
+      or (p.path_rule = 'APERTURA_GV_SPLIT' and share.path_post in ('APERTURA', 'GV'))
+    )
+    and (
+      p.destination_filter = 'ALL'
+      or (p.destination_filter = 'BLANCO' and share.final_destination = 'BLANCO')
+      or (p.destination_filter = 'TINTURADO' and share.final_destination = 'TINTURADO')
+      or (p.destination_filter = 'ARCOIRIS' and share.final_destination = 'ARCOIRIS')
+      or (p.destination_filter = 'TINTURADO_ARCOIRIS' and share.final_destination in ('TINTURADO', 'ARCOIRIS'))
+    )
+  union all
+  select
+    p.work_date,
+    p.rule_scope_area,
+    p.rule_id,
+    p.rule_code,
+    p.activity_id,
+    p.activity_name,
+    p.path_rule,
+    p.variety_filter,
+    p.destination_filter,
+    p.methodology_code,
+    p.stage_side,
+    p.anchor_final,
+    p.cost_area,
+    p.sub_cost_center,
+    p.side,
+    p.residual_hours as hours_side,
+    share.path_post,
+    share.final_destination,
+    p.work_date as post_date,
+    null::double precision as cell_weight_kg,
+    share.share_periodo::double precision as raw_share,
+    'FALLBACK_MACRO'::text as match_kind,
+    'PERIOD_FALLBACK_PATH'::text as allocation_method
+  from residual_after_specific p
+  join period_universe_method share
+    on share.methodology_code = p.methodology_code
+  where (
+      (p.path_rule = 'PRECLAS' and share.path_post = 'PRECLASIFICACION')
+      or (p.path_rule = 'APERTURA' and share.path_post = 'APERTURA')
+      or (p.path_rule = 'GV' and share.path_post = 'GV')
+      or (p.path_rule = 'APERTURA_GV_SPLIT' and share.path_post in ('APERTURA', 'GV'))
+    )
+    and (
+      p.destination_filter = 'ALL'
+      or (p.destination_filter = 'BLANCO' and share.final_destination = 'BLANCO')
+      or (p.destination_filter = 'TINTURADO' and share.final_destination = 'TINTURADO')
+      or (p.destination_filter = 'ARCOIRIS' and share.final_destination = 'ARCOIRIS')
+      or (p.destination_filter = 'TINTURADO_ARCOIRIS' and share.final_destination in ('TINTURADO', 'ARCOIRIS'))
+    )
+),
+period_detail as (
+  select
+    c.post_date,
+    c.path_post,
+    c.final_destination,
+    c.work_date as lot_date,
+    'ALL'::text as variety_canon,
+    c.rule_scope_area as area_id,
+    c.cost_area,
+    c.sub_cost_center,
+    c.activity_id,
+    c.activity_name,
+    c.rule_id,
+    c.rule_code,
+    c.path_rule,
+    c.methodology_code,
+    c.stage_side,
+    c.anchor_final,
+    c.side,
+    c.work_date,
+    c.match_kind,
+    c.allocation_method,
+    c.cell_weight_kg as weight_kg,
+    c.hours_side * (
+      c.raw_share
+      / nullif(sum(c.raw_share) over (partition by c.work_date, c.rule_id, c.side, c.match_kind), 0)
+    ) as effective_hours_assigned
+  from period_candidate_base c
+  where c.raw_share > 0
+),
+period_assigned as (
+  select
+    work_date,
+    rule_id,
+    side,
+    sum(effective_hours_assigned)::double precision as assigned_hours
+  from period_detail
+  where match_kind = 'FALLBACK_MACRO'
+  group by work_date, rule_id, side
+),
+residual_after_period as (
+  select
+    p.*,
+    greatest(p.residual_hours - coalesce(a.assigned_hours, 0), 0)::double precision as residual_hours_day
+  from residual_after_specific p
+  left join period_assigned a
+    on a.work_date = p.work_date
+   and a.rule_id = p.rule_id
+   and a.side = p.side
+  where greatest(p.residual_hours - coalesce(a.assigned_hours, 0), 0) > 0.01
+),
+fallback_day_candidates as (
+  select
+    p.work_date,
+    p.rule_scope_area,
+    p.rule_id,
+    p.rule_code,
+    p.activity_id,
+    p.activity_name,
+    p.path_rule,
+    p.variety_filter,
+    p.destination_filter,
+    p.methodology_code,
+    p.stage_side,
+    p.anchor_final,
+    p.cost_area,
+    p.sub_cost_center,
+    p.side,
+    p.residual_hours_day as hours_side,
+    d.path_post,
+    d.final_destination,
+    d.work_date as post_date,
+    d.lot_date,
+    d.variety_canon,
+    d.weight_kg as cell_weight_kg,
+    d.share_day::double precision as raw_share,
+    'FALLBACK_DAY'::text as match_kind,
+    'FINAL_DAY_UNIVERSE'::text as allocation_method
+  from residual_after_period p
+  join final_day_share d
+    on d.work_date = p.work_date
+),
+fallback_day_detail as (
+  select
+    c.post_date,
+    c.path_post,
+    c.final_destination,
+    c.lot_date,
+    c.variety_canon,
+    c.rule_scope_area as area_id,
+    c.cost_area,
+    c.sub_cost_center,
+    c.activity_id,
+    c.activity_name,
+    c.rule_id,
+    c.rule_code,
+    c.path_rule,
+    c.methodology_code,
+    c.stage_side,
+    c.anchor_final,
+    c.side,
+    c.work_date,
+    c.match_kind,
+    c.allocation_method,
+    c.cell_weight_kg as weight_kg,
+    c.hours_side * (
+      c.raw_share
+      / nullif(sum(c.raw_share) over (partition by c.work_date, c.rule_id, c.side), 0)
+    ) as effective_hours_assigned
+  from fallback_day_candidates c
+  where c.raw_share > 0
+),
+detail_union as (
+  select * from specific_detail
+  union all
+  select * from period_detail
+  union all
+  select * from fallback_day_detail
+),
+detail_grouped as (
+  select
+    post_date,
+    path_post,
+    final_destination,
+    lot_date,
+    variety_canon,
+    area_id,
+    cost_area,
+    sub_cost_center,
+    activity_id,
+    activity_name,
+    rule_id,
+    rule_code,
+    path_rule,
+    methodology_code,
+    stage_side,
+    anchor_final,
+    side,
+    work_date,
+    match_kind,
+    allocation_method,
+    max(weight_kg)::double precision as weight_kg,
+    sum(effective_hours_assigned)::double precision as effective_hours_assigned
+  from detail_union
+  group by
+    post_date,
+    path_post,
+    final_destination,
+    lot_date,
+    variety_canon,
+    area_id,
+    cost_area,
+    sub_cost_center,
+    activity_id,
+    activity_name,
+    rule_id,
+    rule_code,
+    path_rule,
+    methodology_code,
+    stage_side,
+    anchor_final,
+    side,
+    work_date,
+    match_kind,
+    allocation_method
+)
+select
+  post_date,
+  path_post,
+  final_destination,
+  lot_date,
+  variety_canon,
+  area_id,
+  cost_area,
+  sub_cost_center,
+  activity_id,
+  activity_name,
+  rule_id,
+  rule_code,
+  path_rule,
+  methodology_code,
+  stage_side,
+  anchor_final,
+  side,
+  work_date,
+  match_kind,
+  allocation_method,
+  weight_kg,
+  (weight_kg / 10.0)::double precision as boxes10,
+  effective_hours_assigned,
+  case
+    when coalesce(weight_kg, 0) > 0 then effective_hours_assigned / (weight_kg / 10.0)
+    else null::double precision
+  end as hours_per_box
+from detail_grouped
+where effective_hours_assigned > 0;
+
+create materialized view if not exists gld.mv_prod_postharvest_hours_box_detail_cur as
+select *
+from gld.vw_prod_postharvest_hours_box_detail_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_hours_box_detail_cur;
+
+create index if not exists idx_mv_prod_postharvest_hours_box_detail_cur_post_date
+  on gld.mv_prod_postharvest_hours_box_detail_cur (post_date);
+
+create index if not exists idx_mv_prod_postharvest_hours_box_detail_cur_area_slice
+  on gld.mv_prod_postharvest_hours_box_detail_cur (area_id, path_post, final_destination, variety_canon);
+
+create index if not exists idx_mv_prod_postharvest_hours_box_detail_cur_activity
+  on gld.mv_prod_postharvest_hours_box_detail_cur (activity_id);
+
+create or replace view gld.vw_prod_postharvest_hours_box_cur as
+with area_universe as (
+  select unnest(array['CLS', 'SB', 'EMP'])::text as area_id
+),
+kg_post as (
+  select
+    post_date,
+    path_post,
+    final_destination,
+    variety_canon,
+    sum(weight_kg)::double precision as weight_kg
+  from gld.mv_prod_postharvest_lot_final_output_cur
+  where post_date >= date '2025-04-29'
+  group by post_date, path_post, final_destination, variety_canon
+),
+kg_path_destination_total as (
+  select
+    path_post,
+    final_destination,
+    sum(weight_kg)::double precision as weight_total_kg
+  from kg_post
+  group by path_post, final_destination
+),
+kg_path_destination_variety_total as (
+  select
+    path_post,
+    final_destination,
+    variety_canon,
+    sum(weight_kg)::double precision as weight_total_kg
+  from kg_post
+  group by path_post, final_destination, variety_canon
+),
+kg_distribution as (
+  select
+    k.post_date,
+    k.path_post,
+    k.final_destination,
+    k.variety_canon,
+    case
+      when coalesce(t.weight_total_kg, 0) > 0 then k.weight_kg / t.weight_total_kg
+      else 0::double precision
+    end as share_post_date_in_path_destination,
+    case
+      when coalesce(tv.weight_total_kg, 0) > 0 then k.weight_kg / tv.weight_total_kg
+      else 0::double precision
+    end as share_post_date_in_path_destination_variety
+  from kg_post k
+  join kg_path_destination_total t
+    on t.path_post = k.path_post
+   and t.final_destination = k.final_destination
+  join kg_path_destination_variety_total tv
+    on tv.path_post = k.path_post
+   and tv.final_destination = k.final_destination
+   and tv.variety_canon = k.variety_canon
+),
+detail_regular as (
+  select
+    post_date,
+    path_post,
+    final_destination,
+    variety_canon,
+    area_id,
+    side,
+    sum(effective_hours_assigned)::double precision as effective_hours_assigned
+  from gld.mv_prod_postharvest_hours_box_detail_cur
+  where match_kind not in ('SPECIFIC_PERIOD', 'FALLBACK_MACRO')
+    and post_date >= date '2025-04-29'
+  group by
+    post_date,
+    path_post,
+    final_destination,
+    variety_canon,
+    area_id,
+    side
+),
+detail_placeholder as (
+  select
+    path_post,
+    final_destination,
+    variety_canon,
+    area_id,
+    side,
+    sum(effective_hours_assigned)::double precision as effective_hours_total
+  from gld.mv_prod_postharvest_hours_box_detail_cur
+  where match_kind in ('SPECIFIC_PERIOD', 'FALLBACK_MACRO')
+    and post_date >= date '2025-04-29'
+  group by
+    path_post,
+    final_destination,
+    variety_canon,
+    area_id,
+    side
+),
+detail_placeholder_redistributed as (
+  select
+    k.post_date,
+    p.path_post,
+    p.final_destination,
+    case
+      when p.variety_canon = 'ALL' then k.variety_canon
+      else p.variety_canon
+    end as variety_canon,
+    p.area_id,
+    p.side,
+    (
+      p.effective_hours_total
+      * case
+          when p.variety_canon = 'ALL' then k.share_post_date_in_path_destination
+          else k.share_post_date_in_path_destination_variety
+        end
+    )::double precision as effective_hours_assigned
+  from detail_placeholder p
+  join kg_distribution k
+    on k.path_post = p.path_post
+   and k.final_destination = p.final_destination
+   and (p.variety_canon = 'ALL' or k.variety_canon = p.variety_canon)
+),
+detail_allocation as (
+  select * from detail_regular
+  union all
+  select * from detail_placeholder_redistributed
+),
+detail_grouped as (
+  select
+    post_date,
+    path_post,
+    final_destination,
+    variety_canon,
+    area_id,
+    sum(effective_hours_assigned)::double precision as effective_hours_assigned,
+    sum(case when side = 'UPSTREAM' then effective_hours_assigned else 0 end)::double precision as effective_hours_upstream,
+    sum(case when side = 'DOWNSTREAM' then effective_hours_assigned else 0 end)::double precision as effective_hours_downstream
+  from detail_allocation
+  group by
+    post_date,
+    path_post,
+    final_destination,
+    variety_canon,
+    area_id
+)
+select
+  k.post_date,
+  k.path_post,
+  k.final_destination,
+  k.variety_canon,
+  a.area_id,
+  k.weight_kg,
+  (k.weight_kg / 10.0)::double precision as boxes10,
+  coalesce(d.effective_hours_assigned, 0)::double precision as effective_hours_assigned,
+  coalesce(d.effective_hours_upstream, 0)::double precision as effective_hours_upstream,
+  coalesce(d.effective_hours_downstream, 0)::double precision as effective_hours_downstream,
+  null::double precision as effective_hours_specific,
+  null::double precision as effective_hours_specific_period,
+  null::double precision as effective_hours_fallback_macro,
+  null::double precision as effective_hours_fallback_day,
+  case
+    when coalesce(k.weight_kg, 0) > 0 then coalesce(d.effective_hours_assigned, 0) / (k.weight_kg / 10.0)
+    else null::double precision
+  end as hours_per_box,
+  case
+    when coalesce(k.weight_kg, 0) > 0 then coalesce(d.effective_hours_upstream, 0) / (k.weight_kg / 10.0)
+    else null::double precision
+  end as hours_per_box_upstream,
+  case
+    when coalesce(k.weight_kg, 0) > 0 then coalesce(d.effective_hours_downstream, 0) / (k.weight_kg / 10.0)
+    else null::double precision
+  end as hours_per_box_downstream
+from kg_post k
+cross join area_universe a
+left join detail_grouped d
+  on d.post_date = k.post_date
+ and d.path_post = k.path_post
+ and d.final_destination = k.final_destination
+ and d.variety_canon = k.variety_canon
+ and d.area_id = a.area_id;
+
+create materialized view if not exists gld.mv_prod_postharvest_hours_box_cur as
+select *
+from gld.vw_prod_postharvest_hours_box_cur
+with no data;
+
+refresh materialized view gld.mv_prod_postharvest_hours_box_cur;
+
+create index if not exists idx_mv_prod_postharvest_hours_box_cur_post_date
+  on gld.mv_prod_postharvest_hours_box_cur (post_date);
+
+create index if not exists idx_mv_prod_postharvest_hours_box_cur_area_slice
+  on gld.mv_prod_postharvest_hours_box_cur (area_id, path_post, final_destination, variety_canon);
+
+create index if not exists idx_mv_prod_postharvest_hours_box_cur_path_destination
+  on gld.mv_prod_postharvest_hours_box_cur (path_post, final_destination, variety_canon);
+
+-- Final CoreX explorer contract.
+--
+-- Refresh order:
+--   1. gld.mv_prod_postharvest_capacity_hours_cur
+--   2. gld.mv_prod_postharvest_step_flow_cur
+--   3. gld.mv_prod_postharvest_day_universe_cur
+--   4. gld.mv_prod_postharvest_lot_final_output_cur
+--   5. gld.mv_prod_postharvest_period_universe_cur
+--   6. gld.mv_prod_postharvest_rule_hours_cur
+--   7. gld.mv_prod_postharvest_rule_side_hours_cur
+--   8. gld.mv_prod_postharvest_hours_box_detail_cur
+--   9. gld.mv_prod_postharvest_hours_box_cur
