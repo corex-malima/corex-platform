@@ -114,6 +114,7 @@ export const ADMIN_RESOURCE_KEYS = new Set<string>(
 export const RESTRICTED_FROM_VIEWER_DEFAULTS = new Set<string>([
   "/dashboard/comercial/reclamos",
   "/dashboard/calidad/reclamos",
+  "/dashboard/postcosecha/productividad",
 ]);
 
 export const ROLE_OPTIONS: Array<{ value: RoleCode; label: string; description: string }> = [
@@ -178,6 +179,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     pathnamePrefix: "/api/comercial/reclamos",
     policy: "resource-bound",
     requiredResources: ["/dashboard/comercial/reclamos"],
+  },
+  {
+    pathnamePrefix: "/api/postcosecha/productividad",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/postcosecha/productividad"],
   },
   {
     pathnamePrefix: "/api/me/profile",
