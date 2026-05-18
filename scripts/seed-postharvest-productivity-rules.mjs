@@ -34,12 +34,30 @@ const config = {
 
 const REF_TABLE = "public.postharvest_ref_productivity_rule_id_core_scd2";
 const DIM_TABLE = "public.postharvest_dim_productivity_rule_profile_scd2";
-const SOURCE_ROOT = "C:/Users/paul.loja/PYPROYECTOS/Poscosecha/analisis_horas";
+// Ruta configurable de los CSVs maestros de reglas (CLS / SB / EMP).
+// Prioridad:
+//   1) Flag CLI:  --csv-root=/ruta/donde/estan/los/csvs
+//   2) Env var:   POSTHARVEST_RULES_CSV_ROOT
+//   3) Fallback:  C:/Users/paul.loja/PYPROYECTOS/Poscosecha/analisis_horas (origen historico)
+const cliRootArg = process.argv.find((arg) => arg.startsWith("--csv-root="));
+const SOURCE_ROOT =
+  (cliRootArg ? cliRootArg.split("=").slice(1).join("=") : "") ||
+  env("POSTHARVEST_RULES_CSV_ROOT") ||
+  "C:/Users/paul.loja/PYPROYECTOS/Poscosecha/analisis_horas";
 const SOURCES = [
   { area: "CLS", file: path.join(SOURCE_ROOT, "cls_activity_path_master.csv") },
   { area: "SB", file: path.join(SOURCE_ROOT, "sb_activity_path_master.csv") },
   { area: "EMP", file: path.join(SOURCE_ROOT, "emp_activity_path_master.csv") },
 ];
+
+console.log(`[seed] CSV source root: ${SOURCE_ROOT}`);
+for (const source of SOURCES) {
+  if (!fs.existsSync(source.file)) {
+    console.error(`[seed] ERROR: CSV no encontrado: ${source.file}`);
+    console.error(`[seed] Define POSTHARVEST_RULES_CSV_ROOT en .env.local o pasa --csv-root=/ruta`);
+    process.exit(1);
+  }
+}
 
 function normalizeText(value, fallback = "") {
   const text = String(value ?? "").trim().replace(/\s+/g, " ");
