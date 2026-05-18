@@ -6,19 +6,25 @@ import fs from "node:fs";
 import path from "node:path";
 import pg from "pg";
 
-const envPath = path.resolve(process.cwd(), ".env.local");
-const envFile = fs.existsSync(envPath)
-  ? Object.fromEntries(
-      fs.readFileSync(envPath, "utf8")
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith("#") && line.includes("="))
-        .map((line) => {
-          const idx = line.indexOf("=");
-          return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
-        }),
-    )
-  : {};
+// Lee .env.local (dev local) o .env (server prod). .env.local tiene prioridad
+// si ambos existen. Si ninguno existe, cae a process.env del shell actual.
+function readEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+  return Object.fromEntries(
+    fs.readFileSync(filePath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#") && line.includes("="))
+      .map((line) => {
+        const idx = line.indexOf("=");
+        return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
+      }),
+  );
+}
+
+const envLocal = readEnvFile(path.resolve(process.cwd(), ".env.local"));
+const envDefault = readEnvFile(path.resolve(process.cwd(), ".env"));
+const envFile = { ...envDefault, ...envLocal };
 
 const env = (key) => envFile[key] ?? process.env[key] ?? "";
 
