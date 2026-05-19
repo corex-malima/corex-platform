@@ -7,9 +7,10 @@ import { runClasificacionEnBlancoRecipeSolver } from "@/lib/postcosecha-clasific
 import { buildRecipeInputFromResult } from "@/lib/postcosecha-clasificacion-recipe-input";
 import { getRequestId } from "@/lib/request-id";
 import { buildOrdenTrabajoDataTex } from "@/lib/postcosecha-clasificacion-pdf-builder";
-import type { PoscosechaClasificacionRecipeResult } from "@/lib/postcosecha-clasificacion-en-blanco-types";
-import { generateClasificacionFallbackPdf } from "@/lib/postcosecha-clasificacion-pdf-fallback";
-import type { PoscosechaClasificacionModeResult } from "@/lib/postcosecha-clasificacion-en-blanco-types";
+import type {
+  PoscosechaClasificacionModeResult,
+  PoscosechaClasificacionRecipeResult,
+} from "@/lib/postcosecha-clasificacion-en-blanco-types";
 import {
   generateCanonicalPdf,
   pdfBufferToResponse,
@@ -24,7 +25,7 @@ type PdfRequestBody = {
   runs: PoscosechaClasificacionModeResult[];
 };
 
-type FallbackFlowRow = {
+type EnrichedFlowRow = {
   label: string;
   incoming: number;
   resolved: number;
@@ -32,17 +33,21 @@ type FallbackFlowRow = {
   compliance: number;
 };
 
-type FallbackRecipeEntry = {
+type EnrichedRecipeEntry = {
   sku: string;
   recipe: PoscosechaClasificacionRecipeResult | null;
 };
 
-type FallbackRunRow = PoscosechaClasificacionModeResult & {
-  flow: FallbackFlowRow;
-  recipes: FallbackRecipeEntry[];
+type EnrichedRunRow = PoscosechaClasificacionModeResult & {
+  flow: EnrichedFlowRow;
+  recipes: EnrichedRecipeEntry[];
 };
 
-async function buildFallbackRuns(runs: PoscosechaClasificacionModeResult[]): Promise<FallbackRunRow[]> {
+/**
+ * Enriquece cada corrida con el flujo agregado y las recetas resueltas por SKU,
+ * usadas por el builder LaTeX para componer la orden de trabajo.
+ */
+async function enrichRunsForPdf(runs: PoscosechaClasificacionModeResult[]): Promise<EnrichedRunRow[]> {
   return Promise.all(
     runs.map(async (run) => {
       const incoming = Number(run.result?.stage1Summary?.pedido_bunches_total ?? 0);
@@ -88,18 +93,15 @@ export async function POST(request: NextRequest) {
   const authError = await requireAuth(request);
   if (authError) return authError;
 
-  let parsedBody: PdfRequestBody | null = null;
-
   try {
     const body = (await request.json()) as PdfRequestBody;
-    parsedBody = body;
 
     if (!Array.isArray(body.runs) || body.runs.length === 0) {
       return Response.json({ message: "Se requiere al menos una corrida para exportar." }, { status: 400 });
     }
 
     const exportDate = new Date();
-    const enrichedRuns = await buildFallbackRuns(body.runs);
+    const enrichedRuns = await enrichRunsForPdf(body.runs);
     const dataTexContent = buildOrdenTrabajoDataTex(enrichedRuns, exportDate);
 
     const { pdf } = await generateCanonicalPdf({
@@ -121,39 +123,28 @@ export async function POST(request: NextRequest) {
 
     return pdfBufferToResponse(pdf, `orden_trabajo_clasificacion_en_blanco_${datestamp}.pdf`);
   } catch (error) {
+    const requestId = getRequestId(request);
     if (error instanceof PdfCompileError) {
       logEvent("error", "pdf.clasificacion.latex_compile_error", {
-        requestId: getRequestId(request),
-        buildLogTail: error.buildLog.slice(-1000),
+        requestId,
+        buildLogTail: error.buildLog.slice(-1500),
         jobId: error.jobId,
       });
-      try {
-        const exportDate = new Date();
-        const fallbackRuns = await buildFallbackRuns(parsedBody?.runs ?? []);
-        const fallbackPdf = await generateClasificacionFallbackPdf(fallbackRuns, exportDate);
-
-        const pad = (n: number) => String(n).padStart(2, "0");
-        const datestamp = [
-          exportDate.getFullYear(),
-          pad(exportDate.getMonth() + 1),
-          pad(exportDate.getDate()),
-          "_",
-          pad(exportDate.getHours()),
-          pad(exportDate.getMinutes()),
-          pad(exportDate.getSeconds()),
-        ].join("");
-
-        return pdfBufferToResponse(
-          fallbackPdf,
-          `orden_trabajo_clasificacion_en_blanco_${datestamp}.pdf`,
-        );
-      } catch (fallbackError) {
-        return handleApiError(fallbackError, "No se pudo generar el PDF alterno de Clasificacion en blanco.");
-      }
+      return Response.json(
+        {
+          message: "Error al compilar el PDF de Clasificacion en blanco. Revise los logs del servidor para el detalle del error LaTeX.",
+          requestId,
+        },
+        { status: 500 },
+      );
     }
     if (error instanceof PdfTemplateNotFoundError) {
-      return Response.json({ message: error.message }, { status: 500 });
+      return Response.json({ message: error.message, requestId }, { status: 500 });
     }
+    logEvent("error", "pdf.clasificacion.unexpected_error", {
+      requestId,
+      message: error instanceof Error ? error.message : String(error),
+    });
     return handleApiError(error, "No se pudo generar el PDF de Clasificacion en blanco.");
   }
 }
