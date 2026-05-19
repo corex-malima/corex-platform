@@ -403,9 +403,9 @@ ${pathDestinationRowsTex}
   \\end{longtable}
   \\end{center}
 
-  \\ObservationBox[Lectura operativa]{
-    El PDF consolida la misma fuente oficial visible en CoreX. La lectura semanal se limita a las ultimas 10 semanas para priorizar tendencias recientes y evitar que la historia completa diluya cambios operativos de corto plazo.
-  }
+  \\begin{ObservationBox}[Lectura operativa]
+  El PDF consolida la misma fuente oficial visible en CoreX. La lectura semanal se limita a las ultimas 10 semanas para priorizar tendencias recientes y evitar que la historia completa diluya cambios operativos de corto plazo.
+  \\end{ObservationBox}
 }
 `;
 

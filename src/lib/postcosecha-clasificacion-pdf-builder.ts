@@ -94,9 +94,9 @@ function buildRecipeSection(recipes: PdfRecipeEntry[]): string[] {
     lines.push(
       "\\begin{ObservationBox}[Resumen de receta]",
       "{\\small "
-      + `Bunches resueltos: ${int(summary.bunchesResueltos)}\\quad`
-      + `Recetas activas: ${int(summary.recetasUsadas)}\\quad`
-      + `Peso promedio real: ${dec(summary.pesoPromedioReal)}~g\\quad`
+      + `Bunches resueltos: ${int(summary.bunchesResueltos)}\\quad{}`
+      + `Recetas activas: ${int(summary.recetasUsadas)}\\quad{}`
+      + `Peso promedio real: ${dec(summary.pesoPromedioReal)}~g\\quad{}`
       + `Estado: ${toLatexSafe(summary.status)}`
       + "}",
       "\\end{ObservationBox}",
