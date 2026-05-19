@@ -18,6 +18,7 @@ function makeRecord(overrides: Partial<PuntoAperturaRecord> = {}): PuntoApertura
     ciclo: "C001",
     area: "Area A",
     spType: "SP1",
+    variety: "AURORA",
     month: "2024-01",
     year: "2024",
     isoWeekId: "2024-01",
@@ -47,6 +48,7 @@ describe("normalizePuntoAperturaFilters", () => {
     expect(result.isoWeek).toBe("all");
     expect(result.area).toBe("all");
     expect(result.spType).toBe("all");
+    expect(result.variety).toBe("all");
     expect(result.month).toBe("all");
     expect(result.dominantClass).toBe("all");
   });

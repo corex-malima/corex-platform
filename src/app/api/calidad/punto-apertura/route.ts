@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
       isoWeek: request.nextUrl.searchParams.get("isoWeek") ?? undefined,
       area: request.nextUrl.searchParams.get("area") ?? undefined,
       spType: request.nextUrl.searchParams.get("spType") ?? undefined,
+      variety: request.nextUrl.searchParams.get("variety") ?? undefined,
       month: request.nextUrl.searchParams.get("month") ?? undefined,
       year: request.nextUrl.searchParams.get("year") ?? undefined,
       date: request.nextUrl.searchParams.get("date") ?? undefined,

@@ -9,6 +9,7 @@ export type PuntoAperturaFilters = {
   isoWeek: string;
   area: string;
   spType: string;
+  variety: string;
   month: string;
   year: string;
   date: string;
@@ -25,6 +26,7 @@ export type PuntoAperturaRecord = {
   ciclo: string;
   area: string;
   spType: string;
+  variety: string;
   month: string;
   year: string;
   isoWeekId: string;
@@ -54,6 +56,7 @@ export type PuntoAperturaOptions = {
   isoWeeks: string[];
   areas: string[];
   spTypes: string[];
+  varieties: string[];
   months: string[];
   years: string[];
   dominantClasses: string[];
@@ -86,6 +89,7 @@ type OptionsRow = {
   iso_weeks: string[] | null;
   areas: string[] | null;
   sp_types: string[] | null;
+  varieties: string[] | null;
   months: string[] | null;
   years: string[] | null;
   dominant_classes: string[] | null;
@@ -99,6 +103,7 @@ type RecordRow = {
   ciclo: string | null;
   area: string | null;
   sp_type: string | null;
+  variety: string | null;
   record_month: string | null;
   record_year: string | null;
   iso_week_id: string | null;
@@ -120,6 +125,7 @@ export const defaultPuntoAperturaFilters: PuntoAperturaFilters = {
   isoWeek: "all",
   area: "all",
   spType: "all",
+  variety: "all",
   month: "all",
   year: "all",
   date: "",
@@ -132,6 +138,7 @@ export function normalizePuntoAperturaFilters(input: Partial<PuntoAperturaFilter
     isoWeek: normalizeSelect(input.isoWeek),
     area: normalizeSelect(input.area),
     spType: normalizeSelect(input.spType),
+    variety: normalizeSelect(input.variety),
     month: normalizeSelect(input.month),
     year: normalizeSelect(input.year),
     date: normalizeDate(input.date),
@@ -181,7 +188,8 @@ function buildBaseSql(whereSql = "") {
       select distinct on (cycle_key)
         cycle_key::text,
         nullif(area_id, '') as area,
-        nullif(sp_type, '') as sp_type
+        nullif(sp_type, '') as sp_type,
+        nullif(variety, '') as variety
       from slv.camp_dim_cycle_profile_scd2
       order by cycle_key, valid_from desc nulls last
     ),
@@ -192,6 +200,7 @@ function buildBaseSql(whereSql = "") {
         t.ciclo::text as ciclo,
         coalesce(cp.area, 'Sin area') as area,
         coalesce(cp.sp_type, 'Sin tipo') as sp_type,
+        coalesce(cp.variety, 'Sin variedad') as variety,
         extract(month from t.fecha::date)::int::text as record_month,
         extract(year from t.fecha::date)::text as record_year,
         coalesce(c.iso_week_id, concat(c.iso_year::text, '-', lpad(c.iso_week::text, 2, '0'))) as iso_week_id,
@@ -255,7 +264,8 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
       select distinct on (cycle_key)
         cycle_key::text,
         nullif(area_id, '') as area,
-        nullif(sp_type, '') as sp_type
+        nullif(sp_type, '') as sp_type,
+        nullif(variety, '') as variety
       from slv.camp_dim_cycle_profile_scd2
       order by cycle_key, valid_from desc nulls last
     ),
@@ -264,6 +274,7 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
         coalesce(c.iso_week_id, concat(c.iso_year::text, '-', lpad(c.iso_week::text, 2, '0'))) as iso_week_id,
         coalesce(cp.area, 'Sin area') as area,
         coalesce(cp.sp_type, 'Sin tipo') as sp_type,
+        coalesce(cp.variety, 'Sin variedad') as variety,
         extract(month from t.fecha::date)::int::text as record_month,
         extract(year from t.fecha::date)::text as record_year,
         case greatest(
@@ -295,6 +306,7 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
       array(select distinct iso_week_id from filtered where iso_week_id is not null order by iso_week_id desc) as iso_weeks,
       array(select distinct area from filtered where area is not null order by area) as areas,
       array(select distinct sp_type from filtered where sp_type is not null order by sp_type) as sp_types,
+      array(select distinct variety from filtered where variety is not null order by variety) as varieties,
       array(
         select record_month
         from (select distinct record_month from filtered where record_month is not null) m
@@ -310,6 +322,7 @@ async function getOptions(): Promise<PuntoAperturaOptions> {
     isoWeeks: row?.iso_weeks ?? [],
     areas: row?.areas ?? [],
     spTypes: row?.sp_types ?? [],
+    varieties: row?.varieties ?? [],
     months: row?.months ?? [],
     years: row?.years ?? [],
     dominantClasses: row?.dominant_classes ?? [],
@@ -344,6 +357,7 @@ export async function getPuntoAperturaDashboardData(
     sqlArrayFilter("u", "iso_week_id", decodeMultiSelectValue(filters.isoWeek), params),
     sqlArrayFilter("u", "area", decodeMultiSelectValue(filters.area), params),
     sqlArrayFilter("u", "sp_type", decodeMultiSelectValue(filters.spType), params),
+    sqlArrayFilter("u", "variety", decodeMultiSelectValue(filters.variety), params),
     sqlArrayFilter("u", "record_month", decodeMultiSelectValue(filters.month), params),
     sqlArrayFilter("u", "record_year", decodeMultiSelectValue(filters.year), params),
     sqlDateFilter("u", "fecha", filters.date, params),
@@ -422,6 +436,7 @@ function mapRecordRow(row: RecordRow): PuntoAperturaRecord {
     ciclo: row.ciclo ?? "Sin ciclo",
     area: row.area ?? "Sin area",
     spType: row.sp_type ?? "Sin tipo",
+    variety: row.variety ?? "Sin variedad",
     month: row.record_month ?? "Sin mes",
     year: row.record_year ?? "Sin año",
     isoWeekId: row.iso_week_id ?? "Sin semana",
