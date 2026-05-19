@@ -26,17 +26,17 @@ Período analizado: semana 17-2026 (2026-04-14 al 2026-04-20).
 
 \section{Hallazgos}
 
-\KeyFindingBox[Integridad confirmada en BAL1 y BAL2]{
+\begin{KeyFindingBox}[Integridad confirmada en BAL1 y BAL2]
   Los totales de BAL1 y BAL2 concilian con el registro de nómina al 99.97\,\%.
   La diferencia de 3 tallos se atribuye a un registro manual corregido post-turno,
   documentado en el log de auditoría \texttt{AUD-BAL-2026-17-003}.
-}
+\end{KeyFindingBox}
 
-\WarningBox[Dato faltante — BAL2 madrugada 17-abr]{
+\begin{WarningBox}[Dato faltante — BAL2 madrugada 17-abr]
   El servidor de adquisición BAL2 no registró datos entre las 02:15 y las 04:40 del
   2026-04-17 por mantenimiento no programado.  El gap afecta 88 registros.
   Se aplicó imputación por promedio de los 3 días anteriores (método \texttt{imp\_avg3}).
-}
+\end{WarningBox}
 
 \section{Evidencia técnica}
 
