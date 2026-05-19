@@ -86,6 +86,11 @@ export type HarvestCurveControlsProps = {
   weeklyMetric: HarvestCurveWeeklyMetric;
   onWeeklyMetricChange: (metric: HarvestCurveWeeklyMetric) => void;
   className?: string;
+  /**
+   * Vistas a ocultar del segmented control. Útil en contextos agregados
+   * donde alguna vista no tiene sentido (p. ej. "weekly" en eje día-relativo).
+   */
+  disabledViews?: readonly HarvestCurveView[];
 };
 
 export function HarvestCurveControls({
@@ -96,13 +101,19 @@ export function HarvestCurveControls({
   weeklyMetric,
   onWeeklyMetricChange,
   className,
+  disabledViews,
 }: HarvestCurveControlsProps) {
+  const viewOptions =
+    disabledViews && disabledViews.length > 0
+      ? VIEW_OPTIONS.filter((option) => !disabledViews.includes(option.value))
+      : VIEW_OPTIONS;
+
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-medium text-muted-foreground">Vista:</span>
         <SegmentedControl<HarvestCurveView>
-          options={VIEW_OPTIONS}
+          options={viewOptions}
           value={view}
           onChange={onViewChange}
           ariaLabel="Vista de la curva de cosecha"

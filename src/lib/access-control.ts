@@ -330,6 +330,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/productividad"],
   },
   {
+    pathnamePrefix: "/api/curva-cosecha",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/curva-cosecha"],
+  },
+  {
     pathnamePrefix: "/api/programaciones",
     policy: "resource-bound",
     requiredResources: ["/dashboard/programaciones"],
