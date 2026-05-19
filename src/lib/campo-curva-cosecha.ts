@@ -25,7 +25,7 @@ export type CurvaCosechaPoint = {
   // Eje X (1-indexed): día desde harvest_start_date
   eventDay: number;
 
-  // Campos "compat HarvestCurvePoint" — usan la mediana
+  // Campos "compat HarvestCurvePoint" — usan la mediana (legacy / compat)
   eventDate: string; // siempre "" en agregado
   dailyStems: number;
   cumulativeStems: number;
@@ -37,7 +37,24 @@ export type CurvaCosechaPoint = {
   dailyWeightPerStemG: number | null;
   cumulativeWeightPerStemG: number | null;
 
-  // Estadísticos ampliados (para tooltip + banda de dispersión)
+  /**
+   * Métricas ponderadas (sum/sum) — el usuario las prefiere sobre la mediana.
+   * - dailyStems / cumulativeStems / dailyGreenKg / cumulativeGreenKg: suma cruda
+   *   de todos los ciclos en ese día relativo.
+   * - dailyWeightPerStemG: sum(green_kg)/sum(stems)*1000 ponderado por volumen.
+   * - percentOfTotal: sum(stems_día) / total_global_stems * 100.
+   */
+  weighted: {
+    dailyStems: number;
+    cumulativeStems: number;
+    dailyGreenKg: number;
+    cumulativeGreenKg: number;
+    dailyWeightPerStemG: number | null;
+    cumulativeWeightPerStemG: number | null;
+    percentOfTotal: number;
+  };
+
+  // Estadísticos ampliados (para tooltip + banda de dispersión en modo Mediana)
   stats: {
     n: number;
     dailyStemsMean: number | null;
@@ -103,6 +120,12 @@ export type CurvaCosechaPayload = {
     medianWeightPerStemG: number | null;
     meanWeightPerStemG: number | null;
     maxDayOffset: number;
+    /** Suma total de tallos a través de TODOS los ciclos filtrados. Denominador del % ponderado. */
+    totalStemsAllCycles: number;
+    /** Suma total de kg verde a través de TODOS los ciclos filtrados. */
+    totalGreenKgAllCycles: number;
+    /** Peso/tallo ponderado global = sum(kg)/sum(stems)*1000. */
+    weightedWeightPerStemG: number | null;
   };
   vegetative: VegetativeSummary;
   points: CurvaCosechaPoint[];
@@ -172,12 +195,18 @@ type CycleAccumulator = {
 };
 
 type DayBucket = {
+  // Arrays para mediana / media / σ
   dailyStems: number[];
   cumulativeStems: number[];
   dailyGreenKg: number[];
   cumulativeGreenKg: number[];
   dailyWeightG: number[];
   cumulativeWeightG: number[];
+  // Sumas para ponderado (sum/sum)
+  sumDailyStems: number;
+  sumCumulativeStems: number;
+  sumDailyGreenKg: number;
+  sumCumulativeGreenKg: number;
 };
 
 function emptyBucket(): DayBucket {
@@ -188,6 +217,10 @@ function emptyBucket(): DayBucket {
     cumulativeGreenKg: [],
     dailyWeightG: [],
     cumulativeWeightG: [],
+    sumDailyStems: 0,
+    sumCumulativeStems: 0,
+    sumDailyGreenKg: 0,
+    sumCumulativeGreenKg: 0,
   };
 }
 
@@ -260,6 +293,11 @@ export function aggregateCycleDays(rows: DayRow[]): {
       bucket.cumulativeGreenKg.push(cumGreen);
       if (dailyW !== null) bucket.dailyWeightG.push(dailyW);
       if (cumW !== null) bucket.cumulativeWeightG.push(cumW);
+      // Sumas para ponderado
+      bucket.sumDailyStems += day.dailyStems;
+      bucket.sumCumulativeStems += cumStems;
+      bucket.sumDailyGreenKg += day.dailyGreenKg;
+      bucket.sumCumulativeGreenKg += cumGreen;
     }
 
     meta.daysCount = days.length;
@@ -287,10 +325,18 @@ export function aggregateCycleDays(rows: DayRow[]): {
     });
   }
 
+  // Total global para % ponderado (denominador)
+  const totalStemsAllCycles = cycleSummaries.reduce((sum, c) => sum + c.totalStems, 0);
+  const totalGreenKgAllCycles = cycleSummaries.reduce((sum, c) => sum + c.totalGreenKg, 0);
+  const weightedWeightPerStemG =
+    totalStemsAllCycles > 0
+      ? round1((totalGreenKgAllCycles / totalStemsAllCycles) * 1000)
+      : null;
+
   // Pasada 3: convertir buckets → CurvaCosechaPoint
   const points: CurvaCosechaPoint[] = [...pivot.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([eventDay, bucket]) => buildPoint(eventDay, bucket));
+    .map(([eventDay, bucket]) => buildPoint(eventDay, bucket, totalStemsAllCycles));
 
   // Vegetativo (todos los ciclos con sp_date Y harvest_start_date)
   const vegetativeDaysList = cycleSummaries
@@ -334,18 +380,37 @@ export function aggregateCycleDays(rows: DayRow[]): {
     medianWeightPerStemG: round1(weightsStats.median),
     meanWeightPerStemG: round1(weightsStats.mean),
     maxDayOffset,
+    totalStemsAllCycles: roundValue(totalStemsAllCycles),
+    totalGreenKgAllCycles: roundValue(totalGreenKgAllCycles, 2),
+    weightedWeightPerStemG,
   };
 
   return { points, cycles: cycleSummaries, vegetative, summary };
 }
 
-function buildPoint(eventDay: number, bucket: DayBucket): CurvaCosechaPoint {
+function buildPoint(
+  eventDay: number,
+  bucket: DayBucket,
+  totalStemsAllCycles: number,
+): CurvaCosechaPoint {
   const stems = describe(bucket.dailyStems);
   const cum = describe(bucket.cumulativeStems);
   const green = describe(bucket.dailyGreenKg);
   const weight = describe(bucket.dailyWeightG);
   const cumGreen = describe(bucket.cumulativeGreenKg);
   const cumWeight = describe(bucket.cumulativeWeightG);
+
+  // Ponderado (sum/sum)
+  const weightedDailyWeight =
+    bucket.sumDailyStems > 0
+      ? round1((bucket.sumDailyGreenKg / bucket.sumDailyStems) * 1000)
+      : null;
+  const weightedCumWeight =
+    bucket.sumCumulativeStems > 0
+      ? round1((bucket.sumCumulativeGreenKg / bucket.sumCumulativeStems) * 1000)
+      : null;
+  const percentOfTotal =
+    totalStemsAllCycles > 0 ? (bucket.sumDailyStems / totalStemsAllCycles) * 100 : 0;
 
   return {
     eventDay,
@@ -359,6 +424,15 @@ function buildPoint(eventDay: number, bucket: DayBucket): CurvaCosechaPoint {
     cumulativeGreenKg: round1(cumGreen.median) ?? 0,
     dailyWeightPerStemG: round1(weight.median),
     cumulativeWeightPerStemG: round1(cumWeight.median),
+    weighted: {
+      dailyStems: roundValue(bucket.sumDailyStems),
+      cumulativeStems: roundValue(bucket.sumCumulativeStems),
+      dailyGreenKg: roundValue(bucket.sumDailyGreenKg, 2),
+      cumulativeGreenKg: roundValue(bucket.sumCumulativeGreenKg, 2),
+      dailyWeightPerStemG: weightedDailyWeight,
+      cumulativeWeightPerStemG: weightedCumWeight,
+      percentOfTotal: round1(percentOfTotal) ?? 0,
+    },
     stats: {
       n: stems.n,
       dailyStemsMean: round1(stems.mean),
@@ -459,7 +533,8 @@ async function loadFilterOptions(): Promise<CurvaCosechaFilterOptions> {
     const row = result.rows[0];
     return {
       years: (row?.years ?? []).map((n) => String(n)),
-      months: (row?.months ?? []).map((n) => String(n).padStart(2, "0")),
+      // Sin pad cero: formatMonthNumeric espera "1"..."12" para mapear a "Enero".."Diciembre"
+      months: (row?.months ?? []).map((n) => String(n)),
       varieties: row?.varieties ?? [],
       spTypes: row?.sp_types ?? [],
       areas: row?.areas ?? [],

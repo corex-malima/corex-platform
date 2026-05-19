@@ -200,6 +200,76 @@ describe("aggregateCycleDays — vegetativo", () => {
   });
 });
 
+describe("aggregateCycleDays — métricas ponderadas (sum/sum)", () => {
+  it("dailyStems ponderado = suma cruda de stems del bucket", () => {
+    const rows: DayRow[] = [
+      buildDay({ cycleKey: "A", dayOffset: 0, dailyStems: 100 }),
+      buildDay({ cycleKey: "B", dayOffset: 0, dailyStems: 200 }),
+      buildDay({ cycleKey: "C", dayOffset: 0, dailyStems: 300 }),
+    ];
+    const result = aggregateCycleDays(rows);
+    expect(result.points[0]!.weighted.dailyStems).toBe(600);
+  });
+
+  it("peso/tallo ponderado = sum(green_kg) / sum(stems) * 1000", () => {
+    const rows: DayRow[] = [
+      // Ciclo A: 10 tallos, 0.5 kg → 50 g/tallo
+      buildDay({ cycleKey: "A", dayOffset: 0, dailyStems: 10, dailyGreenKg: 0.5 }),
+      // Ciclo B: 30 tallos, 3.0 kg → 100 g/tallo
+      buildDay({ cycleKey: "B", dayOffset: 0, dailyStems: 30, dailyGreenKg: 3.0 }),
+    ];
+    const result = aggregateCycleDays(rows);
+    // Ponderado: sum(0.5 + 3.0) / sum(10 + 30) * 1000 = 3.5 / 40 * 1000 = 87.5
+    expect(result.points[0]!.weighted.dailyWeightPerStemG).toBe(87.5);
+    // Mediana sería simplemente (50 + 100) / 2 = 75 (mediana de dos = promedio)
+    // El ponderado es DIFERENTE del mediano cuando los ciclos tienen volúmenes distintos.
+  });
+
+  it("percentOfTotal suma ≈ 100 a través de todos los días", () => {
+    const rows: DayRow[] = [
+      buildDay({ cycleKey: "A", dayOffset: 0, dailyStems: 100 }),
+      buildDay({ cycleKey: "A", dayOffset: 1, dailyStems: 200 }),
+      buildDay({ cycleKey: "B", dayOffset: 0, dailyStems: 50 }),
+      buildDay({ cycleKey: "B", dayOffset: 1, dailyStems: 150 }),
+    ];
+    const result = aggregateCycleDays(rows);
+    const sumPercent = result.points.reduce((s, p) => s + p.weighted.percentOfTotal, 0);
+    expect(sumPercent).toBeCloseTo(100, 1);
+
+    // Día 1: 150 de 500 → 30%; Día 2: 350 de 500 → 70%
+    expect(result.points[0]!.weighted.percentOfTotal).toBe(30);
+    expect(result.points[1]!.weighted.percentOfTotal).toBe(70);
+  });
+
+  it("cumulativeStems ponderado = suma de stems acumulados al final del día", () => {
+    const rows: DayRow[] = [
+      // A: día 1=10, día 2=20, día 3=30. Acumulados: 10, 30, 60.
+      buildDay({ cycleKey: "A", dayOffset: 0, dailyStems: 10 }),
+      buildDay({ cycleKey: "A", dayOffset: 1, dailyStems: 20 }),
+      buildDay({ cycleKey: "A", dayOffset: 2, dailyStems: 30 }),
+      // B: día 1=20, día 2=40, día 3=60. Acumulados: 20, 60, 120.
+      buildDay({ cycleKey: "B", dayOffset: 0, dailyStems: 20 }),
+      buildDay({ cycleKey: "B", dayOffset: 1, dailyStems: 40 }),
+      buildDay({ cycleKey: "B", dayOffset: 2, dailyStems: 60 }),
+    ];
+    const result = aggregateCycleDays(rows);
+    // Día 3: suma de cumulativeStems de A (60) + B (120) = 180
+    expect(result.points[2]!.weighted.cumulativeStems).toBe(180);
+  });
+
+  it("summary expone total ponderado global y peso/tallo ponderado", () => {
+    const rows: DayRow[] = [
+      buildDay({ cycleKey: "A", dayOffset: 0, dailyStems: 100, dailyGreenKg: 5 }),
+      buildDay({ cycleKey: "B", dayOffset: 0, dailyStems: 200, dailyGreenKg: 12 }),
+    ];
+    const result = aggregateCycleDays(rows);
+    expect(result.summary.totalStemsAllCycles).toBe(300);
+    expect(result.summary.totalGreenKgAllCycles).toBe(17);
+    // Ponderado: 17000 / 300 = 56.6666...
+    expect(result.summary.weightedWeightPerStemG).toBeCloseTo(56.7, 0);
+  });
+});
+
 describe("aggregateCycleDays — peso/tallo y peak day", () => {
   it("calcula peso/tallo diario correctamente", () => {
     const rows: DayRow[] = [

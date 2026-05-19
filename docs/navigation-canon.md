@@ -85,9 +85,10 @@ Estructura:
 Analítica / Dominio / Tipo de métrica / Vista
 ```
 
-Tipo de métrica vigente:
+Tipos de métrica vigentes:
 
-- `Indicadores & KPI`
+- `Indicadores & KPI` — vistas de KPI puntuales (ratio actual vs meta, evolución reciente, etc.).
+- `Análisis` — vistas analíticas que agregan múltiples entidades (ciclos, lotes, registros) para descubrir patrones, dispersión y comparaciones entre poblaciones. Ejemplo: `Campo / Análisis / Curva de Cosecha`.
 
 `OKR` no debe aparecer hasta que existan módulos reales.
 

@@ -91,6 +91,11 @@ export type HarvestCurveControlsProps = {
    * donde alguna vista no tiene sentido (p. ej. "weekly" en eje día-relativo).
    */
   disabledViews?: readonly HarvestCurveView[];
+  /**
+   * Si true, oculta la sub-selección "Semana: ISO | Dom-Sab" cuando view==="weekly".
+   * Útil en contextos donde no hay fecha calendario (semana relativa).
+   */
+  weekKindDisabled?: boolean;
 };
 
 export function HarvestCurveControls({
@@ -102,6 +107,7 @@ export function HarvestCurveControls({
   onWeeklyMetricChange,
   className,
   disabledViews,
+  weekKindDisabled,
 }: HarvestCurveControlsProps) {
   const viewOptions =
     disabledViews && disabledViews.length > 0
@@ -122,15 +128,17 @@ export function HarvestCurveControls({
 
       {view === "weekly" ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Semana:</span>
-            <SegmentedControl<WeekKind>
-              options={WEEK_KIND_OPTIONS}
-              value={weekKind}
-              onChange={onWeekKindChange}
-              ariaLabel="Tipo de semana"
-            />
-          </div>
+          {!weekKindDisabled ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Semana:</span>
+              <SegmentedControl<WeekKind>
+                options={WEEK_KIND_OPTIONS}
+                value={weekKind}
+                onChange={onWeekKindChange}
+                ariaLabel="Tipo de semana"
+              />
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">Metrica:</span>
             <SegmentedControl<HarvestCurveWeeklyMetric>

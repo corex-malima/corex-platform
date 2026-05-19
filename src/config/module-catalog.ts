@@ -26,7 +26,7 @@ import {
 
 export type ModuleStatus = "active" | "hidden" | "internal";
 export type ModuleNavigationGroup = "Dashboard" | "Gestion" | "Administracion" | "Personal";
-export type ModuleAccessSection = "Analítica / Indicadores & KPI" | "Gestion" | "Administracion" | "Personal" | "Paneles";
+export type ModuleAccessSection = "Analítica / Indicadores & KPI" | "Analítica / Análisis" | "Gestion" | "Administracion" | "Personal" | "Paneles";
 
 export type CatalogModule = {
   key: string;
@@ -121,13 +121,13 @@ export const MODULE_CATALOG: CatalogModule[] = [
     key: "campo-curva-cosecha",
     label: "Curva de Cosecha",
     title: "Curva de Cosecha",
-    eyebrow: "Analítica / Campo / Indicadores & KPI",
+    eyebrow: "Analítica / Campo / Análisis",
     summary: "Curva agregada de cosecha por día relativo y período vegetativo a través de múltiples ciclos.",
     href: "/dashboard/curva-cosecha",
     icon: TrendingUp,
     navigationGroup: "Dashboard",
-    trail: ["Campo", "Indicadores & KPI"],
-    accessSection: "Analítica / Indicadores & KPI",
+    trail: ["Campo", "Análisis"],
+    accessSection: "Analítica / Análisis",
     status: "active",
     quickAccess: true,
   },

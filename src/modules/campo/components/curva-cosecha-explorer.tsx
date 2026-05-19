@@ -24,6 +24,9 @@ import type {
   CurvaCosechaFilters,
   CurvaCosechaPayload,
 } from "@/lib/campo-curva-cosecha";
+import { BlockProfileModal } from "@/modules/fenograma/components/block-profile-modal";
+import { useBlockProfileModal } from "@/hooks/use-block-profile-modal";
+import type { BlockModalRow } from "@/lib/fenograma";
 import { AggregatedHarvestCurvePanel } from "./aggregated-harvest-curve-panel";
 
 const ALL_FILTERS_DEFAULT: CurvaCosechaFilters = {
@@ -52,6 +55,8 @@ const fetcher = (url: string) =>
 
 export function CurvaCosechaExplorer({ initialData }: { initialData: CurvaCosechaPayload }) {
   const [filters, setFilters] = useState<CurvaCosechaFilters>(initialData.filters);
+  const [selectedRow, setSelectedRow] = useState<BlockModalRow | null>(null);
+  const blockModal = useBlockProfileModal(selectedRow);
   const deferredFilters = useDeferredValue(filters);
 
   const initialKey = useMemo(() => buildQueryString(initialData.filters), [initialData.filters]);
@@ -253,20 +258,66 @@ export function CurvaCosechaExplorer({ initialData }: { initialData: CurvaCosech
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h3 className="text-sm font-semibold">Detalle por ciclo</h3>
                   <p className="text-xs text-muted-foreground">
-                    {formatInteger(payload.cycles.length)} ciclos
+                    {formatInteger(payload.cycles.length)} ciclos · Click en el ciclo para ver la
+                    ficha del bloque
                   </p>
                 </div>
-                <CycleTable cycles={payload.cycles} />
+                <CycleTable cycles={payload.cycles} onSelectCycle={setSelectedRow} />
               </CardContent>
             </Card>
           </DetailSection>
         </>
       )}
+
+      <BlockProfileModal
+        row={selectedRow}
+        data={blockModal.blockData}
+        loading={blockModal.blockLoading}
+        error={blockModal.blockError}
+        selectedCycleKey={blockModal.selectedCycleKey}
+        bedData={blockModal.bedData}
+        bedLoading={blockModal.bedLoading}
+        bedError={blockModal.bedError}
+        selectedValveCycleKey={blockModal.selectedValveCycleKey}
+        valvesData={blockModal.valvesData}
+        valvesLoading={blockModal.valvesLoading}
+        valvesError={blockModal.valvesError}
+        selectedValve={blockModal.selectedValve}
+        valveData={blockModal.valveData}
+        valveLoading={blockModal.valveLoading}
+        valveError={blockModal.valveError}
+        selectedCurveCycleKey={blockModal.selectedCurveCycleKey}
+        curveData={blockModal.curveData}
+        curveLoading={blockModal.curveLoading}
+        curveError={blockModal.curveError}
+        selectedMortalityCurve={blockModal.selectedMortalityCurve}
+        mortalityCurveData={blockModal.mortalityCurveData}
+        mortalityCurveLoading={blockModal.mortalityCurveLoading}
+        mortalityCurveError={blockModal.mortalityCurveError}
+        onOpenBeds={blockModal.openBeds}
+        onCloseBeds={blockModal.closeBeds}
+        onOpenValves={blockModal.openValves}
+        onCloseValves={blockModal.closeValves}
+        onOpenValve={blockModal.openValve}
+        onOpenCurve={blockModal.openCurve}
+        onCloseCurve={blockModal.closeCurve}
+        onOpenCycleMortalityCurve={blockModal.openCycleMortalityCurve}
+        onOpenValveMortalityCurve={blockModal.openValveMortalityCurve}
+        onOpenBedMortalityCurve={blockModal.openBedMortalityCurve}
+        onCloseMortalityCurve={blockModal.closeMortalityCurve}
+        onClose={() => setSelectedRow(null)}
+      />
     </div>
   );
 }
 
-function CycleTable({ cycles }: { cycles: CurvaCosechaPayload["cycles"] }) {
+function CycleTable({
+  cycles,
+  onSelectCycle,
+}: {
+  cycles: CurvaCosechaPayload["cycles"];
+  onSelectCycle: (row: BlockModalRow) => void;
+}) {
   const sorted = useMemo(
     () =>
       [...cycles].sort((a, b) => {
@@ -279,6 +330,23 @@ function CycleTable({ cycles }: { cycles: CurvaCosechaPayload["cycles"] }) {
       }),
     [cycles],
   );
+
+  function buildModalRow(cycle: CurvaCosechaPayload["cycles"][number]): BlockModalRow {
+    return {
+      block: cycle.block,
+      cycleKey: cycle.cycleKey,
+      area: cycle.area,
+      variety: cycle.variety,
+      spType: cycle.spType,
+      spDate: cycle.spDate,
+      harvestStartDate: cycle.harvestStartDate,
+      harvestEndDate: cycle.harvestEndDate,
+      totalStems: cycle.totalStems,
+      primaryMetricLabel: "Vegetativo",
+      primaryMetricText:
+        cycle.vegetativeDays !== null ? `${cycle.vegetativeDays} días` : undefined,
+    };
+  }
 
   return (
     <ScrollFadeTable>
@@ -303,7 +371,16 @@ function CycleTable({ cycles }: { cycles: CurvaCosechaPayload["cycles"] }) {
         <tbody>
           {sorted.map((cycle) => (
             <tr key={cycle.cycleKey} className="border-b border-border/40 hover:bg-muted/40">
-              <td className="px-3 py-2 font-mono text-xs">{cycle.cycleKey}</td>
+              <td className="px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => onSelectCycle(buildModalRow(cycle))}
+                  className="cursor-pointer font-mono text-xs text-primary underline-offset-2 hover:underline focus:outline-none focus:underline"
+                  aria-label={`Abrir ficha del bloque ${cycle.block} con ciclo ${cycle.cycleKey}`}
+                >
+                  {cycle.cycleKey}
+                </button>
+              </td>
               <td className="px-3 py-2">{cycle.block || "—"}</td>
               <td className="px-3 py-2">{cycle.area || "—"}</td>
               <td className="px-3 py-2">{cycle.variety || "—"}</td>
