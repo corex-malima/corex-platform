@@ -20,19 +20,23 @@ const AggregatedHarvestCurveChart = dynamic(
 
 export type DisplayMetric = "weighted" | "median";
 
-const STORAGE_KEY = "campo:curva-cosecha:view";
+// Bumped to v2 al cambiar defaults y vistas habilitadas (deja stale state de
+// v1 inválido — se cae al default automáticamente).
+const STORAGE_KEY = "campo:curva-cosecha:view:v2";
+
+// Vistas y métricas habilitadas en el contexto agregado.
+// Acumulado y Diario de tallos NO aportan analíticamente en agregado
+// (son solo sumas crudas), así que se ocultan vía disabledViews del control.
+const DISABLED_VIEWS: readonly HarvestCurveView[] = ["cumulative", "daily"];
+const DISABLED_WEEKLY_METRICS: readonly HarvestCurveWeeklyMetric[] = ["cumulative", "daily"];
 
 const VALID_VIEWS = new Set<HarvestCurveView>([
-  "cumulative",
-  "daily",
   "percent",
   "weight-per-stem",
   "weekly",
 ]);
 const VALID_WEEK_KINDS = new Set<WeekKind>(["iso", "sunsat"]);
 const VALID_WEEKLY_METRICS = new Set<HarvestCurveWeeklyMetric>([
-  "cumulative",
-  "daily",
   "percent",
   "weight-per-stem",
 ]);
@@ -46,9 +50,9 @@ type PersistedState = {
 };
 
 const DEFAULT_STATE: PersistedState = {
-  view: "cumulative",
+  view: "percent",
   weekKind: "iso",
-  weeklyMetric: "cumulative",
+  weeklyMetric: "percent",
   displayMetric: "weighted",
 };
 
@@ -134,6 +138,15 @@ export function AggregatedHarvestCurvePanel({ data }: { data: CurvaCosechaPoint[
     [view, weekKind, weeklyMetric],
   );
 
+  // El toggle Ponderado/Mediana solo aplica para Peso/tallo (y para Semanal
+  // cuando la sub-métrica es Peso/tallo). En "% del total" solo existe el
+  // ponderado, por lo que se oculta el toggle para no confundir.
+  const showDisplayMetricToggle =
+    view === "weight-per-stem" || (view === "weekly" && weeklyMetric === "weight-per-stem");
+
+  // Cuando solo aplica ponderado, forzamos displayMetric="weighted" en el chart.
+  const effectiveDisplayMetric: DisplayMetric = showDisplayMetricToggle ? displayMetric : "weighted";
+
   return (
     <div className="flex flex-col gap-3">
       <HarvestCurveControls
@@ -144,47 +157,51 @@ export function AggregatedHarvestCurvePanel({ data }: { data: CurvaCosechaPoint[
         weeklyMetric={weeklyMetric}
         onWeeklyMetricChange={handleWeeklyMetricChange}
         weekKindDisabled
+        disabledViews={DISABLED_VIEWS}
+        disabledWeeklyMetrics={DISABLED_WEEKLY_METRICS}
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Métrica:</span>
-        <div
-          role="radiogroup"
-          aria-label="Métrica del chart agregado"
-          className="inline-flex flex-wrap gap-1.5 rounded-full border border-border/60 bg-muted/30 p-1"
-        >
-          {DISPLAY_METRIC_OPTIONS.map((option) => {
-            const active = option.value === displayMetric;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                title={option.hint}
-                onClick={() => {
-                  if (!active) handleDisplayMetricChange(option.value);
-                }}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                  active
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {option.label}
-              </button>
-            );
-          })}
+      {showDisplayMetricToggle ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Métrica:</span>
+          <div
+            role="radiogroup"
+            aria-label="Métrica del chart agregado"
+            className="inline-flex flex-wrap gap-1.5 rounded-full border border-border/60 bg-muted/30 p-1"
+          >
+            {DISPLAY_METRIC_OPTIONS.map((option) => {
+              const active = option.value === displayMetric;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  title={option.hint}
+                  onClick={() => {
+                    if (!active) handleDisplayMetricChange(option.value);
+                  }}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    active
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <AggregatedHarvestCurveChart
         data={data}
         view={view}
         weekKind={weekKind}
         weeklyMetric={weeklyMetric}
-        displayMetric={displayMetric}
+        displayMetric={effectiveDisplayMetric}
       />
     </div>
   );

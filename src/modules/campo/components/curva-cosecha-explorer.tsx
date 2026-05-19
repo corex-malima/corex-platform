@@ -245,7 +245,7 @@ export function CurvaCosechaExplorer({ initialData }: { initialData: CurvaCosech
               subtitle={
                 isValidating
                   ? "Actualizando..."
-                  : `Mediana = línea sólida · Media ± σ = banda translúcida · n por día en tooltip`
+                  : "Ponderado = sum/sum sobre todos los ciclos. En Peso/tallo, alterna Ponderado | Mediana."
               }
             >
               <AggregatedHarvestCurvePanel data={payload.points} />

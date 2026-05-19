@@ -96,6 +96,11 @@ export type HarvestCurveControlsProps = {
    * Útil en contextos donde no hay fecha calendario (semana relativa).
    */
   weekKindDisabled?: boolean;
+  /**
+   * Sub-métricas semanales a ocultar. Útil cuando ciertas métricas no aplican
+   * en el contexto (p. ej. "cumulative" o "daily" tallos en agregado).
+   */
+  disabledWeeklyMetrics?: readonly HarvestCurveWeeklyMetric[];
 };
 
 export function HarvestCurveControls({
@@ -108,11 +113,16 @@ export function HarvestCurveControls({
   className,
   disabledViews,
   weekKindDisabled,
+  disabledWeeklyMetrics,
 }: HarvestCurveControlsProps) {
   const viewOptions =
     disabledViews && disabledViews.length > 0
       ? VIEW_OPTIONS.filter((option) => !disabledViews.includes(option.value))
       : VIEW_OPTIONS;
+  const weeklyMetricOptions =
+    disabledWeeklyMetrics && disabledWeeklyMetrics.length > 0
+      ? WEEKLY_METRIC_OPTIONS.filter((option) => !disabledWeeklyMetrics.includes(option.value))
+      : WEEKLY_METRIC_OPTIONS;
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -142,7 +152,7 @@ export function HarvestCurveControls({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">Metrica:</span>
             <SegmentedControl<HarvestCurveWeeklyMetric>
-              options={WEEKLY_METRIC_OPTIONS}
+              options={weeklyMetricOptions}
               value={weeklyMetric}
               onChange={onWeeklyMetricChange}
               ariaLabel="Metrica semanal"
