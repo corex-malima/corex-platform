@@ -36,9 +36,8 @@ describe("normalizeCumpleanosFilters", () => {
     const result = normalizeCumpleanosFilters({});
     expect(result.corteDate).toBe(today);
     expect(result.months).toBe("all");
-    expect(result.areaGeneral).toBe("all");
+    expect(result.area).toBe("all");
     expect(result.jobClassification).toBe("all");
-    expect(result.farmCode).toBe("all");
     expect(result.jobTitle).toBe("all");
     expect(result.q).toBe("");
   });
@@ -64,9 +63,9 @@ describe("normalizeCumpleanosFilters", () => {
     expect(result.months).toBe("all");
   });
 
-  it("preserva areaGeneral con valor concreto", () => {
-    const result = normalizeCumpleanosFilters({ areaGeneral: "BOTÓN" });
-    expect(result.areaGeneral).toBe("BOTÓN");
+  it("preserva area con valor concreto (multi de areaId)", () => {
+    const result = normalizeCumpleanosFilters({ area: "AREA_001,AREA_002" });
+    expect(result.area).toBe("AREA_001,AREA_002");
   });
 });
 

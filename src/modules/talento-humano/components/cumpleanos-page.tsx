@@ -8,9 +8,9 @@ import { fetchJson } from "@/lib/fetch-json";
 import type {
   CumpleanosData,
   CumpleanosFilters,
+  CumpleanosOptionEntry,
 } from "@/lib/talento-humano-cumpleanos";
 
-type OptionEntry = { id: string; name: string };
 import { CumpleanosTable } from "@/modules/talento-humano/components/cumpleanos-table";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import { MetricTile } from "@/shared/data-display/metric-tile";
@@ -44,11 +44,10 @@ function buildQuery(filters: CumpleanosFilters): string {
   const params = new URLSearchParams();
   params.set("corteDate", filters.corteDate);
   if (filters.months && filters.months !== "all") params.set("months", filters.months);
-  if (filters.areaGeneral && filters.areaGeneral !== "all") params.set("areaGeneral", filters.areaGeneral);
+  if (filters.area && filters.area !== "all") params.set("area", filters.area);
   if (filters.jobClassification && filters.jobClassification !== "all") {
     params.set("jobClassification", filters.jobClassification);
   }
-  if (filters.farmCode && filters.farmCode !== "all") params.set("farmCode", filters.farmCode);
   if (filters.jobTitle && filters.jobTitle !== "all") params.set("jobTitle", filters.jobTitle);
   if (filters.q) params.set("q", filters.q);
   return params.toString();
@@ -69,9 +68,8 @@ function defaultFilters(corteDate: string): CumpleanosFilters {
   return {
     corteDate,
     months: currentMonth,
-    areaGeneral: "all",
+    area: "all",
     jobClassification: "all",
-    farmCode: "all",
     jobTitle: "all",
     q: "",
   };
@@ -116,91 +114,30 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
     updateFilter("q", value);
   };
 
-  const areaGeneralList = useMemo(() => {
-    const list = payload.options?.areaGenerals ?? [];
-    return Array.isArray(list) ? list : [];
-  }, [payload.options?.areaGenerals]);
+  const areasList = useMemo<CumpleanosOptionEntry[]>(
+    () => payload.options?.areas ?? [],
+    [payload.options?.areas],
+  );
 
   const classificationsList = useMemo(
     () => payload.options?.jobClassifications ?? [],
     [payload.options?.jobClassifications],
   );
 
-  const farmsList = useMemo(() => {
-    const list = payload.options?.farmCodes ?? [];
-    return Array.isArray(list) ? list : [];
-  }, [payload.options?.farmCodes]);
+  const jobTitlesList = useMemo(
+    () => payload.options?.jobTitles ?? [],
+    [payload.options?.jobTitles],
+  );
 
-  const jobTitlesList = useMemo(() => {
-    const list = payload.options?.jobTitles ?? [];
-    return Array.isArray(list) ? list : [];
-  }, [payload.options?.jobTitles]);
+  const areaOptions = useMemo(() => areasList.map((entry) => entry.id), [areasList]);
 
-  const areaGeneralOptions = useMemo(() => {
-    return areaGeneralList
-      .map((e: unknown) => {
-        if (typeof e === "object" && e != null && "id" in e) {
-          return (e as OptionEntry).id;
-        }
-        return e as string;
-      })
-      .filter((v: string) => Boolean(v));
-  }, [areaGeneralList]);
-
-  const areaGeneralLabelMap = useMemo(() => {
+  const areaLabelMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const entry of areaGeneralList) {
-      if (typeof entry === "object" && entry != null && "id" in entry && "name" in entry) {
-        const e = entry as OptionEntry;
-        map.set(e.id, e.name);
-      }
+    for (const entry of areasList) {
+      map.set(entry.id, entry.name);
     }
     return map;
-  }, [areaGeneralList]);
-
-  const farmOptions = useMemo(() => {
-    return farmsList
-      .map((e: unknown) => {
-        if (typeof e === "object" && e != null && "id" in e) {
-          return (e as OptionEntry).id;
-        }
-        return e as string;
-      })
-      .filter((v: string) => Boolean(v));
-  }, [farmsList]);
-
-  const farmLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entry of farmsList) {
-      if (typeof entry === "object" && entry != null && "id" in entry && "name" in entry) {
-        const e = entry as OptionEntry;
-        map.set(e.id, e.name);
-      }
-    }
-    return map;
-  }, [farmsList]);
-
-  const jobTitleOptions = useMemo(() => {
-    return jobTitlesList
-      .map((e: unknown) => {
-        if (typeof e === "object" && e != null && "id" in e) {
-          return (e as OptionEntry).id;
-        }
-        return e as string;
-      })
-      .filter((v: string) => Boolean(v));
-  }, [jobTitlesList]);
-
-  const jobTitleLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entry of jobTitlesList) {
-      if (typeof entry === "object" && entry != null && "id" in entry && "name" in entry) {
-        const e = entry as OptionEntry;
-        map.set(e.id, e.name);
-      }
-    }
-    return map;
-  }, [jobTitlesList]);
+  }, [areasList]);
 
   return (
     <div className="space-y-4">
@@ -226,7 +163,7 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
             />
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <DateField
               id="cum-corte"
               label="Fecha de corte"
@@ -234,12 +171,12 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
               onChange={(value) => updateFilter("corteDate", value)}
             />
             <MultiSelectField
-              id="cum-area-general"
-              label="Área Original"
-              value={filters.areaGeneral}
-              options={areaGeneralOptions}
-              displayValue={(id) => areaGeneralLabelMap.get(id) ?? id}
-              onChange={(value) => updateFilter("areaGeneral", value)}
+              id="cum-area"
+              label="Área"
+              value={filters.area}
+              options={areaOptions}
+              displayValue={(id) => areaLabelMap.get(id) ?? id}
+              onChange={(value) => updateFilter("area", value)}
             />
             <MultiSelectField
               id="cum-clasif"
@@ -249,19 +186,10 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
               onChange={(value) => updateFilter("jobClassification", value)}
             />
             <MultiSelectField
-              id="cum-farm"
-              label="Finca"
-              value={filters.farmCode}
-              options={farmOptions}
-              displayValue={(id) => farmLabelMap.get(id) ?? id}
-              onChange={(value) => updateFilter("farmCode", value)}
-            />
-            <MultiSelectField
               id="cum-cargo"
               label="Cargo Actual"
               value={filters.jobTitle}
-              options={jobTitleOptions}
-              displayValue={(id) => jobTitleLabelMap.get(id) ?? id}
+              options={jobTitlesList}
               onChange={(value) => updateFilter("jobTitle", value)}
             />
             <div className="flex items-end">

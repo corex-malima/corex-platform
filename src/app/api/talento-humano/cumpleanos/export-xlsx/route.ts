@@ -53,11 +53,8 @@ const HEADERS = [
   "Mes",
   "Día",
   "Fecha completa",
-  "Área general",
   "Área",
   "Clasificación",
-  "Cargo",
-  "Finca",
 ];
 
 function buildWorksheet(rows: CumpleanosRow[], corteDate: string): string {
@@ -77,11 +74,8 @@ function buildWorksheet(rows: CumpleanosRow[], corteDate: string): string {
       cells.push(cellString(row.birthMonthLabel, excelRow, 2));
       cells.push(cellNumber(row.birthDay, excelRow, 3));
       cells.push(cellString(formatSlash(row.birthDate), excelRow, 4));
-      cells.push(cellString(row.areaGeneral ?? "—", excelRow, 5));
-      cells.push(cellString(row.areaName ?? row.areaId ?? "—", excelRow, 6));
-      cells.push(cellString(row.jobClassificationCode ?? "—", excelRow, 7));
-      cells.push(cellString(row.jobTitle ?? "—", excelRow, 8));
-      cells.push(cellString(row.farmCode ?? "—", excelRow, 9));
+      cells.push(cellString(row.areaName ?? row.areaId ?? "—", excelRow, 5));
+      cells.push(cellString(row.jobClassificationCode ?? "—", excelRow, 6));
       return `<row r="${excelRow}">${cells.join("")}</row>`;
     })
     .join("");
@@ -94,11 +88,8 @@ function buildWorksheet(rows: CumpleanosRow[], corteDate: string): string {
     <col min="3" max="3" width="14" customWidth="1"/>
     <col min="4" max="4" width="8" customWidth="1"/>
     <col min="5" max="5" width="14" customWidth="1"/>
-    <col min="6" max="6" width="20" customWidth="1"/>
-    <col min="7" max="7" width="28" customWidth="1"/>
-    <col min="8" max="8" width="16" customWidth="1"/>
-    <col min="9" max="9" width="22" customWidth="1"/>
-    <col min="10" max="10" width="12" customWidth="1"/>
+    <col min="6" max="6" width="28" customWidth="1"/>
+    <col min="7" max="7" width="16" customWidth="1"/>
   </cols>
   <sheetData>${headerRow}${subtitleRow}${dataRows}</sheetData>
 </worksheet>`;
@@ -226,9 +217,8 @@ export async function GET(request: NextRequest) {
     const filters = normalizeCumpleanosFilters({
       corteDate: sp.get("corteDate") ?? undefined,
       months: sp.get("months") ?? undefined,
-      areaGeneral: sp.get("areaGeneral") ?? undefined,
+      area: sp.get("area") ?? undefined,
       jobClassification: sp.get("jobClassification") ?? undefined,
-      farmCode: sp.get("farmCode") ?? undefined,
       jobTitle: sp.get("jobTitle") ?? undefined,
       q: sp.get("q") ?? undefined,
     });

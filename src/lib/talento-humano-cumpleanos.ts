@@ -8,9 +8,8 @@ type DbDate = string | Date | null;
 export type CumpleanosFilters = {
   corteDate: string;       // YYYY-MM-DD, default hoy
   months: string;          // "all" | "1,2,12" multi-select encoded
-  areaGeneral: string;     // "all" | "BOTÓN,FLOR" multi
+  area: string;            // "all" | "AREA_ID_1,AREA_ID_2" multi (matchea areaId)
   jobClassification: string;
-  farmCode: string;
   jobTitle: string;
   q: string;
 };
@@ -31,10 +30,11 @@ export type CumpleanosRow = {
   birthMonthLabel: string;        // "Enero"..."Diciembre"
 };
 
+export type CumpleanosOptionEntry = { id: string; name: string };
+
 export type CumpleanosOptions = {
-  areaGenerals: string[];
+  areas: CumpleanosOptionEntry[];
   jobClassifications: string[];
-  farmCodes: string[];
   jobTitles: string[];
 };
 
@@ -104,9 +104,8 @@ export function normalizeCumpleanosFilters(
   return {
     corteDate,
     months: normalizeMulti(raw.months ?? null),
-    areaGeneral: normalizeMulti(raw.areaGeneral ?? null),
+    area: normalizeMulti(raw.area ?? null),
     jobClassification: normalizeMulti(raw.jobClassification ?? null),
-    farmCode: normalizeMulti(raw.farmCode ?? null),
     jobTitle: normalizeMulti(raw.jobTitle ?? null),
     q: (raw.q ?? "").trim(),
   };
@@ -214,31 +213,32 @@ function rowMatchesMonth(row: CumpleanosRow, encoded: string): boolean {
   return selected.includes(String(row.birthMonth));
 }
 
-function rowMatchesAreaGeneral(row: CumpleanosRow, encoded: string): boolean {
+function rowMatchesArea(row: CumpleanosRow, encoded: string): boolean {
   if (!encoded || encoded === "all") return true;
   const selected = decodeMultiSelectValue(encoded);
   if (selected.length === 0) return true;
-  if (!row.areaGeneral) return false;
-  return selected.includes(row.areaGeneral);
+  if (!row.areaId) return false;
+  return selected.includes(row.areaId);
 }
 
 function buildOptions(rows: CumpleanosRow[]): CumpleanosOptions {
-  const areaGenerals = new Set<string>();
+  const areasMap = new Map<string, string>();
   const jobClassifications = new Set<string>();
-  const farmCodes = new Set<string>();
   const jobTitles = new Set<string>();
 
   for (const row of rows) {
-    if (row.areaGeneral) areaGenerals.add(row.areaGeneral);
+    if (row.areaId) {
+      areasMap.set(row.areaId, row.areaName ?? row.areaId);
+    }
     if (row.jobClassificationCode) jobClassifications.add(row.jobClassificationCode);
-    if (row.farmCode) farmCodes.add(row.farmCode);
     if (row.jobTitle) jobTitles.add(row.jobTitle);
   }
 
   return {
-    areaGenerals: Array.from(areaGenerals).sort((a, b) => a.localeCompare(b, "es-EC")),
+    areas: Array.from(areasMap.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es-EC")),
     jobClassifications: Array.from(jobClassifications).sort((a, b) => a.localeCompare(b, "es-EC")),
-    farmCodes: Array.from(farmCodes).sort((a, b) => a.localeCompare(b, "es-EC")),
     jobTitles: Array.from(jobTitles).sort((a, b) => a.localeCompare(b, "es-EC")),
   };
 }
@@ -296,9 +296,8 @@ export async function getCumpleanosData(
   const normalized = normalizeCumpleanosFilters({
     corteDate: filters.corteDate,
     months: filters.months,
-    areaGeneral: filters.areaGeneral,
+    area: filters.area,
     jobClassification: filters.jobClassification,
-    farmCode: filters.farmCode,
     jobTitle: filters.jobTitle,
     q: filters.q,
   });
@@ -310,9 +309,8 @@ export async function getCumpleanosData(
   const filteredRows = allRows.filter(
     (row) =>
       rowMatchesMonth(row, normalized.months) &&
-      rowMatchesAreaGeneral(row, normalized.areaGeneral) &&
+      rowMatchesArea(row, normalized.area) &&
       matchesMultiSelectValue(normalized.jobClassification, row.jobClassificationCode) &&
-      matchesMultiSelectValue(normalized.farmCode, row.farmCode) &&
       matchesMultiSelectValue(normalized.jobTitle, row.jobTitle) &&
       rowMatchesSearch(row, tokens),
   );

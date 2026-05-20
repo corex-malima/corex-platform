@@ -18,9 +18,8 @@ export async function GET(request: NextRequest) {
     const filters = normalizeCumpleanosFilters({
       corteDate: sp.get("corteDate") ?? undefined,
       months: sp.get("months") ?? undefined,
-      areaGeneral: sp.get("areaGeneral") ?? undefined,
+      area: sp.get("area") ?? undefined,
       jobClassification: sp.get("jobClassification") ?? undefined,
-      farmCode: sp.get("farmCode") ?? undefined,
       jobTitle: sp.get("jobTitle") ?? undefined,
       q: sp.get("q") ?? undefined,
     });

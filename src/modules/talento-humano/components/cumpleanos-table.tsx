@@ -17,10 +17,9 @@ type SortKey =
   | "nationalId"
   | "birthMonth"
   | "birthDay"
-  | "areaGeneral"
+  | "areaName"
   | "jobClassificationCode"
-  | "jobTitle"
-  | "farmCode";
+  | "jobTitle";
 
 const collator = new Intl.Collator("es-EC", { numeric: true, sensitivity: "base" });
 
@@ -42,14 +41,12 @@ function rowSortValue(row: CumpleanosRow, key: SortKey): string | number | null 
       return row.birthMonth;
     case "birthDay":
       return row.birthDay;
-    case "areaGeneral":
-      return row.areaGeneral ?? row.areaId;
+    case "areaName":
+      return row.areaName ?? row.areaId;
     case "jobClassificationCode":
       return row.jobClassificationCode;
     case "jobTitle":
       return row.jobTitle;
-    case "farmCode":
-      return row.farmCode;
     default:
       return null;
   }
@@ -115,9 +112,8 @@ export function CumpleanosTable({
       const searchFields = [
         row.personName?.toLocaleLowerCase("es-EC") ?? "",
         row.nationalId ?? "",
-        row.areaGeneral?.toLocaleLowerCase("es-EC") ?? "",
+        row.areaName?.toLocaleLowerCase("es-EC") ?? "",
         row.jobTitle?.toLocaleLowerCase("es-EC") ?? "",
-        row.farmCode ?? "",
       ];
       return searchFields.some((field) => field.includes(lowerQuery));
     });
@@ -155,7 +151,7 @@ export function CumpleanosTable({
         </CardHeader>
         <CardContent>
           <ScrollFadeTable topScrollbar>
-            <StandardTable className="min-w-[1200px]">
+            <StandardTable className="min-w-[1000px]">
               <thead>
                 <tr>
                   <SortableHeader
@@ -188,8 +184,8 @@ export function CumpleanosTable({
                     align="right"
                   />
                   <SortableHeader
-                    label="Área Original"
-                    sortKey="areaGeneral"
+                    label="Área"
+                    sortKey="areaName"
                     activeSortKey={sortKey}
                     direction={direction}
                     onSort={handleSort}
@@ -204,13 +200,6 @@ export function CumpleanosTable({
                   <SortableHeader
                     label="Cargo"
                     sortKey="jobTitle"
-                    activeSortKey={sortKey}
-                    direction={direction}
-                    onSort={handleSort}
-                  />
-                  <SortableHeader
-                    label="Finca"
-                    sortKey="farmCode"
                     activeSortKey={sortKey}
                     direction={direction}
                     onSort={handleSort}
@@ -244,10 +233,9 @@ function CumpleanosRowItem({ row }: { row: CumpleanosRow }) {
           <span className="text-sm">{row.birthDay}</span>
         )}
       </StandardTd>
-      <StandardTd className="text-sm">{row.areaGeneral}</StandardTd>
+      <StandardTd className="text-sm">{row.areaName ?? row.areaId ?? "—"}</StandardTd>
       <StandardTd className="text-sm">{row.jobClassificationCode}</StandardTd>
       <StandardTd className="text-sm">{row.jobTitle}</StandardTd>
-      <StandardTd className="text-sm">{row.farmCode}</StandardTd>
     </tr>
   );
 }
