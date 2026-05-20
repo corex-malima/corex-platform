@@ -8,7 +8,13 @@ FROM base AS deps
 
 COPY package.json package-lock.json ./
 
-RUN npm ci
+# --include=optional --os=linux --cpu=x64 fuerza a npm a descargar los
+# binarios opcionales de sharp para Linux x64 (@img/sharp-linux-x64 +
+# @img/sharp-libvips-linux-x64, este último trae libvips-cpp.so.8.17.3
+# embedded). Sin estos flags, npm a veces salta opcionales dentro de
+# Docker BuildKit y el build falla en "Collecting page data" porque sharp
+# se importa eager-mode en algunas rutas API (/api/comercial/reclamos/...).
+RUN npm ci --include=optional --os=linux --cpu=x64
 
 FROM base AS builder
 
