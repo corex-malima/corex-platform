@@ -79,8 +79,8 @@ export type VegetativeSummary = {
   sampleSd: number | null;
   min: number | null;
   max: number | null;
-  p25: number | null;
-  p75: number | null;
+  p10: number | null;
+  p90: number | null;
 };
 
 export type CurvaCosechaCycleSummary = {
@@ -350,8 +350,8 @@ export function aggregateCycleDays(rows: DayRow[]): {
     sampleSd: round1(vegDescribe.sd),
     min: vegDescribe.min,
     max: vegDescribe.max,
-    p25: round1(vegDescribe.q1),
-    p75: round1(vegDescribe.q3),
+    p10: round1(vegDescribe.p10),
+    p90: round1(vegDescribe.p90),
   };
 
   // Summary

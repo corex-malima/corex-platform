@@ -99,6 +99,8 @@ export type DescriptiveStats = {
   sd: number | null;
   q1: number | null;
   q3: number | null;
+  p10: number | null;
+  p90: number | null;
   min: number | null;
   max: number | null;
 };
@@ -111,7 +113,7 @@ export function describe(values: readonly (number | null | undefined)[]): Descri
   const filtered = filterFiniteNumbers(values);
   const n = filtered.length;
   if (n === 0) {
-    return { n: 0, mean: null, median: null, sd: null, q1: null, q3: null, min: null, max: null };
+    return { n: 0, mean: null, median: null, sd: null, q1: null, q3: null, p10: null, p90: null, min: null, max: null };
   }
 
   const sorted = [...filtered].sort((a, b) => a - b);
@@ -137,6 +139,8 @@ export function describe(values: readonly (number | null | undefined)[]): Descri
     sd,
     q1: quantileSorted(sorted, 0.25),
     q3: quantileSorted(sorted, 0.75),
+    p10: quantileSorted(sorted, 0.10),
+    p90: quantileSorted(sorted, 0.90),
     min: sorted[0]!,
     max: sorted[n - 1]!,
   };

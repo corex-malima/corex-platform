@@ -141,7 +141,7 @@ function aggregateByRelativeWeek(
       // Mediana del día representativo (último del bucket — pico de la semana)
       const lastDay = b.days[b.days.length - 1]!;
       return {
-        weekKey: `S${String(b.weekIndex).padStart(2, "0")}`,
+        weekKey: `S-${String(b.weekIndex).padStart(2, "0")}`,
         weekIndex: b.weekIndex,
         daysIncluded: b.days.length,
         weightedDailyStems: Math.round(b.sumWeightedDailyStems),

@@ -97,7 +97,7 @@ describeTest("minMax", () => {
 describeTest("describe (consolidated)", () => {
   it("returns all nulls for empty array", () => {
     const d = describe([]);
-    expect(d).toEqual({ n: 0, mean: null, median: null, sd: null, q1: null, q3: null, min: null, max: null });
+    expect(d).toEqual({ n: 0, mean: null, median: null, sd: null, q1: null, q3: null, p10: null, p90: null, min: null, max: null });
   });
 
   it("returns valid stats for typical input", () => {
@@ -108,6 +108,9 @@ describeTest("describe (consolidated)", () => {
     expect(d.sd).toBeCloseTo(1.5811, 3); // sd of 1..5 = sqrt(10/4) ≈ 1.5811
     expect(d.q1).toBe(2);
     expect(d.q3).toBe(4);
+    // P10/P90 via linear interpolation: [1,2,3,4,5], p=0.10 → idx=0.4 → 1*0.6+2*0.4=1.4
+    expect(d.p10).toBeCloseTo(1.4, 5);
+    expect(d.p90).toBeCloseTo(4.6, 5);
     expect(d.min).toBe(1);
     expect(d.max).toBe(5);
   });

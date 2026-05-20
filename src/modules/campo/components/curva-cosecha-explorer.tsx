@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { LineChart as LineChartIcon, RefreshCcw } from "lucide-react";
 
@@ -27,7 +28,16 @@ import type {
 import { BlockProfileModal } from "@/modules/fenograma/components/block-profile-modal";
 import { useBlockProfileModal } from "@/hooks/use-block-profile-modal";
 import type { BlockModalRow } from "@/lib/fenograma";
-import { AggregatedHarvestCurvePanel } from "./aggregated-harvest-curve-panel";
+
+// Dynamic import con ssr:false porque el panel lee localStorage en el initial
+// state, lo cual causa hydration mismatch entre SSR (default state) y CSR (state
+// persistido del usuario). Al renderizarlo client-only, el server nunca emite
+// el HTML del panel y no hay desfase.
+const AggregatedHarvestCurvePanel = dynamic(
+  () =>
+    import("./aggregated-harvest-curve-panel").then((mod) => mod.AggregatedHarvestCurvePanel),
+  { ssr: false },
+);
 
 const ALL_FILTERS_DEFAULT: CurvaCosechaFilters = {
   year: "all",
@@ -87,7 +97,7 @@ export function CurvaCosechaExplorer({ initialData }: { initialData: CurvaCosech
   return (
     <div className="min-w-0 space-y-4">
       <SectionPageShell
-        eyebrow="Analítica / Campo / Indicadores & KPI"
+        eyebrow="Analítica / Campo / Análisis"
         title="Curva de Cosecha"
         subtitle="Curva agregada por día relativo al inicio de cosecha y período vegetativo a través de múltiples ciclos."
         icon={<LineChartIcon className="size-6" aria-hidden="true" />}
@@ -138,34 +148,11 @@ export function CurvaCosechaExplorer({ initialData }: { initialData: CurvaCosech
             </div>
           </div>
 
-          {/* KPIs de cosecha */}
-          <KpiGrid columns={4}>
+          <KpiGrid columns={5}>
             <MetricTile
               label="Ciclos analizados"
               value={formatInteger(payload.summary.cycleCount)}
               hint={`Hasta día ${payload.summary.maxDayOffset} relativo`}
-            />
-            <MetricTile
-              label="Día pico (mediana)"
-              value={payload.summary.peakDay !== null ? `Día ${payload.summary.peakDay}` : "—"}
-              hint={
-                payload.summary.peakMedianStems !== null
-                  ? `${formatInteger(payload.summary.peakMedianStems)} tallos`
-                  : "Sin datos"
-              }
-            />
-            <MetricTile
-              label="Tallos / ciclo (mediana)"
-              value={
-                payload.summary.medianTotalStemsPerCycle !== null
-                  ? formatInteger(payload.summary.medianTotalStemsPerCycle)
-                  : "—"
-              }
-              hint={
-                payload.summary.meanTotalStemsPerCycle !== null
-                  ? `Media: ${formatInteger(payload.summary.meanTotalStemsPerCycle)}`
-                  : undefined
-              }
             />
             <MetricTile
               label="Peso / tallo (mediana)"
@@ -180,48 +167,28 @@ export function CurvaCosechaExplorer({ initialData }: { initialData: CurvaCosech
                   : undefined
               }
             />
-          </KpiGrid>
-
-          {/* KPIs del período vegetativo */}
-          <KpiGrid columns={5}>
             <MetricTile
               label="Vegetativo (media)"
               value={payload.vegetative.mean !== null ? `${formatDecimal(payload.vegetative.mean)} d` : "—"}
               hint={`n=${payload.vegetative.cyclesConsidered} ciclos`}
             />
             <MetricTile
-              label="Vegetativo (mediana)"
-              value={
-                payload.vegetative.median !== null
-                  ? `${formatDecimal(payload.vegetative.median)} d`
-                  : "—"
-              }
-            />
-            <MetricTile
               label="Vegetativo (σ)"
               value={
                 payload.vegetative.sampleSd !== null
-                  ? `${formatDecimal(payload.vegetative.sampleSd)} d`
+                  ? `±${formatDecimal(payload.vegetative.sampleSd)} d`
                   : "—"
               }
               hint="Desviación estándar muestral"
             />
             <MetricTile
-              label="Vegetativo mín — máx"
+              label="Vegetativo P10 — P90"
               value={
-                payload.vegetative.min !== null && payload.vegetative.max !== null
-                  ? `${payload.vegetative.min} — ${payload.vegetative.max} d`
+                payload.vegetative.p10 !== null && payload.vegetative.p90 !== null
+                  ? `${formatDecimal(payload.vegetative.p10)} — ${formatDecimal(payload.vegetative.p90)} d`
                   : "—"
               }
-            />
-            <MetricTile
-              label="Vegetativo Q1 — Q3"
-              value={
-                payload.vegetative.p25 !== null && payload.vegetative.p75 !== null
-                  ? `${formatDecimal(payload.vegetative.p25)} — ${formatDecimal(payload.vegetative.p75)} d`
-                  : "—"
-              }
-              hint="Rango intercuartil"
+              hint="Percentiles 10 y 90"
             />
           </KpiGrid>
         </FilterPanel>
