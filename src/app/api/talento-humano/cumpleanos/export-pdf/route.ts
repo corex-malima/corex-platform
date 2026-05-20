@@ -71,13 +71,10 @@ function buildDataTex(
   const docCode = `TTHH-CUM-${exportDate.getFullYear()}${pad(exportDate.getMonth() + 1)}${pad(exportDate.getDate())}`;
   const docDate = `${exportDate.getFullYear()}-${pad(exportDate.getMonth() + 1)}-${pad(exportDate.getDate())}`;
 
-  // Ordenamos por mes y dia (ascendente) para que el listado salga cronologico.
-  // El loader ya ordena asi pero re-asegura por si llegan rows manipuladas.
-  const sortedRows = [...rows].sort((a, b) => {
-    if (a.birthMonth !== b.birthMonth) return a.birthMonth - b.birthMonth;
-    if (a.birthDay !== b.birthDay) return a.birthDay - b.birthDay;
-    return a.personName.localeCompare(b.personName, "es-EC");
-  });
+  // El sort efectivo del PDF se decide afuera (route GET) según el param
+  // ?sort=nombre|area que viene del UI. Acá ya recibimos las rows ya
+  // ordenadas; conservamos el array como vino.
+  const sortedRows = rows;
 
   // Caja vacía para marcar con bolígrafo al imprimir. \fbox + \rule da un
   // cuadrado limpio sin depender de amssymb/pifont (no cargados en canon.cls).
@@ -165,7 +162,30 @@ export async function GET(request: NextRequest) {
     const data = await getCumpleanosData(filters);
     const monthLabel = resolveMonthLabel(monthsParam);
     const exportDate = new Date();
-    const dataTexContent = buildDataTex(data.rows, monthLabel, exportDate);
+
+    // Orden del PDF — viene del UI via ?sort=nombre|area. Default = nombre.
+    // - "nombre": personName asc, areaName como desempate
+    // - "area":   areaName asc, personName como desempate
+    // En ambos casos el localeCompare usa "es-EC" para acentos correctos.
+    const sortKey = sp.get("sort") === "area" ? "area" : "nombre";
+    const collator = new Intl.Collator("es-EC", { sensitivity: "base", numeric: true });
+    const sortedRows = [...data.rows].sort((a, b) => {
+      const aName = a.personName ?? "";
+      const bName = b.personName ?? "";
+      const aArea = a.areaName ?? a.areaId ?? "";
+      const bArea = b.areaName ?? b.areaId ?? "";
+      if (sortKey === "area") {
+        const byArea = collator.compare(aArea, bArea);
+        if (byArea !== 0) return byArea;
+        return collator.compare(aName, bName);
+      }
+      // sortKey === "nombre"
+      const byName = collator.compare(aName, bName);
+      if (byName !== 0) return byName;
+      return collator.compare(aArea, bArea);
+    });
+
+    const dataTexContent = buildDataTex(sortedRows, monthLabel, exportDate);
 
     const { pdf } = await generateCanonicalPdf({
       templateName: "tthh_cumpleanos",

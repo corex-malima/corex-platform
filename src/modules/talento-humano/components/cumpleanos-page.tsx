@@ -2,6 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { Cake, Download, FileText, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export type PdfSortKey = "nombre" | "area";
+
+const PDF_SORT_OPTIONS: Array<{ value: PdfSortKey; label: string; hint: string }> = [
+  { value: "nombre", label: "Nombre", hint: "Ordenar el PDF alfabéticamente por nombre del colaborador (área como desempate)." },
+  { value: "area",   label: "Área",   hint: "Ordenar el PDF alfabéticamente por área (nombre como desempate)." },
+];
 import useSWR from "swr";
 
 import { fetchJson } from "@/lib/fetch-json";
@@ -77,6 +85,7 @@ function defaultFilters(corteDate: string): CumpleanosFilters {
 
 export function CumpleanosPage({ initialData }: { initialData: CumpleanosData }) {
   const [filters, setFilters] = useState<CumpleanosFilters>(initialData.filters);
+  const [pdfSort, setPdfSort] = useState<PdfSortKey>("nombre");
   const selectedMonths = useMemo(() => decodeMonths(filters.months), [filters.months]);
 
   const query = buildQuery(filters);
@@ -111,7 +120,10 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
   };
 
   const handleExportPdf = () => {
-    window.location.href = `/api/talento-humano/cumpleanos/export-pdf?${query}`;
+    // Agregamos &sort=<key> sin tocar el query base que también usa XLSX.
+    // El backend (export-pdf/route.ts) lee este param y reordena las filas
+    // antes de generar la tabla LaTeX.
+    window.location.href = `/api/talento-humano/cumpleanos/export-pdf?${query}&sort=${pdfSort}`;
   };
 
   const handleSearchChange = (value: string) => {
@@ -156,6 +168,38 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
               <Download className="size-4" aria-hidden="true" />
               XLSX
             </Button>
+            <div
+              role="radiogroup"
+              aria-label="Ordenar PDF"
+              className="inline-flex flex-wrap items-center gap-1 rounded-full border border-border/60 bg-muted/30 p-1"
+            >
+              <span className="px-2 text-xs font-medium text-muted-foreground">
+                Orden PDF:
+              </span>
+              {PDF_SORT_OPTIONS.map((opt) => {
+                const active = opt.value === pdfSort;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    title={opt.hint}
+                    onClick={() => {
+                      if (!active) setPdfSort(opt.value);
+                    }}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                      active
+                        ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
             <Button type="button" variant="outline" size="sm" onClick={handleExportPdf}>
               <FileText className="size-4" aria-hidden="true" />
               PDF
