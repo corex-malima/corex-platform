@@ -151,7 +151,7 @@ export function CumpleanosTable({
         </CardHeader>
         <CardContent>
           <ScrollFadeTable topScrollbar>
-            <StandardTable className="min-w-[1000px]">
+            <StandardTable className="w-full min-w-[1000px]">
               <thead>
                 <tr>
                   <SortableHeader

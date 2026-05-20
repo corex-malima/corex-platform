@@ -90,7 +90,7 @@ function buildDataTex(
   }).join("\n");
 
   const emptyRow = sortedRows.length === 0
-    ? `  \\multicolumn{4}{c}{\\textit{Sin cumplea\\~nos para los filtros aplicados.}} \\\\`
+    ? `  \\multicolumn{4}{c}{\\textit{Sin cumpleaños para los filtros aplicados.}} \\\\`
     : "";
 
   // Total formateado al pie. Si solo hay 1 ciclo de meses, mostramos el
@@ -101,21 +101,21 @@ function buildDataTex(
 \\SetDocDate{${tex(docDate)}}
 
 \\newcommand{\\CumpleanosBody}{%
-  \\section*{Cumplea\\~nos --- ${tex(monthLabel)}}
+  \\section*{Cumpleaños --- ${tex(monthLabel)}}
 
   \\begin{center}
   \\begin{longtable}{@{} p{8.0cm} p{5.6cm} c c @{}}
-    \\caption{Lista de cumplea\\~nos para imprimir y marcar a mano.} \\\\
+    \\caption{Lista de cumpleaños para imprimir y marcar a mano.} \\\\
     \\toprule
-    \\textbf{Nombre} & \\textbf{\\'Area} & \\textbf{Cupcake} & \\textbf{Desayuno} \\\\
+    \\textbf{Nombre} & \\textbf{Área} & \\textbf{Cupcake} & \\textbf{Desayuno} \\\\
     \\midrule
     \\endfirsthead
     \\toprule
-    \\textbf{Nombre} & \\textbf{\\'Area} & \\textbf{Cupcake} & \\textbf{Desayuno} \\\\
+    \\textbf{Nombre} & \\textbf{Área} & \\textbf{Cupcake} & \\textbf{Desayuno} \\\\
     \\midrule
     \\endhead
     \\midrule
-    \\multicolumn{4}{r}{\\small\\itshape Contin\\'ua\\ldots} \\\\
+    \\multicolumn{4}{r}{\\small\\itshape Continúa\\ldots} \\\\
     \\endfoot
     \\bottomrule
     \\endlastfoot
