@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
+  Cake,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -251,6 +252,20 @@ export const MODULE_CATALOG: CatalogModule[] = [
     summary: "Rendimiento semanal agregado por colaborador activo, base para señales de desvinculación.",
     href: "/dashboard/talento-humano/herramienta-desvinculacion",
     icon: Activity,
+    navigationGroup: "Dashboard",
+    trail: ["Talento Humano", "Explorador"],
+    accessSection: "Analítica / Indicadores & KPI",
+    status: "active",
+    mobileVisible: false,
+  },
+  {
+    key: "talento-cumpleanos",
+    label: "Cumpleaños",
+    title: "Cumpleaños",
+    eyebrow: "Analítica / Talento Humano / Explorador",
+    summary: "Cumpleaños de colaboradores activos por mes, área y clasificación.",
+    href: "/dashboard/talento-humano/cumpleanos",
+    icon: Cake,
     navigationGroup: "Dashboard",
     trail: ["Talento Humano", "Explorador"],
     accessSection: "Analítica / Indicadores & KPI",
