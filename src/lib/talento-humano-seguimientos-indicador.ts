@@ -114,10 +114,12 @@ async function loadOptions(): Promise<{ years: string[]; months: string[]; areas
         FROM slv.tthh_asgn_person_area_event_scd2 e
         LEFT JOIN slv.camp_dim_area_profile_scd2 ap
           ON ap.area_id = e.area_id AND ap.is_current = true AND ap.is_valid = true
-        WHERE e.person_id = f.person_id AND e.event_type = 'CA' AND e.is_valid = true
+        WHERE e.person_id = f.person_id
+          AND e.event_type IN ('CA', 'IS')
+          AND e.is_valid = true
           AND $1::date >= e.valid_from::date
           AND $1::date < COALESCE(e.valid_to::date, DATE '9999-12-31')
-        ORDER BY e.valid_from DESC
+        ORDER BY CASE WHEN e.event_type = 'CA' THEN 0 ELSE 1 END, e.valid_from DESC
         LIMIT 1
       ) a ON true
       WHERE f.follow_up_date IS NOT NULL
@@ -209,10 +211,12 @@ async function queryDwRows(filters: FollowupIndicatorFilters, overrides?: { year
       FROM slv.tthh_asgn_person_area_event_scd2 e
       LEFT JOIN slv.camp_dim_area_profile_scd2 ap
         ON ap.area_id = e.area_id AND ap.is_current = true AND ap.is_valid = true
-      WHERE e.person_id = f.person_id AND e.event_type = 'CA' AND e.is_valid = true
+      WHERE e.person_id = f.person_id
+        AND e.event_type IN ('CA', 'IS')
+        AND e.is_valid = true
         AND $1::date >= e.valid_from::date
         AND $1::date < COALESCE(e.valid_to::date, DATE '9999-12-31')
-      ORDER BY e.valid_from DESC
+      ORDER BY CASE WHEN e.event_type = 'CA' THEN 0 ELSE 1 END, e.valid_from DESC
       LIMIT 1
     ) a ON true
     WHERE f.follow_up_date IS NOT NULL

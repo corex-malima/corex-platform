@@ -146,7 +146,7 @@ function buildActivosQuery(filters: TalentoFilters): { text: string; values: unk
         FROM slv.tthh_asgn_person_area_event_scd2 a
         CROSS JOIN cal
         WHERE a.area_id <> 'UNKNOWN'
-          AND a.event_type = 'CA'
+          AND a.event_type IN ('CA', 'IS')
           AND a.valid_from <= cal.snapshot_date
           AND COALESCE(a.valid_to, CURRENT_DATE) >= cal.snapshot_date
         ORDER BY a.person_id, a.event_type, a.valid_from DESC
