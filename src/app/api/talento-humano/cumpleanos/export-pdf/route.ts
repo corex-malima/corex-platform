@@ -83,10 +83,16 @@ function buildDataTex(
   // cuadrado limpio sin depender de amssymb/pifont (no cargados en canon.cls).
   const checkbox = "\\fbox{\\rule{0pt}{1.8ex}\\rule{1.8ex}{0pt}}";
 
+  // Cada fila termina con \\ + \midrule para que haya una línea tenue entre
+  // filas como guía visual de lectura. El \midrule respeta el
+  // \arrayrulecolor{CanonRule} y \lightrulewidth=0.3pt configurados abajo →
+  // queda gris muy claro (#D7D7D7) y delgado. La última fila también lleva
+  // su \midrule (es inofensivo: queda justo encima del \bottomrule más
+  // grueso que ya cierra la tabla).
   const tableRows = sortedRows.map((row) => {
     const nombre = tex(titleCaseName(row.personName));
     const area = tex(row.areaName ?? row.areaId ?? "-");
-    return `  ${nombre} & ${area} & ${checkbox} & ${checkbox} \\\\`;
+    return `  ${nombre} & ${area} & ${checkbox} & ${checkbox} \\\\ \\midrule`;
   }).join("\n");
 
   const emptyRow = sortedRows.length === 0
@@ -97,6 +103,12 @@ function buildDataTex(
   // conteo plano; si hay varios meses, agregamos un sub-conteo por mes.
   const totalLine = `\\NoteInline{Total:} ${sortedRows.length} colaborador(es).`;
 
+  // Bloque visual: aislamos la configuración de reglas en un grupo { ... }
+  // para no contaminar otras tablas del documento.
+  // - arrayrulecolor{CanonRule}: gris #D7D7D7 (definido en canon.cls)
+  // - heavyrulewidth 1pt: \toprule y \bottomrule más prominentes
+  // - lightrulewidth 0.3pt: \midrule fino (filas guía)
+  // - arraystretch 1.35: aire vertical para que las guías respiren
   return `\\SetDocCode{${tex(docCode)}}
 \\SetDocDate{${tex(docDate)}}
 
@@ -104,6 +116,10 @@ function buildDataTex(
   \\section*{Cumpleaños --- ${tex(monthLabel)}}
 
   \\begin{center}
+  {\\arrayrulecolor{CanonRule}%
+   \\setlength{\\heavyrulewidth}{1pt}%
+   \\setlength{\\lightrulewidth}{0.3pt}%
+   \\renewcommand{\\arraystretch}{1.35}%
   \\begin{longtable}{@{} p{8.0cm} p{5.6cm} c c @{}}
     \\caption{Lista de cumpleaños para imprimir y marcar a mano.} \\\\
     \\toprule
@@ -120,7 +136,8 @@ function buildDataTex(
     \\bottomrule
     \\endlastfoot
 ${tableRows}${emptyRow}
-  \\end{longtable}
+  \\end{longtable}%
+  }
   \\end{center}
 
   ${totalLine}
