@@ -47,6 +47,7 @@ export type CanonTemplateKey =
   | "anexo_tecnico"
   | "orden_trabajo_clasificacion"
   | "tthh_agenda_seguimientos"
+  | "tthh_cumpleanos"
   | "bodega_programacion_drench"
   | "calidad_punto_apertura"
   | "postcosecha_productividad";

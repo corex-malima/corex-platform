@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Cake, Download, X } from "lucide-react";
+import { Cake, Download, FileText, X } from "lucide-react";
 import useSWR from "swr";
 
 import { fetchJson } from "@/lib/fetch-json";
@@ -110,6 +110,10 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
     window.location.href = `/api/talento-humano/cumpleanos/export-xlsx?${query}`;
   };
 
+  const handleExportPdf = () => {
+    window.location.href = `/api/talento-humano/cumpleanos/export-pdf?${query}`;
+  };
+
   const handleSearchChange = (value: string) => {
     updateFilter("q", value);
   };
@@ -147,10 +151,16 @@ export function CumpleanosPage({ initialData }: { initialData: CumpleanosData })
         subtitle="Colaboradores activos al corte, ordenados por mes y día de cumpleaños."
         icon={<Cake className="size-6" aria-hidden="true" />}
         actions={(
-          <Button type="button" variant="outline" size="sm" onClick={handleExport}>
-            <Download className="size-4" aria-hidden="true" />
-            Exportar
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={handleExport}>
+              <Download className="size-4" aria-hidden="true" />
+              XLSX
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={handleExportPdf}>
+              <FileText className="size-4" aria-hidden="true" />
+              PDF
+            </Button>
+          </div>
         )}
       >
         <FilterPanel>
