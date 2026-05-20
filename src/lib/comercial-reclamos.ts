@@ -1048,6 +1048,17 @@ export async function createCommercialClaim(input: CommercialClaimFormInput, act
     );
   });
 
+  // Post-commit: notificación fire-and-forget a n8n. No bloquea ni rompe el
+  // flujo si n8n está caído.
+  void notifyClaimWebhook({
+    claim_id: claimId,
+    event_type: "claim-created",
+    actor_id: actorId,
+    occurred_at: now.toISOString(),
+    event_note: null,
+    status_key: statusKey,
+  });
+
   const moduleData = await getCommercialClaimModuleData();
   return {
     ...moduleData,
@@ -1100,6 +1111,17 @@ export async function decideCommercialClaimApproval(
     );
   });
 
+  // Post-commit: notificación fire-and-forget a n8n. No bloquea ni rompe el
+  // flujo si n8n está caído.
+  void notifyClaimWebhook({
+    claim_id: claimId,
+    event_type: decision === "approve" ? "claim-approved" : "claim-rejected",
+    actor_id: actorId,
+    occurred_at: now.toISOString(),
+    event_note: note ?? null,
+    status_key: nextStatus,
+  });
+
   return getCommercialClaimModuleData();
 }
 
@@ -1139,6 +1161,17 @@ export async function applyCommercialClaim(
       `,
       [makeEventId(), claimId, normalizeOptionalText(note), now, actorId],
     );
+  });
+
+  // Post-commit: notificación fire-and-forget a n8n. No bloquea ni rompe el
+  // flujo si n8n está caído.
+  void notifyClaimWebhook({
+    claim_id: claimId,
+    event_type: "claim-applied",
+    actor_id: actorId,
+    occurred_at: now.toISOString(),
+    event_note: note ?? null,
+    status_key: "applied",
   });
 
   return getCommercialClaimModuleData();
@@ -1231,4 +1264,79 @@ export async function attachCommercialClaimPhoto(
   }
 
   return mapAttachmentRow(row);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notificación a n8n (fire-and-forget, post-commit)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Diseño:
+// - Disparo SIEMPRE después del commit de la transacción de dominio. La BD es
+//   source of truth; el webhook es notificación. Si n8n cae o tarda, el flujo
+//   de la app NO se rompe (no-throw, AbortController de 3s, console.warn).
+// - Payload mínimo: solo IDs y metadata pública. n8n lee la fila completa por
+//   `claim_id` con su propia consulta (cross-cluster vía dblink/fdw).
+// - Si `N8N_RECLAMO_WEBHOOK_URL` no está configurada, el helper es no-op
+//   silencioso — útil en dev/staging sin n8n.
+// - `X-Webhook-Secret` se envía solo si `N8N_WEBHOOK_SECRET` está configurada.
+
+export type ClaimWebhookEventType =
+  | "claim-created"
+  | "claim-approved"
+  | "claim-rejected"
+  | "claim-applied";
+
+export type ClaimWebhookPayload = {
+  claim_id: string;
+  event_type: ClaimWebhookEventType;
+  actor_id: string;
+  occurred_at: string;
+  event_note?: string | null;
+  status_key?: string;
+};
+
+const CLAIM_WEBHOOK_TIMEOUT_MS = 3000;
+
+export async function notifyClaimWebhook(payload: ClaimWebhookPayload): Promise<void> {
+  const url = process.env.N8N_RECLAMO_WEBHOOK_URL?.trim();
+  if (!url) {
+    // Sin URL configurada → no-op silencioso. Permite correr la app sin n8n.
+    return;
+  }
+
+  const secret = process.env.N8N_WEBHOOK_SECRET?.trim();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (secret) {
+    headers["X-Webhook-Secret"] = secret;
+  }
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => {
+    controller.abort();
+  }, CLAIM_WEBHOOK_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      console.warn(
+        `[n8n] webhook respondió ${response.status} para ${payload.event_type} ${payload.claim_id}`,
+      );
+    }
+  } catch (error) {
+    // No re-throw. La BD ya está commiteada, el reclamo NO se debe romper
+    // si n8n está caído o el webhook timeoutea.
+    console.warn(
+      `[n8n] webhook falló para ${payload.event_type} ${payload.claim_id}:`,
+      error instanceof Error ? error.message : error,
+    );
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 }

@@ -92,6 +92,18 @@ Viewers heredan todos los paneles por defecto (opt-out); el admin los bloquea po
 - `HUMAN_TALENT_DATABASE_URL` (alternativa a split config; prioridad sobre DATABASE_HOST/PORT/USER/PASSWORD)
 - `TTHH_FOLLOWUPS_WRITE_RATE_LIMIT`
 - `TTHH_FOLLOWUPS_WRITE_RATE_LIMIT_WINDOW_MS`
+- `N8N_RECLAMO_WEBHOOK_URL` (webhook n8n para Reclamos Comerciales; vacia = no-op)
+- `N8N_WEBHOOK_SECRET` (se envia como header `X-Webhook-Secret` si esta configurado)
+
+## Webhook n8n - Reclamos Comerciales
+
+El modulo de Reclamos Comerciales notifica a n8n via fire-and-forget (post-commit, AbortController 3s, no-throw). Los 4 eventos disparados son:
+
+- `claim-created` (al registrar el reclamo en `createCommercialClaim`)
+- `claim-approved` / `claim-rejected` (al decidir en `decideCommercialClaimApproval`)
+- `claim-applied` (al aplicar en `applyCommercialClaim`)
+
+El payload solo lleva IDs y metadata publica (`claim_id`, `event_type`, `actor_id`, `occurred_at`, `event_note`, `status_key`). n8n consulta la fila completa por `claim_id` desde su propio workflow. Si `N8N_RECLAMO_WEBHOOK_URL` esta vacio, la app NO contacta a n8n (sin cambios de comportamiento).
 
 ## APIs web en clientes HTTP internos
 
