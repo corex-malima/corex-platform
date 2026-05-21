@@ -1,6 +1,6 @@
 import { describe as describeTest, expect, it } from "vitest";
 
-import { describe, mean, median, minMax, quartiles, sampleSd } from "../statistics";
+import { describe, linearRegression, mean, median, minMax, quartiles, sampleSd } from "../statistics";
 
 describeTest("mean", () => {
   it("returns null for empty array", () => {
@@ -140,5 +140,75 @@ describeTest("describe (consolidated)", () => {
     expect(d.n).toBe(3);
     expect(d.mean).toBe(2);
     expect(d.median).toBe(2);
+  });
+});
+
+describeTest("linearRegression", () => {
+  it("devuelve null cuando n=0", () => {
+    expect(linearRegression([], [])).toBeNull();
+  });
+
+  it("devuelve null cuando n=1", () => {
+    expect(linearRegression([1], [2])).toBeNull();
+  });
+
+  it("devuelve null cuando todos los valores son no-finitos", () => {
+    expect(linearRegression([null, undefined, NaN], [1, 2, 3])).toBeNull();
+  });
+
+  it("devuelve null cuando solo queda n=1 tras filtrar no-finitos", () => {
+    expect(linearRegression([1, null], [2, 3])).toBeNull();
+  });
+
+  it("n=2 con puntos colineales — slope correcto y r2=1", () => {
+    // y = 2x + 1  →  puntos (0,1) y (1,3)
+    const result = linearRegression([0, 1], [1, 3]);
+    expect(result).not.toBeNull();
+    expect(result!.n).toBe(2);
+    expect(result!.slope).toBeCloseTo(2, 6);
+    expect(result!.intercept).toBeCloseTo(1, 6);
+    expect(result!.r2).toBeCloseTo(1, 6);
+  });
+
+  it("n=3 puntos perfectamente colineales — r2=1", () => {
+    // y = 3x  →  (0,0) (1,3) (2,6)
+    const result = linearRegression([0, 1, 2], [0, 3, 6]);
+    expect(result).not.toBeNull();
+    expect(result!.r2).toBeCloseTo(1, 6);
+    expect(result!.slope).toBeCloseTo(3, 6);
+  });
+
+  it("n=3 con dispersión — slope calculado correctamente y r2<1", () => {
+    // (1,2) (2,2) (3,5)
+    // slope = (3·21 − 6·9) / (3·14 − 36) = 9/6 = 1.5
+    const result = linearRegression([1, 2, 3], [2, 2, 5]);
+    expect(result).not.toBeNull();
+    expect(result!.n).toBe(3);
+    expect(result!.slope).toBeCloseTo(1.5, 6);
+    expect(result!.r2).toBeLessThan(1);
+    expect(result!.r2).toBeGreaterThan(0);
+  });
+
+  it("todos los y iguales — r2=1 por convención (ssTot=0)", () => {
+    const result = linearRegression([1, 2, 3], [5, 5, 5]);
+    expect(result).not.toBeNull();
+    expect(result!.r2).toBe(1);
+    expect(result!.slope).toBeCloseTo(0, 6);
+  });
+
+  it("filtra valores no-finitos de xs e ys correctamente", () => {
+    // (1,2) válido, (null,3) descartado, (2,4) válido → n=2
+    const result = linearRegression([1, null, 2], [2, 3, 4]);
+    expect(result).not.toBeNull();
+    expect(result!.n).toBe(2);
+    expect(result!.slope).toBeCloseTo(2, 6);
+    expect(result!.r2).toBeCloseTo(1, 6);
+  });
+
+  it("filtra Infinity y NaN en xs", () => {
+    const result = linearRegression([1, Infinity, NaN, 2], [2, 100, 200, 4]);
+    expect(result).not.toBeNull();
+    expect(result!.n).toBe(2);
+    expect(result!.slope).toBeCloseTo(2, 6);
   });
 });

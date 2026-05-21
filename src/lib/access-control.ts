@@ -214,6 +214,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/mortality"],
   },
   {
+    pathnamePrefix: "/api/campo/alturas-dron",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/campo/alturas-dron"],
+  },
+  {
     pathnamePrefix: "/api/campo/administrar-maestros/programacion-drench",
     policy: "resource-bound",
     requiredResources: ["/dashboard/campo/administrar-maestros/programacion-drench"],

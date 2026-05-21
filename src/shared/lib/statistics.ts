@@ -145,3 +145,69 @@ export function describe(values: readonly (number | null | undefined)[]): Descri
     max: sorted[n - 1]!,
   };
 }
+
+export type LinearRegression = {
+  slope: number; // pendiente (unidad/tiempo)
+  intercept: number; // ordenada al origen
+  r2: number; // coeficiente de determinación [0..1]
+  n: number; // número de puntos válidos
+};
+
+/**
+ * Regresión lineal por mínimos cuadrados.
+ *
+ * - Filtra pares (x,y) donde cualquiera no sea finito.
+ * - Devuelve null si n<2 (no se puede ajustar línea).
+ * - r2 = 1 cuando ssTot === 0 (todos los y iguales) por convención.
+ */
+export function linearRegression(
+  xs: readonly (number | null | undefined)[],
+  ys: readonly (number | null | undefined)[],
+): LinearRegression | null {
+  const len = Math.min(xs.length, ys.length);
+  const validXs: number[] = [];
+  const validYs: number[] = [];
+
+  for (let i = 0; i < len; i += 1) {
+    const x = xs[i];
+    const y = ys[i];
+    if (x === null || x === undefined || !Number.isFinite(x)) continue;
+    if (y === null || y === undefined || !Number.isFinite(y)) continue;
+    validXs.push(x);
+    validYs.push(y);
+  }
+
+  const n = validXs.length;
+  if (n < 2) return null;
+
+  let sumX = 0;
+  let sumY = 0;
+  let sumXX = 0;
+  let sumXY = 0;
+
+  for (let i = 0; i < n; i += 1) {
+    sumX += validXs[i]!;
+    sumY += validYs[i]!;
+    sumXX += validXs[i]! * validXs[i]!;
+    sumXY += validXs[i]! * validYs[i]!;
+  }
+
+  const denominator = n * sumXX - sumX * sumX;
+  const slope = denominator === 0 ? 0 : (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+
+  const meanY = sumY / n;
+  let ssTot = 0;
+  let ssRes = 0;
+
+  for (let i = 0; i < n; i += 1) {
+    const yPred = slope * validXs[i]! + intercept;
+    const diff = validYs[i]! - meanY;
+    ssTot += diff * diff;
+    ssRes += (validYs[i]! - yPred) * (validYs[i]! - yPred);
+  }
+
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+
+  return { slope, intercept, r2, n };
+}
