@@ -4,7 +4,23 @@ import { loadProtectedPageData } from "@/modules/core/server-page";
 
 export const dynamic = "force-dynamic";
 
-export default async function ComercialReclamosPageRoute() {
+type SearchParamsValue = string | string[] | undefined;
+type ModuleTab = "registration" | "approvals" | "applications";
+
+function parseTab(value: SearchParamsValue): ModuleTab {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  if (normalized === "approvals" || normalized === "applications") return normalized;
+  return "registration";
+}
+
+export default async function ComercialReclamosPageRoute({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, SearchParamsValue>>;
+}) {
+  const resolvedSearchParams: Record<string, SearchParamsValue> = await Promise.resolve(searchParams ?? {});
+  const initialTab = parseTab(resolvedSearchParams.tab);
+
   const { data, error } = await loadProtectedPageData({
     resourceKey: "/dashboard/comercial/reclamos",
     loader: getCommercialClaimModuleData,
@@ -49,5 +65,5 @@ export default async function ComercialReclamosPageRoute() {
     },
   });
 
-  return <ComercialReclamosPage initialData={data!} initialError={error} />;
+  return <ComercialReclamosPage initialData={data!} initialError={error} initialTab={initialTab} />;
 }

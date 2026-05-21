@@ -116,6 +116,7 @@ export const ADMIN_RESOURCE_KEYS = new Set<string>(
  */
 export const RESTRICTED_FROM_VIEWER_DEFAULTS = new Set<string>([
   "/dashboard/comercial/reclamos",
+  "/dashboard/comercial/indicadores-kpi/reclamos",
   "/dashboard/calidad/reclamos",
   "/dashboard/postcosecha/productividad",
 ]);
@@ -269,6 +270,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/general/administrar-maestros/variedades"],
   },
   {
+    pathnamePrefix: "/api/general/administrar-maestros/punto-apertura",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/general/administrar-maestros/punto-apertura"],
+  },
+  {
     pathnamePrefix: "/api/postcosecha/administrar-maestros/destinos",
     policy: "resource-bound",
     requiredResources: ["/dashboard/postcosecha/administrar-maestros/destinos"],
@@ -277,6 +283,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     pathnamePrefix: "/api/general/administrar-maestros/fincas",
     policy: "resource-bound",
     requiredResources: ["/dashboard/general/administrar-maestros/fincas"],
+  },
+  {
+    pathnamePrefix: "/api/general/reglas-operativas/punto-apertura",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/general/reglas-operativas/punto-apertura"],
   },
   {
     pathnamePrefix: "/api/comercial/administrar-maestros/problemas-reclamo",
