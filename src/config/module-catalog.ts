@@ -529,7 +529,9 @@ export const MODULE_CATALOG: CatalogModule[] = [
     navigationGroup: "Administracion",
     trail: ["Maestros por dominio", "General"],
     accessSection: "Administracion",
-    status: "active",
+    // Pendiente: la ruta Next.js no existe todavía. Registrada como "hidden"
+    // hasta que Paul Loja envíe los archivos de la página (page.tsx + loader).
+    status: "hidden",
     mobileVisible: false,
   },
   {
@@ -571,7 +573,9 @@ export const MODULE_CATALOG: CatalogModule[] = [
     navigationGroup: "Gestion",
     trail: ["General", "Reglas operativas"],
     accessSection: "Gestion",
-    status: "active",
+    // Pendiente: la ruta Next.js no existe todavía. Registrada como "hidden"
+    // hasta que Paul Loja envíe los archivos de la página (page.tsx + loader).
+    status: "hidden",
     mobileVisible: false,
   },
   {
