@@ -13,7 +13,8 @@ import { formatDecimal, formatPercent } from "@/shared/lib/format";
 import type { AlturasDronStatsRow } from "@/lib/campo-alturas-dron";
 
 export interface AlturasDronTableProps {
-  rows: AlturasDronStatsRow[];
+  rows: AlturasDronStatsRow[];           // 1 row por bloque (última fecha) — se renderiza
+  allStats: AlturasDronStatsRow[];       // todas las filas del rango — para calcular tendencia
   searchValue: string;
   onSearchChange: (value: string) => void;
 }
@@ -28,33 +29,29 @@ type SortKey =
 
 export function AlturasDronTable({
   rows,
+  allStats,
   searchValue,
   onSearchChange,
 }: AlturasDronTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("parentBlock");
   const [sortAsc, setSortAsc] = useState(true);
 
-  // Calcular tendencia por bloque (altura última fecha - altura primera fecha)
+  // Calcular tendencia por bloque usando allStats (asumiendo que viene ordenado por parent_block, event_date asc)
   const blockTendencias = useMemo(() => {
-    const map = new Map<string, { first: number | null; last: number | null }>();
-    rows.forEach((row) => {
-      const key = row.parentBlock;
-      if (!map.has(key)) {
-        map.set(key, { first: row.alturaM, last: row.alturaM });
+    const grouped = new Map<string, { first: number; last: number }>();
+    for (const row of allStats) {
+      if (row.alturaM === null || row.alturaM === undefined) continue;
+      const cur = grouped.get(row.parentBlock);
+      if (!cur) {
+        grouped.set(row.parentBlock, { first: row.alturaM, last: row.alturaM });
       } else {
-        const current = map.get(key)!;
-        current.last = row.alturaM; // Asumir que están ordenados por fecha
+        cur.last = row.alturaM;
       }
-    });
-
+    }
     const tendencias = new Map<string, number>();
-    map.forEach((val, key) => {
-      const first = val.first ?? 0;
-      const last = val.last ?? 0;
-      tendencias.set(key, last - first);
-    });
+    for (const [k, v] of grouped) tendencias.set(k, v.last - v.first);
     return tendencias;
-  }, [rows]);
+  }, [allStats]);
 
   // Filtrar por búsqueda
   const filtered = useMemo(
@@ -213,9 +210,9 @@ export function AlturasDronTable({
                 Math.abs(tendencia) < 0.001 ? (
                   <Minus className="size-4 text-muted-foreground" />
                 ) : tendencia > 0 ? (
-                  <ArrowUp className="size-4 text-success" />
+                  <ArrowUp className="size-4" style={{ color: "var(--color-chart-success-bold)" }} />
                 ) : (
-                  <ArrowDown className="size-4 text-danger" />
+                  <ArrowDown className="size-4" style={{ color: "var(--color-chart-danger)" }} />
                 );
 
               return (
@@ -228,7 +225,7 @@ export function AlturasDronTable({
                   </StandardTd>
                   <StandardTd className="text-right">
                     <Badge variant={getCvBadgeVariant(row.cv)}>
-                      {formatPercent(row.cv, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
+                      {formatPercent(row.cv, { input: "ratio", minimumFractionDigits: 0, maximumFractionDigits: 1 })}
                     </Badge>
                   </StandardTd>
                   <StandardTd className="text-right">

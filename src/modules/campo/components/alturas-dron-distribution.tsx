@@ -24,7 +24,7 @@ import {
   axisTickStyle,
   gridConfig,
 } from "@/shared/charts/chart-axis-config";
-import { formatPercent, formatDecimal } from "@/shared/lib/format";
+import { formatDecimal } from "@/shared/lib/format";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import type { AlturasDronRangeRow } from "@/lib/campo-alturas-dron";
 import { Input } from "@/shared/ui/input";
@@ -43,11 +43,11 @@ const CHART_TYPES = [
 ];
 
 const PIE_COLORS = [
-  "hsl(var(--color-chart-1))",
-  "hsl(var(--color-chart-2))",
-  "hsl(var(--color-chart-3))",
-  "hsl(var(--color-chart-4))",
-  "hsl(var(--color-chart-5))",
+  "var(--chart-line-primary)",
+  "var(--chart-line-secondary)",
+  "var(--color-chart-success-bold)",
+  "var(--color-chart-warning)",
+  "var(--color-chart-info-bold)",
 ];
 
 function getPieColor(index: number): string {
@@ -72,7 +72,7 @@ export function AlturasDronDistribution({
       .filter(
         (r) =>
           r.parentBlock === selectedBlock &&
-          (r.distPrc ?? 0) >= threshold / 100,
+          (r.distPrc ?? 0) >= threshold,
       )
       .sort((a, b) => (a.alturaM ?? 0) - (b.alturaM ?? 0));
   }, [ranges, selectedBlock, threshold]);
@@ -135,15 +135,18 @@ export function AlturasDronDistribution({
               </div>
             ) : chartType === "barV" ? (
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={filteredRanges} {...axisConfig}>
+                <BarChart data={filteredRanges} margin={{ top: 10, right: 24, left: 0, bottom: 8 }}>
                   <CartesianGrid {...gridConfig} />
                   <XAxis
+                    {...axisConfig}
                     dataKey="alturaM"
                     tick={axisTickStyle}
-                    type="number"
+                    type="category"
+                    tickFormatter={(v) => `${Number(v).toFixed(2)}`}
                     label={{ value: "Altura (m)", position: "insideBottomRight", offset: -5 }}
                   />
                   <YAxis
+                    {...axisConfig}
                     label={{
                       value: "% Distribución",
                       angle: -90,
@@ -163,7 +166,7 @@ export function AlturasDronDistribution({
                       />
                     }
                   />
-                  <Bar dataKey="distPrc" fill="hsl(var(--color-chart-1))" />
+                  <Bar dataKey="distPrc" fill="var(--chart-line-primary)" />
                 </BarChart>
               </ResponsiveContainer>
             ) : chartType === "barH" ? (
@@ -171,11 +174,12 @@ export function AlturasDronDistribution({
                 <BarChart
                   data={filteredRanges}
                   layout="vertical"
-                  {...axisConfig}
+                  margin={{ top: 10, right: 24, left: 0, bottom: 8 }}
                 >
                   <CartesianGrid {...gridConfig} />
-                  <XAxis type="number" tick={axisTickStyle} />
+                  <XAxis {...axisConfig} type="number" tick={axisTickStyle} />
                   <YAxis
+                    {...axisConfig}
                     dataKey="alturaM"
                     type="category"
                     tick={axisTickStyle}
@@ -194,7 +198,7 @@ export function AlturasDronDistribution({
                       />
                     }
                   />
-                  <Bar dataKey="distPrc" fill="hsl(var(--color-chart-2))" />
+                  <Bar dataKey="distPrc" fill="var(--chart-line-secondary)" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -209,7 +213,7 @@ export function AlturasDronDistribution({
                     outerRadius={100}
                     label={(entry) => {
                       const data = entry.payload as AlturasDronRangeRow;
-                      return `${formatDecimal(data.alturaM ?? 0)}m (${formatPercent((data.distPrc ?? 0) / 100)})`;
+                      return `${formatDecimal(data.alturaM ?? 0)}m (${formatDecimal(data.distPrc ?? 0)}%)`;
                     }}
                   >
                     {filteredRanges.map((_, index) => (

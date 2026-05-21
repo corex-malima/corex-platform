@@ -245,7 +245,7 @@ export async function getAlturasDronData(
     const statsSql = `
       WITH stats AS (
         SELECT DISTINCT ON (event_date, parent_block)
-          event_date,
+          to_char(event_date, 'YYYY-MM-DD') AS event_date,
           parent_block,
           block_id,
           cycle_key,
@@ -327,6 +327,7 @@ export async function getAlturasDronData(
       .filter(Boolean)
       .map((t) => t.toLocaleLowerCase("es-EC"));
 
+    const options = buildOptions(statsRows);  // opciones del rango completo, antes de q
     const filteredStats =
       qTokens.length > 0
         ? statsRows.filter((r) => qTokens.every((t) => r.parentBlock.toLocaleLowerCase("es-EC").includes(t)))
@@ -338,8 +339,6 @@ export async function getAlturasDronData(
       alturaM: toFloatRequired(r.altura_m),
       distPrc: toFloatRequired(r.dist_prc),
     }));
-
-    const options = buildOptions(filteredStats);
     const summary = computeAlturasDronSummary(filteredStats);
 
     return {

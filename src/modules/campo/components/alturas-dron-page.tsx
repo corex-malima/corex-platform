@@ -47,8 +47,8 @@ function defaultFilters(dateFrom: string, dateTo: string): AlturasDronFilters {
   return {
     dateFrom,
     dateTo,
-    block: "",
-    cycleKey: "",
+    block: "all",
+    cycleKey: "all",
     q: "",
   };
 }
@@ -193,6 +193,7 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
               value={
                 summary.avgCvLastDate !== null
                   ? formatPercent(summary.avgCvLastDate, {
+                      input: "ratio",
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 1,
                     })
@@ -214,12 +215,13 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
       </SectionPageShell>
 
       {!hasData ? (
-        <EmptyState />
+        <EmptyState label="Sin mediciones de dron para los filtros aplicados." />
       ) : (
         <>
           <AlturasDronBarCharts statsLastDate={lastDateStats} />
           <AlturasDronTable
             rows={lastDateStats}
+            allStats={stats}
             searchValue={searchValue}
             onSearchChange={(val) => {
               setSearchValue(val);

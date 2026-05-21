@@ -26,10 +26,10 @@ export interface AlturasDronBarChartsProps {
 }
 
 function getCvAccentColor(cv: number | null): string {
-  if (cv === null || cv === undefined) return "hsl(var(--color-chart-2))";
-  if (cv >= 0.4) return "hsl(var(--color-danger))";
-  if (cv >= 0.25) return "hsl(var(--color-warning))";
-  return "hsl(var(--color-success))";
+  if (cv === null || cv === undefined) return "var(--chart-line-secondary)";
+  if (cv >= 0.4) return "var(--color-chart-danger)";
+  if (cv >= 0.25) return "var(--color-chart-warning)";
+  return "var(--color-chart-success-bold)";
 }
 
 export function AlturasDronBarCharts({ statsLastDate }: AlturasDronBarChartsProps) {
@@ -44,15 +44,17 @@ export function AlturasDronBarCharts({ statsLastDate }: AlturasDronBarChartsProp
         {/* Altura por bloque */}
         <ChartSurface title="Altura por bloque (m)">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={alturaData} {...axisConfig}>
+            <BarChart data={alturaData} margin={{ top: 10, right: 24, left: 0, bottom: 8 }}>
               <CartesianGrid {...gridConfig} />
               <XAxis
+                {...axisConfig}
                 dataKey="parentBlock"
                 tick={axisTickStyle}
                 angle={-45}
                 height={80}
               />
               <YAxis
+                {...axisConfig}
                 label={{ value: "Altura (m)", angle: -90, position: "insideLeft" }}
                 tick={axisTickStyle}
               />
@@ -68,7 +70,7 @@ export function AlturasDronBarCharts({ statsLastDate }: AlturasDronBarChartsProp
                   />
                 }
               />
-              <Bar dataKey="alturaM" fill="hsl(var(--color-chart-1))" />
+              <Bar dataKey="alturaM" fill="var(--chart-line-primary)" />
             </BarChart>
           </ResponsiveContainer>
         </ChartSurface>
@@ -76,15 +78,17 @@ export function AlturasDronBarCharts({ statsLastDate }: AlturasDronBarChartsProp
         {/* CV por bloque */}
         <ChartSurface title="Coeficiente de Variación por bloque">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={alturaData} {...axisConfig}>
+            <BarChart data={alturaData} margin={{ top: 10, right: 24, left: 0, bottom: 8 }}>
               <CartesianGrid {...gridConfig} />
               <XAxis
+                {...axisConfig}
                 dataKey="parentBlock"
                 tick={axisTickStyle}
                 angle={-45}
                 height={80}
               />
               <YAxis
+                {...axisConfig}
                 label={{ value: "CV", angle: -90, position: "insideLeft" }}
                 tick={axisTickStyle}
               />
@@ -100,7 +104,7 @@ export function AlturasDronBarCharts({ statsLastDate }: AlturasDronBarChartsProp
                   />
                 }
               />
-              <Bar dataKey="cv" fill="hsl(var(--color-chart-2))">
+              <Bar dataKey="cv" fill="var(--chart-line-secondary)">
                 {alturaData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}

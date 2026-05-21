@@ -21,6 +21,7 @@ import {
   axisTickStyle,
   gridConfig,
 } from "@/shared/charts/chart-axis-config";
+import { linearRegression } from "@/shared/lib/statistics";
 import { formatDecimal } from "@/shared/lib/format";
 import type { AlturasDronStatsRow } from "@/lib/campo-alturas-dron";
 import { Card } from "@/shared/ui/card";
@@ -40,36 +41,8 @@ interface RegressionStat {
   r2: number;
 }
 
-// Función de regresión lineal local
-function linearRegression(
-  xs: number[],
-  ys: number[],
-): { slope: number; intercept: number; r2: number; n: number } | null {
-  if (xs.length < 2) return null;
-  const n = xs.length;
-  const sumX = xs.reduce((a, b) => a + b, 0);
-  const sumY = ys.reduce((a, b) => a + b, 0);
-  const sumXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
-  const sumX2 = xs.reduce((a, x) => a + x * x, 0);
-
-  const denom = n * sumX2 - sumX * sumX;
-  if (Math.abs(denom) < 1e-10) return null;
-
-  const slope = (n * sumXY - sumX * sumY) / denom;
-  const intercept = (sumY - slope * sumX) / n;
-
-  const ssRes = ys.reduce(
-    (a, y, i) => a + Math.pow(y - (intercept + slope * xs[i]), 2),
-    0,
-  );
-  const ssTot = ys.reduce((a, y) => a + Math.pow(y - sumY / n, 2), 0);
-  const r2 = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
-
-  return { slope, intercept, r2, n };
-}
-
 function getTrendColor(slope: number): string {
-  return slope > 0 ? "hsl(var(--color-success))" : "hsl(var(--color-danger))";
+  return slope > 0 ? "var(--color-chart-success-bold)" : "var(--color-chart-danger)";
 }
 
 export function AlturasDronMulti({ stats }: AlturasDronMultiProps) {
@@ -90,12 +63,10 @@ export function AlturasDronMulti({ stats }: AlturasDronMultiProps) {
     [uniqueBlocks],
   );
 
-  // Inicializar con el primer bloque si hay
+  // displayedBlocks: solo los seleccionados (sin fallback)
   const displayedBlocks = useMemo(() => {
-    if (selectedBlocks.length > 0) return selectedBlocks;
-    if (uniqueBlocks.length > 0) return [uniqueBlocks[0]];
-    return [];
-  }, [selectedBlocks, uniqueBlocks]);
+    return selectedBlocks;
+  }, [selectedBlocks]);
 
   // Construir datos para el chart
   const chartData = useMemo((): BlockChartData[] => {
@@ -195,83 +166,93 @@ export function AlturasDronMulti({ stats }: AlturasDronMultiProps) {
           </div>
 
           <div className="space-y-4">
-            <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={chartData} {...axisConfig}>
-                <CartesianGrid {...gridConfig} />
-                <XAxis
-                  dataKey="eventDate"
-                  tick={axisTickStyle}
-                  angle={-45}
-                  height={80}
-                />
-                <YAxis
-                  label={{
-                    value: "Altura (m)",
-                    angle: -90,
-                    position: "insideLeft",
-                  }}
-                  tick={axisTickStyle}
-                />
-                <Tooltip
-                  content={
-                    <RechartsTooltipAdapter
-                      mapPayload={(payload) =>
-                        payload.map((item) => ({
-                          label: item.name || "Altura",
-                          value: String(item.value ?? "—"),
-                        }))
+            {displayedBlocks.length === 0 ? (
+              <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
+                Selecciona uno o más bloques para ver la evolución temporal.
+              </div>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={chartData} margin={{ top: 10, right: 24, left: 0, bottom: 8 }}>
+                    <CartesianGrid {...gridConfig} />
+                    <XAxis
+                      {...axisConfig}
+                      dataKey="eventDate"
+                      tick={axisTickStyle}
+                      angle={-45}
+                      height={80}
+                    />
+                    <YAxis
+                      {...axisConfig}
+                      label={{
+                        value: "Altura (m)",
+                        angle: -90,
+                        position: "insideLeft",
+                      }}
+                      tick={axisTickStyle}
+                    />
+                    <Tooltip
+                      content={
+                        <RechartsTooltipAdapter
+                          mapPayload={(payload) =>
+                            payload.map((item) => ({
+                              label: item.name || "Altura",
+                              value: String(item.value ?? "—"),
+                            }))
+                          }
+                        />
                       }
                     />
-                  }
-                />
 
-                {displayedBlocks.map((block) => {
-                  const trend =
-                    regressionStats.find((r) => r.block === block)?.slope ?? 0;
-                  return (
-                    <Line
-                      key={`line-${block}`}
-                      type="monotone"
-                      dataKey={block}
-                      stroke={getTrendColor(trend)}
-                      dot={false}
-                      isAnimationActive={false}
-                      strokeWidth={2}
-                    />
-                  );
-                })}
-              </LineChart>
-            </ResponsiveContainer>
+                    {displayedBlocks.map((block) => {
+                      const trend =
+                        regressionStats.find((r) => r.block === block)?.slope ?? 0;
+                      return (
+                        <Line
+                          key={`line-${block}`}
+                          type="monotone"
+                          dataKey={block}
+                          stroke={getTrendColor(trend)}
+                          dot={false}
+                          isAnimationActive={false}
+                          strokeWidth={2}
+                        />
+                      );
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
 
-            {showRegression && regressionStats.length > 0 && (
-              <Card className="border p-3 bg-muted/40">
-                <div className="text-xs font-semibold uppercase tracking-wide mb-2">
-                  Análisis de regresión (m/día)
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  {regressionStats.map((stat) => (
-                    <div
-                      key={stat.block}
-                      className="p-2 bg-background rounded border"
-                    >
-                      <div className="font-medium">{stat.block}</div>
-                      <div className="text-muted-foreground">
-                        Pendiente:{" "}
-                        <span
-                          style={{
-                            color: getTrendColor(stat.slope),
-                          }}
-                        >
-                          {formatDecimal(stat.slope)}
-                        </span>
-                      </div>
-                      <div className="text-muted-foreground">
-                        R²: {formatDecimal(stat.r2)}
-                      </div>
+                {showRegression && regressionStats.length > 0 && (
+                  <Card className="border p-3 bg-muted/40">
+                    <div className="text-xs font-semibold uppercase tracking-wide mb-2">
+                      Análisis de regresión (m/día)
                     </div>
-                  ))}
-                </div>
-              </Card>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      {regressionStats.map((stat) => (
+                        <div
+                          key={stat.block}
+                          className="p-2 bg-background rounded border"
+                        >
+                          <div className="font-medium">{stat.block}</div>
+                          <div className="text-muted-foreground">
+                            Pendiente:{" "}
+                            <span
+                              style={{
+                                color: getTrendColor(stat.slope),
+                              }}
+                            >
+                              {formatDecimal(stat.slope)}
+                            </span>
+                          </div>
+                          <div className="text-muted-foreground">
+                            R²: {formatDecimal(stat.r2)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </>
             )}
           </div>
         </div>
