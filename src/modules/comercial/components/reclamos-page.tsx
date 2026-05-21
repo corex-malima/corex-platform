@@ -339,11 +339,13 @@ function QueueCard({
 export function ComercialReclamosPage({
   initialData,
   initialError,
+  initialTab,
 }: {
   initialData: CommercialClaimModuleData;
   initialError?: string | null;
+  initialTab?: ModuleTab | null;
 }) {
-  const [activeTab, setActiveTab] = useState<ModuleTab>("registration");
+  const [activeTab, setActiveTab] = useState<ModuleTab>(initialTab ?? "registration");
   const [formValues, setFormValues] = useState<CommercialClaimFormInput>(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState<ClaimFormErrors>({});
   const [photoFile, setPhotoFile] = useState<File | null>(null);
