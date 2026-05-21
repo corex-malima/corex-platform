@@ -193,6 +193,7 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
               value={
                 summary.avgCvLastDate !== null
                   ? formatPercent(summary.avgCvLastDate, {
+                      minimumFractionDigits: 0,
                       maximumFractionDigits: 1,
                     })
                   : "—"

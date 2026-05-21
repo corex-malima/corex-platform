@@ -6,11 +6,16 @@ export const metadata = {
   title: "Alturas Dron (CHN)",
 };
 
+type SearchParamsRecord = Record<string, string | string[] | undefined>;
+
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<SearchParamsRecord>;
 }) {
+  // En Next.js 16 `searchParams` viene como Promise — hay que awaitearlo.
+  const sp = await searchParams;
+
   // Parámetros por defecto: últimos 90 días
   const today = new Date();
   const ninetyDaysAgo = new Date(today);
@@ -24,15 +29,11 @@ export default async function Page({
     loader: () =>
       getAlturasDronData(
         normalizeAlturasDronFilters({
-          dateFrom: searchParams.dateFrom
-            ? String(searchParams.dateFrom)
-            : defaultDateFrom,
-          dateTo: searchParams.dateTo
-            ? String(searchParams.dateTo)
-            : defaultDateTo,
-          block: searchParams.block ? String(searchParams.block) : "",
-          cycleKey: searchParams.cycleKey ? String(searchParams.cycleKey) : "",
-          q: searchParams.q ? String(searchParams.q) : "",
+          dateFrom: sp.dateFrom ? String(sp.dateFrom) : defaultDateFrom,
+          dateTo: sp.dateTo ? String(sp.dateTo) : defaultDateTo,
+          block: sp.block ? String(sp.block) : "",
+          cycleKey: sp.cycleKey ? String(sp.cycleKey) : "",
+          q: sp.q ? String(sp.q) : "",
         }),
       ),
     fallbackMessage: "Error inesperado al consultar datos de alturas dron.",

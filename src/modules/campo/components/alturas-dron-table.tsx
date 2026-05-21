@@ -228,7 +228,7 @@ export function AlturasDronTable({
                   </StandardTd>
                   <StandardTd className="text-right">
                     <Badge variant={getCvBadgeVariant(row.cv)}>
-                      {formatPercent(row.cv, { maximumFractionDigits: 1 })}
+                      {formatPercent(row.cv, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}
                     </Badge>
                   </StandardTd>
                   <StandardTd className="text-right">
