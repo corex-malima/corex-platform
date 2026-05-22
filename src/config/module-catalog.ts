@@ -120,6 +120,20 @@ export const MODULE_CATALOG: CatalogModule[] = [
     quickAccess: true,
   },
   {
+    key: "campo-punto-apertura",
+    label: "Punto de apertura",
+    title: "Punto de apertura",
+    eyebrow: "Analítica / Campo / Indicadores & KPI",
+    summary: "Cumplimiento ponderado del punto de apertura con serie histórica y drilldown por área y bloque.",
+    href: "/dashboard/campo/punto-apertura",
+    icon: Target,
+    navigationGroup: "Dashboard",
+    trail: ["Campo", "Indicadores & KPI"],
+    accessSection: "Analítica / Indicadores & KPI",
+    status: "active",
+    quickAccess: true,
+  },
+  {
     key: "campo-curva-cosecha",
     label: "Curva de Cosecha",
     title: "Curva de Cosecha",
@@ -529,9 +543,7 @@ export const MODULE_CATALOG: CatalogModule[] = [
     navigationGroup: "Administracion",
     trail: ["Maestros por dominio", "General"],
     accessSection: "Administracion",
-    // Pendiente: la ruta Next.js no existe todavía. Registrada como "hidden"
-    // hasta que Paul Loja envíe los archivos de la página (page.tsx + loader).
-    status: "hidden",
+    status: "active",
     mobileVisible: false,
   },
   {
@@ -573,9 +585,7 @@ export const MODULE_CATALOG: CatalogModule[] = [
     navigationGroup: "Gestion",
     trail: ["General", "Reglas operativas"],
     accessSection: "Gestion",
-    // Pendiente: la ruta Next.js no existe todavía. Registrada como "hidden"
-    // hasta que Paul Loja envíe los archivos de la página (page.tsx + loader).
-    status: "hidden",
+    status: "active",
     mobileVisible: false,
   },
   {

@@ -1,0 +1,1200 @@
+METODOLOGIA PROPUESTA DE META
+CALIDAD / INDICADORES / PUNTO DE APERTURA
+
+Fecha: 2026-05-20
+Estado: Definicion funcional previa a implementacion de logica y KPI
+
+1. Objetivo
+
+Definir una metodologia objetiva para medir cumplimiento de punto de apertura contra una meta operativa vigente, evitando evaluaciones subjetivas y permitiendo luego construir KPIs de cumplimiento por area o responsable.
+
+La medicion real ya existe en el sistema:
+- a nivel de registro por malla
+- y en el visualizador tambien como agregado a nivel de tallos muestreados
+
+Lo que faltaba definir es contra que meta se compara y como se castiga el incumplimiento.
+
+
+2. Principio general
+
+La meta de punto de apertura no debe evaluarse solamente como cumple / no cumple.
+
+Debe evaluarse con una logica de cercania y distancia respecto al punto objetivo:
+- mientras mas cerca este la observacion del punto objetivo, el castigo es menor
+- mientras mas lejos este la observacion del punto objetivo, el castigo es mayor
+
+Esto significa que no todos los incumplimientos pesan igual.
+
+Ejemplo:
+Si la meta vigente es 1 a 3 flores, entonces:
+- Boton incumple
+- 4 a 9 incumple
+- 10 a 20 incumple
+- Mas de 20 incumple
+
+Pero el incumplimiento no debe penalizarse igual en los cuatro casos.
+
+
+3. Unidad de comparacion
+
+La regla operativa vigente se define con base en la categoria objetivo oficial de punto de apertura:
+- Boton
+- 1 a 3
+- 4 a 9
+- 10 a 20
+- Mas de 20
+
+La medicion del dia debe compararse contra esa categoria vigente segun fecha y alcance aplicable.
+
+La comparacion puede hacerse en dos niveles:
+
+3.1 Nivel registro / malla
+- Sirve para trazabilidad operativa y auditoria
+- Permite ver exactamente cada observacion
+
+3.2 Nivel agregado / tallos muestreados
+- Sirve para KPI diario y consolidado
+- Debe ser la base principal de cumplimiento porcentual
+
+Recomendacion:
+- usar el nivel malla para detalle
+- usar el nivel tallos muestreados para el indicador oficial
+
+
+4. Meta base diaria
+
+Propuesta de criterio principal:
+
+- Al menos el 60% de la flor cosechada y muestreada ese dia debe cumplir la categoria objetivo vigente.
+
+Interpretacion:
+- si la meta del dia es 1 a 3, al menos el 60% del volumen muestreado debe estar dentro de 1 a 3
+- el 40% restante puede desviarse, pero con castigo proporcional a la distancia
+
+Este 60% es la meta base de cumplimiento directo.
+
+Luego, sobre el restante fuera de meta, se aplica un factor de castigo.
+
+
+5. Logica de castigo
+
+La metodologia debe castigar el desvio por distancia ordinal respecto a la categoria objetivo.
+
+5.1 Distancia ordinal
+
+Las categorias tienen orden natural:
+1. Boton
+2. 1 a 3
+3. 4 a 9
+4. 10 a 20
+5. Mas de 20
+
+La distancia se mide por pasos entre categorias.
+
+Ejemplo si la meta es 1 a 3:
+- Boton = distancia 1 hacia abajo
+- 4 a 9 = distancia 1 hacia arriba
+- 10 a 20 = distancia 2 hacia arriba
+- Mas de 20 = distancia 3 hacia arriba
+
+5.2 Regla funcional de penalidad
+
+Se propone que la penalidad aumente con la distancia.
+
+Esquema minimo recomendado:
+- distancia 0 = factor 0
+- distancia 1 = factor 1
+- distancia 2 = factor 2
+- distancia 3 = factor 3
+
+Esto significa:
+- cerca del objetivo, castigo base
+- lejos del objetivo, castigo superior
+
+Ejemplo si la meta es 1 a 3:
+- Boton -> factor 1
+- 4 a 9 -> factor 1
+- 10 a 20 -> factor 2
+- Mas de 20 -> factor 3
+
+Este esquema es simple, entendible y defendible operativamente.
+
+5.3 Variante opcional futura
+
+Si despues se requiere un castigo mas fuerte, la progresion puede volverse no lineal:
+- distancia 1 = factor 1
+- distancia 2 = factor 3
+- distancia 3 = factor 5
+
+Por ahora se recomienda iniciar con penalidad lineal por simplicidad.
+
+
+6. Rango de tolerancia de incumplimiento
+
+Ademas del 60% de cumplimiento directo, se propone un limite de rango de incumplimiento de 20 hacia abajo y 20 hacia arriba.
+
+Interpretacion funcional:
+- el sistema no solo debe decir cuanto cumple exactamente la meta
+- tambien debe reconocer una banda de tolerancia agregada de hasta 20 puntos porcentuales
+
+Ejemplo:
+- cumplimiento objetivo directo: 60%
+- zona tolerable total: entre 40% y 80%, dependiendo del sentido del analisis
+
+Pero esa tolerancia no puede leerse como permiso plano.
+
+Principio importante:
+- dentro de ese 20, el castigo sigue creciendo mientras mas lejos este la categoria observada del punto objetivo
+
+Es decir:
+- un 10% fuera en categorias cercanas no pesa igual
+- que un 10% fuera en categorias muy lejanas
+
+Por eso el indicador final no debe medir solo porcentaje fuera de meta, sino porcentaje fuera de meta ponderado por castigo.
+
+
+7. Indicador sugerido
+
+Se recomienda separar dos lecturas:
+
+7.1 Cumplimiento directo
+
+Porcentaje del volumen muestreado que cae exactamente dentro de la categoria objetivo vigente.
+
+Formula conceptual:
+
+Cumplimiento directo =
+  tallos muestreados dentro de la categoria objetivo
+  dividido para
+  tallos muestreados totales del dia
+
+7.2 Incumplimiento ponderado
+
+Porcentaje del volumen fuera de meta, ajustado por factor de castigo.
+
+Formula conceptual:
+
+Incumplimiento ponderado =
+  suma de (participacion fuera de meta x factor de castigo)
+  dividido para
+  total muestreado
+
+7.3 Puntaje final sugerido
+
+Se puede construir despues un indice de cumplimiento neto:
+
+Indice neto =
+  cumplimiento directo
+  menos
+  penalidad ponderada normalizada
+
+Esta parte no debe implementarse todavia hasta validar negocio.
+
+
+8. Ejemplo conceptual
+
+Meta vigente del dia: 1 a 3
+
+Distribucion observada:
+- Boton = 10%
+- 1 a 3 = 55%
+- 4 a 9 = 20%
+- 10 a 20 = 10%
+- Mas de 20 = 5%
+
+Lectura:
+- cumplimiento directo = 55%
+- no cumple la meta base del 60%
+
+Castigo lineal:
+- Boton: 10 x 1 = 10
+- 4 a 9: 20 x 1 = 20
+- 10 a 20: 10 x 2 = 20
+- Mas de 20: 5 x 3 = 15
+
+Penalidad total = 65 unidades ponderadas
+
+Conclusiones:
+- el mayor problema no es solo estar por debajo de 60%
+- sino que parte del desvio esta muy lejos del objetivo
+- por eso la sancion operativa debe sentirse mas fuerte que si todo el desvio estuviera concentrado en Boton o 4 a 9
+
+
+9. Criterio metodologico recomendado para la primera version
+
+Primera version recomendada:
+
+- Meta vigente definida por categoria oficial
+- Cumplimiento medido principalmente sobre tallos muestreados
+- Meta base diaria: 60% dentro de categoria objetivo
+- Penalidad por distancia ordinal
+- Escala inicial de castigo lineal:
+  - distancia 1 = 1
+  - distancia 2 = 2
+  - distancia 3 = 3
+- Banda de tolerancia conceptual de 20 hacia abajo y 20 hacia arriba
+- El incumplimiento no se lee plano: siempre se pondera por distancia
+
+
+10. Lo que no se implementa aun
+
+En esta etapa no se implementa:
+- KPI visual de cumplimiento
+- semaforo final
+- score por area
+- alertas automaticas
+- comparacion automatica en el visualizador
+
+En esta etapa solo se deja definida la metodologia funcional.
+
+
+11. Siguiente fase sugerida
+
+Una vez aprobada esta metodologia:
+
+1. Tomar la meta vigente desde Gestion / General / Reglas operativas / Punto de apertura
+2. Cruce automatico con la medicion diaria de Calidad / Indicadores / Punto de apertura
+3. Calcular:
+   - cumplimiento directo
+   - incumplimiento ponderado
+   - indice neto
+4. Desplegar KPI por area o responsable
+
+
+12. Decision pendiente de negocio
+
+Antes de construir la logica definitiva, negocio debe confirmar:
+
+- si el 60% es el umbral correcto
+- si la tolerancia de 20 hacia arriba y 20 hacia abajo se mantiene
+- si el castigo sera lineal o no lineal
+- si el KPI oficial se medira sobre tallos muestreados, mallas o ambos
+
+
+13. Recomendacion final
+
+La recomendacion tecnica y operativa es:
+
+- usar tallos muestreados como base del KPI oficial
+- usar mallas como soporte de auditoria
+- iniciar con castigo lineal por distancia ordinal
+- validar primero el comportamiento del indicador antes de sofisticar el castigo
+
+Con esto se logra una metodologia clara, auditable y consistente con la estructura de vigencias ya construida en el sistema.
+
+
+14. Fuentes reales del sistema
+
+La metodologia debe montarse sobre las fuentes que hoy ya usa CoreX para el modulo:
+
+14.1 Fuente principal de observacion
+
+- Base: `datalakehouse`
+- Tabla principal: `hist.temp_monitoreo_verde`
+
+Campos relevantes ya usados por el modulo actual:
+- `fecha`
+- `bloque`
+- `ciclo`
+- `ptoapertura_boton`
+- `ptoapertura_1a3`
+- `ptoapertura_4a9`
+- `ptoapertura_10a20`
+- `ptoapertura_mas20`
+- `num_tallos_por_malla_cv`
+
+Interpretacion:
+- cada fila representa un registro de monitoreo
+- la medicion real viene distribuida por clase de apertura
+- la suma de esas clases forma el universo observado de apertura de ese registro
+
+14.2 Fuente calendario
+
+- Base: `datalakehouse`
+- Tabla: `slv.common_dim_calendar_date_scd0`
+
+Uso:
+- obtener `iso_week_id`
+- consolidar por semana, mes y anio
+
+14.3 Fuente de perfil del ciclo
+
+- Base: `datalakehouse`
+- Tabla: `slv.camp_dim_cycle_profile_scd2`
+
+Campos usados por el modulo actual:
+- `cycle_key`
+- `area_id`
+- `sp_type`
+- `variety`
+
+Uso:
+- enriquecer cada registro con:
+  - area
+  - tipo SP
+  - variedad
+
+14.4 Fuente de meta operativa
+
+- Base: `db_general`
+- Maestro de categorias:
+  - `public.gnl_ref_opening_point_category_id_core_scd2`
+  - `public.gnl_dim_opening_point_category_profile_scd2`
+- Reglas operativas vigentes:
+  - `public.gnl_ref_opening_target_rule_id_core_scd2`
+  - `public.gnl_dim_opening_target_rule_profile_scd2`
+
+Campos relevantes de la regla:
+- `valid_from`
+- `valid_to`
+- `opening_point_category_id`
+- `opening_point_category_code`
+- `opening_point_category_name`
+- `target_class_min`
+- `target_class_max`
+- `variety_id`
+- `is_current`
+- `is_active`
+
+Uso:
+- resolver la categoria objetivo vigente para cada fecha
+- con alcance:
+  - general
+  - o por variedad
+
+
+15. Unidad oficial para el KPI
+
+Aunque el monitoreo existe a nivel de registro y malla, el KPI oficial debe montarse sobre tallos muestreados.
+
+Recomendacion funcional:
+- la unidad oficial del indicador sea el total muestreado en las clases de apertura
+- no la cantidad de filas
+- no la cantidad de mallas planas
+
+Formula base por registro:
+
+total_tallos_muestreados_registro =
+  boton + 1a3 + 4a9 + 10a20 + mas20
+
+Esto hoy en el modulo ya existe como:
+- `total_apertura`
+
+Interpretacion:
+- `total_apertura` es la mejor base para ponderar cumplimiento
+- `num_tallos_por_malla_cv` puede quedar como dato de auditoria o soporte, pero no como denominador principal
+
+Motivo:
+- el KPI de cumplimiento de apertura debe medir la distribucion real de la muestra clasificada en categorias
+- y esa distribucion vive en la suma de las clases de apertura
+
+
+16. Logica de cruce meta vs observacion
+
+Para cada registro observado se debe resolver:
+
+1. la categoria objetivo vigente para esa fecha
+2. la categoria observada dominante
+3. la distancia entre ambas
+4. el factor de castigo aplicable
+
+16.1 Categoria observada
+
+La categoria observada del registro es la categoria dominante:
+- la que tiene mayor numero de tallos dentro del registro
+
+Hoy el modulo ya calcula:
+- `dominante_clase`
+- `dominante_valor`
+- `dominante_pct`
+
+16.2 Categoria objetivo
+
+Debe obtenerse desde `db_general` por vigencia:
+
+Regla recomendada:
+- si existe regla activa por variedad para esa fecha, usar esa
+- si no existe, usar la regla general vigente para esa fecha
+
+Orden de prioridad:
+1. regla especifica por variedad
+2. regla general
+
+16.3 Distancia entre categorias
+
+Debe calcularse ordinalmente con esta codificacion:
+- Boton = 1
+- 1 a 3 = 2
+- 4 a 9 = 3
+- 10 a 20 = 4
+- Mas de 20 = 5
+
+Entonces:
+
+distancia =
+  abs(orden_categoria_observada - orden_categoria_objetivo)
+
+16.4 Factor de castigo
+
+Primera propuesta recomendada:
+- distancia 0 = 0
+- distancia 1 = 1
+- distancia 2 = 2
+- distancia 3 = 3
+- distancia 4 = 4
+
+Nota:
+- en la operacion real, para la mayoria de metas practicas la distancia maxima visible sera 3
+- pero dejar 4 hace el esquema robusto para cualquier comparacion extrema
+
+
+17. Estructura propuesta en base de datos para el indicador
+
+No se recomienda construir el KPI directamente en el visualizador.
+
+Se recomienda separar la solucion en 2 capas analiticas.
+
+17.1 Capa 1: evaluacion por registro
+
+Propuesta:
+- crear una vista o tabla derivada a nivel de registro de monitoreo
+
+Nombre sugerido:
+- `gld.vw_qly_opening_point_record_eval_cur`
+
+Grano:
+- 1 fila por registro de monitoreo de `hist.temp_monitoreo_verde`
+
+Columnas minimas sugeridas:
+- `record_id`
+- `fecha`
+- `ciclo`
+- `bloque`
+- `area`
+- `sp_type`
+- `variety`
+- `iso_week_id`
+- `boton`
+- `uno_tres`
+- `cuatro_nueve`
+- `diez_veinte`
+- `mas_veinte`
+- `total_apertura`
+- `tallos_malla`
+- `dominante_clase`
+- `dominante_valor`
+- `dominante_pct`
+- `target_category_id`
+- `target_category_code`
+- `target_category_name`
+- `target_class_min`
+- `target_class_max`
+- `target_category_order`
+- `observed_category_order`
+- `distance_to_target`
+- `penalty_factor`
+- `compliance_direct_flag`
+- `weighted_penalty_units`
+- `rule_id`
+- `rule_valid_from`
+
+Reglas de calculo sugeridas:
+
+`compliance_direct_flag`
+- 1 si `dominante_clase` = categoria objetivo
+- 0 en caso contrario
+
+`weighted_penalty_units`
+- `total_apertura * penalty_factor`
+
+Este campo permite que un registro con mucho volumen y mucho desvio pese mas que uno pequeno y cercano.
+
+17.2 Capa 2: KPI diario agregado
+
+Propuesta:
+- crear una vista o tabla derivada diaria
+
+Nombre sugerido:
+- `gld.vw_qly_opening_point_kpi_day_cur`
+
+Grano:
+- 1 fila por dia + area + variedad + tipo SP
+
+Columnas minimas sugeridas:
+- `fecha`
+- `iso_week_id`
+- `record_year`
+- `record_month`
+- `area`
+- `sp_type`
+- `variety`
+- `target_category_id`
+- `target_category_code`
+- `target_category_name`
+- `sampled_stems_total`
+- `compliant_stems_total`
+- `compliance_direct_pct`
+- `non_compliant_stems_total`
+- `weighted_penalty_total`
+- `weighted_penalty_rate`
+- `compliance_goal_pct`
+- `within_goal_flag`
+- `net_compliance_index`
+
+Formulas sugeridas:
+
+`sampled_stems_total`
+- suma de `total_apertura`
+
+`compliant_stems_total`
+- suma de `total_apertura` solo donde `compliance_direct_flag = 1`
+
+`compliance_direct_pct`
+- `compliant_stems_total / sampled_stems_total * 100`
+
+`weighted_penalty_total`
+- suma de `weighted_penalty_units`
+
+`weighted_penalty_rate`
+- `weighted_penalty_total / sampled_stems_total`
+
+`compliance_goal_pct`
+- valor fijo inicial: `60`
+
+`within_goal_flag`
+- 1 si `compliance_direct_pct >= 60`
+- 0 en caso contrario
+
+`net_compliance_index`
+- propuesta inicial:
+  - `compliance_direct_pct - weighted_penalty_rate`
+
+Este indice neto no debe hacerse oficial sin validacion de negocio, pero sirve como base tecnica.
+
+
+18. Como debe leerse el 60% en base
+
+La meta del 60% no se mide por cantidad de registros.
+Se mide por volumen muestreado agregado.
+
+Ejemplo conceptual:
+
+Si un dia en un area se muestrearon:
+- 1,000 tallos totales en todas las observaciones
+
+Entonces:
+- al menos 600 tallos deben caer en registros cuya categoria dominante coincide con la meta vigente
+
+Ese es el cumplimiento directo del dia.
+
+Luego:
+- los otros 400 tallos fuera de meta no se cuentan todos igual
+- se ponderan por el castigo segun distancia
+
+
+19. Como implementar el rango de tolerancia de 20
+
+La tolerancia de 20 hacia arriba y 20 hacia abajo no debe guardarse como simple texto.
+Debe incorporarse como parte del KPI diario.
+
+Propuesta:
+
+Columnas derivadas:
+- `goal_center_pct = 60`
+- `goal_lower_pct = 40`
+- `goal_upper_pct = 80`
+
+Uso:
+- `goal_center_pct` = meta directa
+- `goal_lower_pct` y `goal_upper_pct` = banda de lectura operativa
+
+Importante:
+- estar dentro de la banda no significa automaticamente buen resultado
+- la severidad real la define el `weighted_penalty_rate`
+
+Asi, dos dias con el mismo `55%` de cumplimiento directo pueden no ser equivalentes:
+- uno puede tener desviacion cercana
+- otro puede tener mucha flor en `10 a 20` o `Mas de 20`
+
+
+20. Ruta recomendada de implementacion
+
+Fase tecnica recomendada:
+
+1. Mantener el modulo actual de visualizacion como esta
+2. Crear la capa `record_eval` con cruce a reglas vigentes
+3. Crear la capa `kpi_day` agregada
+4. Validar resultados con negocio
+5. Recién despues montar el KPI de cumplimiento en pantalla
+
+Orden recomendado de bases:
+
+1. `db_general`
+- maestro y reglas operativas
+
+2. `datalakehouse`
+- lectura de observacion real
+- enriquecimiento con calendario y ciclo
+- vistas o tablas derivadas del KPI
+
+
+21. Recomendacion final de arquitectura
+
+La recomendacion tecnica es:
+
+- no recalcular la metodologia completa en frontend
+- no dejar el KPI solo en la API de pantalla
+- dejar la meta y el castigo resueltos en una capa analitica reusable
+
+Arquitectura sugerida:
+- maestro y vigencia en `db_general`
+- evaluacion por registro en `datalakehouse`
+- KPI diario agregado en `datalakehouse`
+- visualizador de Calidad consumiendo esa capa derivada cuando llegue la siguiente fase
+
+Con esto la metodologia queda no solo definida estadisticamente, sino tambien aterrizada a las fuentes reales y a una estructura de base de datos implementable.
+
+
+22. Como entra la meta desde la fuente maestra
+
+La meta ya no debe quedar hardcodeada en el visualizador.
+Debe leerse desde la fuente maestra de metas activas:
+
+Consulta base:
+
+SELECT
+  target_code,
+  target_name,
+  metric_code,
+  operator_code,
+  value_min,
+  value_max,
+  domain_code,
+  target_grain_code,
+  target_scope_jsonb,
+  valid_from,
+  valid_to,
+  actor_id,
+  change_reason
+FROM public.vw_adm_goal_target_active
+WHERE target_code = 'punto_apertura_participacion_dominante_global_60';
+
+Interpretacion funcional de esa meta:
+- `target_code`
+  - identifica la regla de meta que se quiere evaluar
+- `metric_code`
+  - identifica que la metrica corresponde a punto de apertura
+- `operator_code`
+  - normalmente indica el criterio de comparacion de la meta
+  - para este caso se interpreta como:
+    - cumplir al menos el minimo requerido
+- `value_min`
+  - es el umbral principal de cumplimiento directo
+  - en este caso: 60
+- `value_max`
+  - puede venir null o puede usarse para bandas superiores si negocio las define
+- `domain_code`
+  - identifica el dominio funcional de la meta
+- `target_grain_code`
+  - debe indicar el grano al que se evalua la meta
+  - recomendado para este caso:
+    - diario por area
+    - diario por area y variedad
+- `target_scope_jsonb`
+  - define si la meta es:
+    - global
+    - por variedad
+    - por area
+    - por otra combinacion
+- `valid_from` y `valid_to`
+  - indican la vigencia exacta de la meta
+
+Conclusion importante:
+- la meta del 60 ya existe estructuralmente
+- lo que faltaba no era el porcentaje meta
+- lo que faltaba era definir como castigar el desvio de la distribucion observada contra la categoria objetivo
+
+
+23. Como debe entenderse esta meta de 60
+
+La meta `punto_apertura_participacion_dominante_global_60` no significa:
+- que el promedio numerico de apertura sea 60
+- ni que el 60 de los registros cumpla
+
+Significa:
+- al menos el 60% del volumen muestreado del dia debe quedar dentro de la categoria objetivo vigente
+
+Como la metodologia propuesta usa tallos muestreados como base oficial:
+- el 60 se interpreta sobre `sampled_stems_total`
+- no sobre numero de filas
+- no sobre numero de mallas planas
+
+Entonces:
+
+si `sampled_stems_total = 1,000`
+
+la meta exige:
+- `compliant_stems_total >= 600`
+
+Si el cumplimiento directo cae por debajo de 600 tallos:
+- no se cumple la meta directa
+- y ademas el incumplimiento debe ponderarse por distancia al objetivo
+
+
+24. Ejemplo completo de medicion
+
+Supuesto de negocio:
+- categoria objetivo vigente: `1 a 3`
+- meta activa desde `vw_adm_goal_target_active`:
+  - `target_code = punto_apertura_participacion_dominante_global_60`
+  - `value_min = 60`
+
+Distribucion observada del dia para un area:
+- Boton = 120 tallos
+- 1 a 3 = 540 tallos
+- 4 a 9 = 180 tallos
+- 10 a 20 = 110 tallos
+- Mas de 20 = 50 tallos
+
+Total muestreado:
+- `sampled_stems_total = 1,000`
+
+24.1 Cumplimiento directo
+
+Categoria objetivo:
+- `1 a 3`
+
+Tallos dentro del objetivo:
+- `compliant_stems_total = 540`
+
+Cumplimiento directo:
+- `compliance_direct_pct = 540 / 1000 * 100 = 54%`
+
+Lectura:
+- la meta era 60%
+- el resultado fue 54%
+- por meta directa: no cumple
+
+24.2 Distancias ordinales
+
+Si la categoria objetivo es `1 a 3`, entonces:
+- Boton = distancia 1
+- 1 a 3 = distancia 0
+- 4 a 9 = distancia 1
+- 10 a 20 = distancia 2
+- Mas de 20 = distancia 3
+
+24.3 Penalidad ponderada
+
+Con castigo lineal:
+- distancia 0 = 0
+- distancia 1 = 1
+- distancia 2 = 2
+- distancia 3 = 3
+
+Calculo:
+- Boton: `120 * 1 = 120`
+- 4 a 9: `180 * 1 = 180`
+- 10 a 20: `110 * 2 = 220`
+- Mas de 20: `50 * 3 = 150`
+
+Suma:
+- `weighted_penalty_total = 670`
+
+Tasa de penalidad:
+- `weighted_penalty_rate = 670 / 1000 = 0.67`
+
+Si se quiere leer en porcentaje equivalente:
+- `weighted_penalty_pct_equivalent = 67`
+
+24.4 Lectura ejecutiva del resultado
+
+Resultado diario:
+- meta directa esperada: `60%`
+- cumplimiento directo logrado: `54%`
+- brecha directa: `-6 puntos`
+- penalidad ponderada: `67`
+
+Interpretacion:
+- no solo faltaron 6 puntos para cumplir la meta
+- ademas el desvio estuvo cargado hacia categorias lejanas
+- por eso el incumplimiento operativo es mas severo que un simple 54%
+
+Comparacion conceptual:
+- un dia con 54% pero todo el restante en `Boton` o `4 a 9`
+  - seria menos grave
+- otro dia con 54% pero con mucho peso en `10 a 20` y `Mas de 20`
+  - debe recibir mayor castigo
+
+Ese es exactamente el valor de esta metodologia.
+
+
+25. Como aterrizarlo a nivel de indicador
+
+La meta maestra aporta:
+- el umbral de cumplimiento directo
+
+La metodologia aporta:
+- la penalidad por distancia
+
+Entonces el KPI no debe ser una sola cifra plana.
+
+Se recomienda construir tres lecturas visibles:
+
+25.1 Cumplimiento directo
+- compara `compliance_direct_pct` contra `value_min`
+- ejemplo:
+  - meta = 60
+  - resultado = 54
+
+25.2 Brecha de cumplimiento
+- `compliance_direct_pct - value_min`
+- ejemplo:
+  - `54 - 60 = -6`
+
+25.3 Penalidad ponderada
+- `weighted_penalty_rate`
+- ejemplo:
+  - `0.67`
+
+Con eso negocio puede leer:
+- si cumple o no cumple
+- cuanto se desvia
+- y cuan grave es la distribucion de ese desvio
+
+
+26. Como deberia visualizarse luego en CoreX
+
+No implementarlo todavia, pero dejar definido el frente correcto:
+
+Modulo:
+- `Calidad / Indicadores / Punto de apertura`
+
+Bloques sugeridos:
+
+26.1 Tarjetas KPI
+- Meta vigente
+- Cumplimiento directo del periodo
+- Brecha contra meta
+- Penalidad ponderada
+
+26.2 Grafico de distribucion
+- participacion por categoria:
+  - Boton
+  - 1 a 3
+  - 4 a 9
+  - 10 a 20
+  - Mas de 20
+
+26.3 Grafico de cumplimiento por area
+- area
+- meta vigente
+- cumplimiento directo
+- brecha
+
+26.4 Tabla de auditoria
+- fecha
+- area
+- variedad
+- categoria objetivo
+- categoria dominante observada
+- total muestreado
+- cumplimiento directo
+- penalidad
+
+26.5 Semaforo sugerido futuro
+- verde:
+  - cumple meta directa
+- amarillo:
+  - no cumple meta, pero desviacion cercana
+- rojo:
+  - no cumple meta y desviacion lejana con penalidad alta
+
+
+27. Regla final recomendada para primera implementacion
+
+Primera implementacion tecnica recomendada:
+
+- tomar meta desde `public.vw_adm_goal_target_active`
+- usar `value_min` como umbral de cumplimiento directo
+- usar la categoria objetivo vigente desde `db_general`
+- medir el cumplimiento sobre `sampled_stems_total`
+- castigar el desvio con distancia ordinal lineal
+- exponer en visualizacion:
+  - meta
+  - cumplimiento directo
+  - brecha
+  - penalidad ponderada
+
+Con eso el CoreX ya puede mostrar un KPI serio y defendible, sin caer en una lectura subjetiva o solamente visual del punto de apertura.
+
+
+28. Ajuste recomendado del esquema de castigo
+
+Revision funcional acordada:
+- el esquema inicial lineal queda reemplazado por un esquema de credito ponderado mas estable
+- el credito por cercania queda asi:
+  - distancia 0 = 1.000
+  - distancia 1 = 0.500
+  - distancia 2 = 0.250
+  - distancia 3 = 0.125
+
+Interpretacion:
+- la categoria exacta vale el 100% del credito
+- una categoria contigua solo aporta el 50%
+- una categoria a dos pasos solo aporta el 25%
+- una categoria muy lejana solo aporta el 12.5%
+
+Esto no es un "castigo" restando puntos de forma abstracta.
+Es un esquema de credito parcial:
+- cerca del objetivo todavia se reconoce algo de valor
+- lejos del objetivo el aporte marginal cae fuertemente
+
+Formula recomendada:
+
+cumplimiento_ponderado_pct =
+  (% distancia 0 * 1.000)
++ (% distancia 1 * 0.500)
++ (% distancia 2 * 0.250)
++ (% distancia 3 * 0.125)
+
+Lectura:
+- este KPI ya queda en escala 0 a 100
+- se puede comparar contra una meta maestra unica
+- permite un solo resultado ejecutivo
+
+
+29. Como parametrizar el castigo en catalogo
+
+No se recomienda dejar estos pesos hardcodeados en la logica.
+
+Se recomienda parametrizar el esquema en catalogo para poder cambiarlo en el tiempo.
+
+Propuesta de modelado:
+
+29.1 Catalogo de esquema de ponderacion
+
+Ubicacion sugerida:
+- `Administracion / Maestros por dominio / General / Punto de apertura`
+
+Concepto nuevo sugerido:
+- `esquema_ponderacion_punto_apertura`
+
+Campos sugeridos:
+- `scheme_code`
+- `scheme_name`
+- `distance_0_weight`
+- `distance_1_weight`
+- `distance_2_weight`
+- `distance_3_weight`
+- `is_active`
+- `valid_from`
+- `valid_to`
+- `actor_id`
+- `change_reason`
+
+Valores iniciales recomendados:
+- `distance_0_weight = 1.000`
+- `distance_1_weight = 0.500`
+- `distance_2_weight = 0.250`
+- `distance_3_weight = 0.125`
+
+29.2 Relacion con la meta
+
+La meta activa de `vw_adm_goal_target_active` deberia referenciar el esquema.
+
+Opciones:
+- guardarlo dentro de `target_scope_jsonb`
+- o crear una relacion explicita entre meta y esquema de ponderacion
+
+Recomendacion inicial:
+- usar `target_scope_jsonb` para no abrir todavia mas tablas
+
+Ejemplo conceptual:
+
+`target_scope_jsonb`
+{
+  "target_category_code": "PA_1_A_3",
+  "weight_scheme_code": "opening_point_weight_v1",
+  "evaluation_scope": "global"
+}
+
+Con eso:
+- la meta define el umbral
+- el scope define la categoria objetivo
+- el esquema define como ponderar la desviacion
+
+
+30. Como subir la meta para que el centro real siga siendo 60
+
+Punto clave:
+- si el KPI oficial sera el ponderado
+- y negocio quiere que la categoria objetivo real siga siendo 60%
+- entonces la meta ponderada ya no puede quedarse en 60
+
+Motivo:
+- el ponderado da credito parcial a las categorias vecinas
+- por lo tanto un dia con centro en 54 o 55 puede terminar ponderando cerca de 60
+- eso relajaria demasiado el criterio si se compara directo contra 60
+
+Conclusion:
+- si el "centro exacto" debe seguir siendo 60
+- entonces la meta del KPI ponderado debe ser mayor que 60
+
+
+31. Formula general de la meta ponderada
+
+Si negocio define que una distribucion sana debe tener:
+- 60% en la categoria objetivo exacta
+- `a%` a distancia 1
+- `b%` a distancia 2
+- `c%` a distancia 3
+
+con restriccion:
+- `a + b + c = 40`
+
+entonces la meta ponderada correspondiente sera:
+
+meta_ponderada_pct =
+  (60 * 1.000)
++ (a * 0.500)
++ (b * 0.250)
++ (c * 0.125)
+
+Esto significa:
+- la meta ponderada no se inventa
+- sale de la distribucion sana que negocio considera aceptable fuera del centro
+
+
+32. Escenarios ejemplo para definir una meta sana
+
+32.1 Escenario equilibrado
+
+Distribucion sana propuesta:
+- 60% exacto
+- 25% en categorias contiguas
+- 10% a distancia 2
+- 5% a distancia 3
+
+Calculo:
+- `60 * 1.000 = 60.000`
+- `25 * 0.500 = 12.500`
+- `10 * 0.250 = 2.500`
+- `5 * 0.125 = 0.625`
+
+Resultado:
+- `meta_ponderada_pct = 75.625`
+
+Lectura:
+- si se quiere conservar 60 real en el centro
+- una meta ponderada razonable seria aproximadamente `75.6`
+
+32.2 Escenario mas sano / mas estricto
+
+Distribucion sana propuesta:
+- 60% exacto
+- 30% en categorias contiguas
+- 8% a distancia 2
+- 2% a distancia 3
+
+Calculo:
+- `60 * 1.000 = 60.000`
+- `30 * 0.500 = 15.000`
+- `8 * 0.250 = 2.000`
+- `2 * 0.125 = 0.250`
+
+Resultado:
+- `meta_ponderada_pct = 77.250`
+
+Lectura:
+- una meta ponderada de alrededor de `77.25`
+- exige un comportamiento mejor que el escenario equilibrado
+
+32.3 Escenario muy estricto
+
+Distribucion sana propuesta:
+- 60% exacto
+- 35% en categorias contiguas
+- 5% a distancia 2
+- 0% a distancia 3
+
+Calculo:
+- `60 * 1.000 = 60.000`
+- `35 * 0.500 = 17.500`
+- `5 * 0.250 = 1.250`
+- `0 * 0.125 = 0.000`
+
+Resultado:
+- `meta_ponderada_pct = 78.750`
+
+
+33. Recomendacion de negocio para primera salida
+
+Si el negocio quiere:
+- mantener el centro exacto en 60%
+- y evitar que el ponderado relaje demasiado el criterio
+
+la recomendacion inicial es:
+- usar el esquema de pesos:
+  - `1.000`
+  - `0.500`
+  - `0.250`
+  - `0.125`
+- y fijar una meta ponderada inicial en el rango:
+  - `75.5%` a `77.5%`
+
+Recomendacion concreta para arrancar:
+- `meta_ponderada_pct = 76%`
+
+Por que 76:
+- queda cerca del escenario equilibrado
+- no es excesivamente laxo
+- no obliga de entrada a un escenario ultra estricto
+- permite calibrar luego con resultados reales
+
+
+34. KPI unico recomendado
+
+Si se desea mostrar un solo numero ejecutivo en CoreX:
+
+KPI principal:
+- `cumplimiento_ponderado_pct`
+
+Meta oficial:
+- `meta_ponderada_pct`
+
+Apoyo metodologico en tooltip o detalle:
+- `cumplimiento_directo_pct`
+- `participacion_objetivo_pct`
+- `esquema_ponderacion_usado`
+
+Ejemplo de lectura:
+- `Cumplimiento ponderado: 74.8%`
+- `Meta ponderada: 76.0%`
+- `Estado: No cumple`
+
+Y en el detalle:
+- `Participacion exacta en objetivo: 58%`
+- `Esquema: 1 / 0.5 / 0.25 / 0.125`
+
+
+35. Regla final sugerida para implementar
+
+Para primera implementacion ya con KPI unico:
+
+- tomar `value_min` desde `vw_adm_goal_target_active`
+- interpretar ese `value_min` como `meta_ponderada_pct`
+- guardar en `target_scope_jsonb`:
+  - categoria objetivo
+  - codigo del esquema de ponderacion
+- calcular siempre:
+  - `cumplimiento_directo_pct`
+  - `cumplimiento_ponderado_pct`
+- mostrar en pantalla solo:
+  - `cumplimiento_ponderado_pct`
+  - comparado contra su meta activa
+
+Con eso:
+- negocio ve un solo resultado
+- la meta sigue siendo administrable
+- y el sistema no pierde trazabilidad del centro real ni del esquema de castigo utilizado.

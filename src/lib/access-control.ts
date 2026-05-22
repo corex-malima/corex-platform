@@ -175,6 +175,11 @@ const API_ACCESS_RULES_UNSORTED: ApiAccessRule[] = [
     requiredResources: ["/dashboard/calidad/punto-apertura"],
   },
   {
+    pathnamePrefix: "/api/campo/punto-apertura",
+    policy: "resource-bound",
+    requiredResources: ["/dashboard/campo/punto-apertura"],
+  },
+  {
     pathnamePrefix: "/api/calidad/reclamos",
     policy: "resource-bound",
     requiredResources: ["/dashboard/calidad/reclamos"],

@@ -7,12 +7,22 @@ import type {
   GeneralSimpleMasterKind,
   GeneralSimpleMasterRecord,
 } from "@/lib/general-master-types";
+import { OPENING_POINT_CATEGORY_DEFINITIONS } from "@/lib/opening-point-categories";
 
 type SimpleMasterConfig = {
   kind: GeneralSimpleMasterKind;
   entityPrefix: string;
   refTable: string;
   dimTable: string;
+  orderBySql?: string;
+  seedRecords?: Array<{
+    code: string;
+    name: string;
+    description?: string | null;
+    externalRefCode?: string | null;
+    contactEmail?: string | null;
+    isActive?: boolean;
+  }>;
 };
 
 type CurrentSimpleRow = {
@@ -43,6 +53,20 @@ const SIMPLE_MASTER_CONFIGS: SimpleMasterConfig[] = [
     entityPrefix: "gfrm",
     refTable: "public.gnl_ref_farm_id_core_scd2",
     dimTable: "public.gnl_dim_farm_profile_scd2",
+  },
+  {
+    kind: "opening-points",
+    entityPrefix: "gopt",
+    refTable: "public.gnl_ref_opening_point_category_id_core_scd2",
+    dimTable: "public.gnl_dim_opening_point_category_profile_scd2",
+    orderBySql: "coalesce(nullif(dim.external_ref_code, ''), '9999') asc, lower(dim.entity_name) asc",
+    seedRecords: OPENING_POINT_CATEGORY_DEFINITIONS.map((item) => ({
+      code: item.code,
+      name: item.name,
+      description: item.description,
+      externalRefCode: item.sortKey,
+      isActive: true,
+    })),
   },
 ];
 
@@ -127,7 +151,7 @@ function sanitizeSimpleMasterInput(input: GeneralSimpleMasterInput) {
 }
 
 async function ensureSimpleMasterTables(client?: PoolClient) {
-  const runQuery = (text: string) => client ? client.query(text) : queryGeneral(text);
+  const runQuery = (text: string, values: unknown[] = []) => client ? client.query(text, values) : queryGeneral(text, values);
 
   for (const config of SIMPLE_MASTER_CONFIGS) {
     await runQuery(`
@@ -195,6 +219,71 @@ async function ensureSimpleMasterTables(client?: PoolClient) {
         on ${config.dimTable} (lower(regexp_replace(trim(entity_name), '\\s+', ' ', 'g')))
     `);
   }
+
+  const seedLoadedAt = new Date();
+
+  for (const config of SIMPLE_MASTER_CONFIGS) {
+    if (!config.seedRecords?.length) {
+      continue;
+    }
+
+    for (const seedRecord of config.seedRecords) {
+      const existing = await runQuery(
+        `
+          select entity_id
+          from ${config.dimTable}
+          where is_current = true
+            and is_valid = true
+            and lower(regexp_replace(trim(entity_code), '\\s+', ' ', 'g'))
+              = lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
+          limit 1
+        `,
+        [seedRecord.code],
+      );
+
+      if (existing.rows.length > 0) {
+        continue;
+      }
+
+      const entityId = makeEntityId(config.entityPrefix);
+      const runId = makeRunId(`general_${config.kind}_seed`);
+      const actorId = "corex_general_seed";
+      const changeReason = "SEED_FROM_COREX_BOOTSTRAP";
+
+      await runQuery(
+        `
+          insert into ${config.refTable} (
+            record_id, entity_id, valid_from, valid_to, is_current, is_valid, loaded_at, run_id, actor_id, change_reason
+          ) values ($1, $2, $3, null, true, true, $3, $4, $5, $6)
+        `,
+        [makeRecordId(), entityId, seedLoadedAt, runId, actorId, changeReason],
+      );
+
+      await runQuery(
+        `
+          insert into ${config.dimTable} (
+            record_id, entity_id, valid_from, valid_to, is_current, entity_code, entity_name, entity_description,
+            external_ref_code, contact_email, is_active, is_valid, loaded_at, run_id, actor_id, change_reason
+          ) values ($1, $2, $3, null, true, $4, $5, $6, $7, $8, $9, true, $10, $11, $12, $13)
+        `,
+        [
+          makeRecordId(),
+          entityId,
+          seedLoadedAt,
+          normalizeCode(seedRecord.code),
+          normalizeText(seedRecord.name),
+          normalizeOptionalText(seedRecord.description),
+          normalizeOptionalText(seedRecord.externalRefCode),
+          normalizeOptionalEmail(seedRecord.contactEmail),
+          boolValue(seedRecord.isActive, true),
+          seedLoadedAt,
+          runId,
+          actorId,
+          changeReason,
+        ],
+      );
+    }
+  }
 }
 
 export async function initializeGeneralMasters() {
@@ -252,6 +341,7 @@ function mapSimpleMasterRow(kind: GeneralSimpleMasterKind, row: CurrentSimpleRow
 async function getCurrentSimpleMasterRows(kind: GeneralSimpleMasterKind) {
   await initializeGeneralMasters();
   const config = getSimpleMasterConfig(kind);
+  const orderBySql = config.orderBySql ?? "lower(dim.entity_name) asc";
   const result = await queryGeneral<CurrentSimpleRow>(
     `
       select
@@ -275,7 +365,7 @@ async function getCurrentSimpleMasterRows(kind: GeneralSimpleMasterKind) {
        and ref.is_valid = true
       where dim.is_current = true
         and dim.is_valid = true
-      order by lower(dim.entity_name) asc
+      order by ${orderBySql}
     `,
   );
 
