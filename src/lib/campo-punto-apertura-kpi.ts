@@ -49,18 +49,76 @@ export type CampoPuntoAperturaDistributionRow = {
   pct: number;
 };
 
+export type CampoPuntoAperturaNonConformityRuleKey =
+  | "mas_de_20_supera_2_pct"
+  | "diez_a_veinte_mas_mas_de_20_supera_25_pct"
+  | "cuatro_a_nueve_supera_50_pct";
+
+export type CampoPuntoAperturaNonConformityRuleResult = {
+  key: CampoPuntoAperturaNonConformityRuleKey;
+  label: string;
+  thresholdPct: number;
+  measuredPct: number;
+};
+
+export type CampoPuntoAperturaNonConformityRecord = {
+  key: string;
+  fecha: string;
+  isoWeekId: string;
+  month: string;
+  year: string;
+  area: string;
+  block: string;
+  totalStems: number;
+  pctCuatroNueve: number;
+  pctDiezVeinte: number;
+  pctMasVeinte: number;
+  pctDiezVeinteMasMasVeinte: number;
+  isNonConformity: boolean;
+  triggeredRules: CampoPuntoAperturaNonConformityRuleResult[];
+};
+
+export type CampoPuntoAperturaNonConformitySummary = {
+  totalBlockDays: number;
+  nonConformingBlockDays: number;
+  conformingBlockDays: number;
+  nonConformityRatePct: number | null;
+  topRuleLabel: string | null;
+};
+
+export type CampoPuntoAperturaNonConformityPeriodPoint = {
+  periodKey: string;
+  periodLabel: string;
+  sortDate: string;
+  totalBlockDays: number;
+  nonConformingBlockDays: number;
+  nonConformityRatePct: number | null;
+};
+
+export type CampoPuntoAperturaNonConformityAreaRow = {
+  area: string;
+  totalBlockDays: number;
+  nonConformingBlockDays: number;
+  nonConformityRatePct: number | null;
+};
+
 export type CampoPuntoAperturaBlockBreakdown = {
   block: string;
   totalRecords: number;
   officialRecords: number;
   unofficialRecords: number;
   totalStems: number;
+  totalBlockDays: number;
+  nonConformingBlockDays: number;
+  hasNonConformity: boolean;
+  triggeredRuleLabels: string[];
   weightedCompliancePct: number | null;
   directCompliancePct: number | null;
   goalPct: number | null;
   goalAttainmentPct: number | null;
   gapPct: number | null;
   dominantCategoryName: string | null;
+  nonConformityDetails: CampoPuntoAperturaNonConformityRecord[];
 };
 
 export type CampoPuntoAperturaAreaBreakdown = {
@@ -69,6 +127,8 @@ export type CampoPuntoAperturaAreaBreakdown = {
   officialRecords: number;
   unofficialRecords: number;
   totalStems: number;
+  totalBlockDays: number;
+  nonConformingBlockDays: number;
   weightedCompliancePct: number | null;
   directCompliancePct: number | null;
   goalPct: number | null;
@@ -76,6 +136,59 @@ export type CampoPuntoAperturaAreaBreakdown = {
   gapPct: number | null;
   dominantCategoryName: string | null;
   blocks: CampoPuntoAperturaBlockBreakdown[];
+};
+
+export type CampoPuntoAperturaHomogeneityTimePoint = {
+  periodKey: string;
+  periodLabel: string;
+  sortDate: string;
+  totalRecords: number;
+  officialRecords: number;
+  unofficialRecords: number;
+  homogeneousRecords: number;
+  nonHomogeneousRecords: number;
+  homogeneousPct: number | null;
+  goalPct: number | null;
+  goalAttainmentPct: number | null;
+};
+
+export type CampoPuntoAperturaHomogeneityNonConformityDetail = {
+  key: string;
+  fecha: string;
+  totalRecords: number;
+  homogeneousRecords: number;
+  nonHomogeneousRecords: number;
+  homogeneousPct: number | null;
+};
+
+export type CampoPuntoAperturaHomogeneityBlockBreakdown = {
+  block: string;
+  totalRecords: number;
+  officialRecords: number;
+  unofficialRecords: number;
+  homogeneousRecords: number;
+  nonHomogeneousRecords: number;
+  homogeneousPct: number | null;
+  goalPct: number | null;
+  goalAttainmentPct: number | null;
+  nonConformingBlockDays: number;
+  totalBlockDays: number;
+  nonConformityDetails: CampoPuntoAperturaHomogeneityNonConformityDetail[];
+};
+
+export type CampoPuntoAperturaHomogeneityAreaBreakdown = {
+  area: string;
+  totalRecords: number;
+  officialRecords: number;
+  unofficialRecords: number;
+  homogeneousRecords: number;
+  nonHomogeneousRecords: number;
+  homogeneousPct: number | null;
+  goalPct: number | null;
+  goalAttainmentPct: number | null;
+  nonConformingBlockDays: number;
+  totalBlockDays: number;
+  blocks: CampoPuntoAperturaHomogeneityBlockBreakdown[];
 };
 
 export type CampoPuntoAperturaKpiData = {
@@ -111,6 +224,36 @@ export type CampoPuntoAperturaKpiData = {
   timeSeries: CampoPuntoAperturaKpiPoint[];
   distribution: CampoPuntoAperturaDistributionRow[];
   areas: CampoPuntoAperturaAreaBreakdown[];
+  nonConformities: {
+    summary: CampoPuntoAperturaNonConformitySummary;
+    timeSeries: CampoPuntoAperturaNonConformityPeriodPoint[];
+    areas: CampoPuntoAperturaNonConformityAreaRow[];
+    records: CampoPuntoAperturaNonConformityRecord[];
+    rulesContextStatus: "pending-goals-catalog";
+  };
+  homogeneity: {
+    goal: {
+      targetCode: string | null;
+      targetName: string | null;
+      operatorCode: string | null;
+      goalPct: number | null;
+      validFrom: string | null;
+      validTo: string | null;
+    };
+    summary: {
+      totalRecords: number;
+      officialRecords: number;
+      unofficialRecords: number;
+      homogeneousRecords: number;
+      nonHomogeneousRecords: number;
+      homogeneousPct: number | null;
+      goalPct: number | null;
+      goalAttainmentPct: number | null;
+    };
+    timeSeries: CampoPuntoAperturaHomogeneityTimePoint[];
+    distribution: Array<{ status: PuntoAperturaStatus; count: number; pct: number }>;
+    areas: CampoPuntoAperturaHomogeneityAreaBreakdown[];
+  };
   notes: string[];
 };
 
@@ -173,6 +316,7 @@ type EvaluatedRecord = PuntoAperturaRecord & {
 };
 
 const GOAL_TARGET_CODE = "punto_apertura_participacion_dominante_global_60";
+const HOMOGENEITY_GOAL_TARGET_CODE = "punto_apertura_homogeneidad_global_90";
 const WEIGHT_SCHEME_CODE = "opening_point_weight_v1";
 const DEFAULT_WEIGHTED_GOAL_PCT = 76;
 const CATEGORY_ORDER: ReadonlyArray<{
@@ -193,6 +337,12 @@ const DISTANCE_WEIGHT = new Map<number, number>([
   [1, 0.5],
   [2, 0.25],
   [3, 0.125],
+]);
+const NON_CONFORMITY_VARIETY_KEYS = new Set(["xle", "xlence"]);
+const NON_CONFORMITY_RULE_LABEL = new Map<CampoPuntoAperturaNonConformityRuleKey, string>([
+  ["mas_de_20_supera_2_pct", "Más de 20 > 2%"],
+  ["diez_a_veinte_mas_mas_de_20_supera_25_pct", "10 a 20 + Más de 20 >= 25%"],
+  ["cuatro_a_nueve_supera_50_pct", "4 a 9 >= 50%"],
 ]);
 
 export const defaultCampoPuntoAperturaKpiFilters: CampoPuntoAperturaKpiFilters = {
@@ -343,6 +493,59 @@ async function loadOpeningGoal() {
   }
 }
 
+async function loadHomogeneityGoal() {
+  try {
+    const result = await queryAdmin<GoalRow>(
+      `
+        select
+          target_code,
+          target_name,
+          metric_code,
+          operator_code,
+          value_min,
+          value_max,
+          target_scope_jsonb,
+          valid_from,
+          valid_to
+        from public.vw_adm_goal_target_active
+        where target_code = $1
+        limit 1
+      `,
+      [HOMOGENEITY_GOAL_TARGET_CODE],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return {
+        targetCode: null,
+        targetName: null,
+        operatorCode: null,
+        goalPct: null,
+        validFrom: null,
+        validTo: null,
+      };
+    }
+
+    return {
+      targetCode: row.target_code,
+      targetName: row.target_name,
+      operatorCode: row.operator_code,
+      goalPct: toNumber(row.value_min),
+      validFrom: toIsoDate(row.valid_from),
+      validTo: toIsoDate(row.valid_to),
+    };
+  } catch {
+    return {
+      targetCode: null,
+      targetName: null,
+      operatorCode: null,
+      goalPct: null,
+      validFrom: null,
+      validTo: null,
+    };
+  }
+}
+
 async function loadOpeningRules(): Promise<OpeningRule[]> {
   await initializeGeneralOpeningTargetRules();
 
@@ -410,6 +613,10 @@ function ruleAppliesToDate(rule: OpeningRule, date: string) {
   if (date < rule.validFrom) return false;
   if (rule.validTo && date > rule.validTo) return false;
   return true;
+}
+
+function recordAppliesToNonConformityRules(record: PuntoAperturaRecord) {
+  return NON_CONFORMITY_VARIETY_KEYS.has(normalizeKey(record.variety));
 }
 
 function resolveApplicableRule(record: PuntoAperturaRecord, rules: OpeningRule[]) {
@@ -592,6 +799,171 @@ function buildDistribution(records: EvaluatedRecord[]): CampoPuntoAperturaDistri
   });
 }
 
+function buildNonConformityRecords(records: EvaluatedRecord[]): CampoPuntoAperturaNonConformityRecord[] {
+  const groups = new Map<string, EvaluatedRecord[]>();
+
+  for (const record of records) {
+    if (!recordAppliesToNonConformityRules(record)) continue;
+    const key = `${record.fecha}__${record.area || "Sin area"}__${record.bloque || "Sin bloque"}`;
+    const rows = groups.get(key) ?? [];
+    rows.push(record);
+    groups.set(key, rows);
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, rows]) => {
+      const sample = rows[0];
+      const totalStems = sum(rows.map((row) => row.totalApertura));
+      const cuatroNueve = sum(rows.map((row) => row.countsByCategory.PA_4_A_9 ?? 0));
+      const diezVeinte = sum(rows.map((row) => row.countsByCategory.PA_10_A_20 ?? 0));
+      const masVeinte = sum(rows.map((row) => row.countsByCategory.PA_MAS_DE_20 ?? 0));
+
+      const pctCuatroNueve = totalStems > 0 ? (cuatroNueve / totalStems) * 100 : 0;
+      const pctDiezVeinte = totalStems > 0 ? (diezVeinte / totalStems) * 100 : 0;
+      const pctMasVeinte = totalStems > 0 ? (masVeinte / totalStems) * 100 : 0;
+      const pctDiezVeinteMasMasVeinte = pctDiezVeinte + pctMasVeinte;
+
+      const triggeredRules: CampoPuntoAperturaNonConformityRuleResult[] = [];
+      if (pctMasVeinte > 2) {
+        triggeredRules.push({
+          key: "mas_de_20_supera_2_pct",
+          label: NON_CONFORMITY_RULE_LABEL.get("mas_de_20_supera_2_pct") ?? "Más de 20 > 2%",
+          thresholdPct: 2,
+          measuredPct: pctMasVeinte,
+        });
+      }
+      if (pctDiezVeinteMasMasVeinte >= 25) {
+        triggeredRules.push({
+          key: "diez_a_veinte_mas_mas_de_20_supera_25_pct",
+          label: NON_CONFORMITY_RULE_LABEL.get("diez_a_veinte_mas_mas_de_20_supera_25_pct") ?? "10 a 20 + Más de 20 >= 25%",
+          thresholdPct: 25,
+          measuredPct: pctDiezVeinteMasMasVeinte,
+        });
+      }
+      if (pctCuatroNueve >= 50) {
+        triggeredRules.push({
+          key: "cuatro_a_nueve_supera_50_pct",
+          label: NON_CONFORMITY_RULE_LABEL.get("cuatro_a_nueve_supera_50_pct") ?? "4 a 9 >= 50%",
+          thresholdPct: 50,
+          measuredPct: pctCuatroNueve,
+        });
+      }
+
+      return {
+        key,
+        fecha: sample?.fecha ?? "",
+        isoWeekId: sample?.isoWeekId ?? "",
+        month: sample?.month ?? "",
+        year: sample?.year ?? "",
+        area: sample?.area || "Sin area",
+        block: sample?.bloque || "Sin bloque",
+        totalStems,
+        pctCuatroNueve,
+        pctDiezVeinte,
+        pctMasVeinte,
+        pctDiezVeinteMasMasVeinte,
+        isNonConformity: triggeredRules.length > 0,
+        triggeredRules,
+      };
+    })
+    .sort((left, right) => {
+      if (left.fecha !== right.fecha) return right.fecha.localeCompare(left.fecha);
+      if (left.area !== right.area) return left.area.localeCompare(right.area);
+      return left.block.localeCompare(right.block);
+    });
+}
+
+function summarizeNonConformities(records: CampoPuntoAperturaNonConformityRecord[]): CampoPuntoAperturaNonConformitySummary {
+  const totalBlockDays = records.length;
+  const nonConformingBlockDays = records.filter((record) => record.isNonConformity).length;
+  const conformingBlockDays = totalBlockDays - nonConformingBlockDays;
+  const nonConformityRatePct = totalBlockDays > 0 ? (nonConformingBlockDays / totalBlockDays) * 100 : null;
+  const ruleCounts = new Map<string, number>();
+
+  for (const record of records) {
+    for (const rule of record.triggeredRules) {
+      ruleCounts.set(rule.label, (ruleCounts.get(rule.label) ?? 0) + 1);
+    }
+  }
+
+  const topRuleLabel =
+    Array.from(ruleCounts.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? null;
+
+  return {
+    totalBlockDays,
+    nonConformingBlockDays,
+    conformingBlockDays,
+    nonConformityRatePct,
+    topRuleLabel,
+  };
+}
+
+function buildNonConformityTimeSeries(
+  records: CampoPuntoAperturaNonConformityRecord[],
+  granularity: CampoPuntoAperturaGranularity,
+): CampoPuntoAperturaNonConformityPeriodPoint[] {
+  const groups = new Map<string, CampoPuntoAperturaNonConformityRecord[]>();
+  const meta = new Map<string, { label: string; sortDate: string }>();
+
+  for (const record of records) {
+    const info =
+      granularity === "day"
+        ? { key: record.fecha, label: record.fecha, sortDate: record.fecha }
+        : granularity === "month"
+          ? {
+              key: `${record.year}-${record.month.padStart(2, "0")}`,
+              label: `${record.year}-${record.month.padStart(2, "0")}`,
+              sortDate: `${record.year}-${record.month.padStart(2, "0")}-01`,
+            }
+          : { key: record.isoWeekId, label: record.isoWeekId, sortDate: record.fecha };
+
+    const rows = groups.get(info.key) ?? [];
+    rows.push(record);
+    groups.set(info.key, rows);
+
+    const currentMeta = meta.get(info.key);
+    if (!currentMeta || info.sortDate < currentMeta.sortDate) {
+      meta.set(info.key, { label: info.label, sortDate: info.sortDate });
+    }
+  }
+
+  return Array.from(groups.entries())
+    .map(([periodKey, rows]) => {
+      const summary = summarizeNonConformities(rows);
+      const periodMeta = meta.get(periodKey) ?? { label: periodKey, sortDate: periodKey };
+      return {
+        periodKey,
+        periodLabel: periodMeta.label,
+        sortDate: periodMeta.sortDate,
+        totalBlockDays: summary.totalBlockDays,
+        nonConformingBlockDays: summary.nonConformingBlockDays,
+        nonConformityRatePct: summary.nonConformityRatePct,
+      };
+    })
+    .sort((left, right) => left.sortDate.localeCompare(right.sortDate));
+}
+
+function buildNonConformityAreas(records: CampoPuntoAperturaNonConformityRecord[]): CampoPuntoAperturaNonConformityAreaRow[] {
+  const groups = new Map<string, CampoPuntoAperturaNonConformityRecord[]>();
+  for (const record of records) {
+    const rows = groups.get(record.area) ?? [];
+    rows.push(record);
+    groups.set(record.area, rows);
+  }
+
+  return Array.from(groups.entries())
+    .map(([area, rows]) => {
+      const summary = summarizeNonConformities(rows);
+      return {
+        area,
+        totalBlockDays: summary.totalBlockDays,
+        nonConformingBlockDays: summary.nonConformingBlockDays,
+        nonConformityRatePct: summary.nonConformityRatePct,
+      };
+    })
+    .sort((left, right) => (right.nonConformityRatePct ?? 0) - (left.nonConformityRatePct ?? 0));
+}
+
 function buildBlockBreakdown(records: EvaluatedRecord[]): CampoPuntoAperturaBlockBreakdown[] {
   const groups = new Map<string, EvaluatedRecord[]>();
   for (const record of records) {
@@ -605,18 +977,28 @@ function buildBlockBreakdown(records: EvaluatedRecord[]): CampoPuntoAperturaBloc
     .map(([block, rows]) => {
       const summary = summarizeEvaluatedRecords(rows);
       const dominant = buildDistribution(rows).sort((left, right) => right.count - left.count)[0] ?? null;
+      const nonConformityRecords = buildNonConformityRecords(rows);
+      const nonConformitySummary = summarizeNonConformities(nonConformityRecords);
+      const triggeredRuleLabels = Array.from(
+        new Set(nonConformityRecords.flatMap((record) => record.triggeredRules.map((rule) => rule.label))),
+      );
       return {
         block,
         totalRecords: summary.totalRecords,
         officialRecords: summary.officialRecords,
         unofficialRecords: summary.unofficialRecords,
         totalStems: summary.totalStems,
+        totalBlockDays: nonConformitySummary.totalBlockDays,
+        nonConformingBlockDays: nonConformitySummary.nonConformingBlockDays,
+        hasNonConformity: nonConformitySummary.nonConformingBlockDays > 0,
+        triggeredRuleLabels,
         weightedCompliancePct: summary.weightedCompliancePct,
         directCompliancePct: summary.directCompliancePct,
         goalPct: summary.goalPct,
         goalAttainmentPct: summary.goalAttainmentPct,
         gapPct: summary.gapPct,
         dominantCategoryName: dominant?.categoryName ?? null,
+        nonConformityDetails: nonConformityRecords.filter((record) => record.isNonConformity),
       };
     })
     .sort((left, right) => {
@@ -642,12 +1024,16 @@ function buildAreaBreakdown(records: EvaluatedRecord[]): CampoPuntoAperturaAreaB
     .map(([area, rows]) => {
       const summary = summarizeEvaluatedRecords(rows);
       const dominant = buildDistribution(rows).sort((left, right) => right.count - left.count)[0] ?? null;
+      const nonConformityRecords = buildNonConformityRecords(rows);
+      const nonConformitySummary = summarizeNonConformities(nonConformityRecords);
       return {
         area,
         totalRecords: summary.totalRecords,
         officialRecords: summary.officialRecords,
         unofficialRecords: summary.unofficialRecords,
         totalStems: summary.totalStems,
+        totalBlockDays: nonConformitySummary.totalBlockDays,
+        nonConformingBlockDays: nonConformitySummary.nonConformingBlockDays,
         weightedCompliancePct: summary.weightedCompliancePct,
         directCompliancePct: summary.directCompliancePct,
         goalPct: summary.goalPct,
@@ -664,6 +1050,210 @@ function buildAreaBreakdown(records: EvaluatedRecord[]): CampoPuntoAperturaAreaB
       if (left.weightedCompliancePct === null) return 1;
       if (right.weightedCompliancePct === null) return -1;
       return right.weightedCompliancePct - left.weightedCompliancePct;
+    });
+}
+
+function homogeneityGoalApplies(record: PuntoAperturaRecord, goal: Awaited<ReturnType<typeof loadHomogeneityGoal>>) {
+  return Boolean(
+    goal.goalPct !== null &&
+      goal.validFrom !== null &&
+      record.fecha >= goal.validFrom &&
+      (!goal.validTo || record.fecha <= goal.validTo),
+  );
+}
+
+function summarizeHomogeneityRecords(
+  records: PuntoAperturaRecord[],
+  goal: Awaited<ReturnType<typeof loadHomogeneityGoal>>,
+) {
+  const totalRecords = records.length;
+  const officialRecords = records.filter((record) => homogeneityGoalApplies(record, goal));
+  const unofficialRecords = totalRecords - officialRecords.length;
+  const homogeneousRecords = officialRecords.filter((record) => record.estado === "Homogeneo").length;
+  const nonHomogeneousRecords = officialRecords.length - homogeneousRecords;
+  const homogeneousPct = officialRecords.length > 0 ? (homogeneousRecords / officialRecords.length) * 100 : null;
+  const goalPct = officialRecords.length > 0 ? goal.goalPct : null;
+  const goalAttainmentPct =
+    homogeneousPct !== null && goalPct !== null && goalPct > 0 ? (homogeneousPct / goalPct) * 100 : null;
+
+  return {
+    totalRecords,
+    officialRecords: officialRecords.length,
+    unofficialRecords,
+    homogeneousRecords,
+    nonHomogeneousRecords,
+    homogeneousPct,
+    goalPct,
+    goalAttainmentPct,
+  };
+}
+
+function buildHomogeneityTimeSeries(
+  records: PuntoAperturaRecord[],
+  granularity: CampoPuntoAperturaGranularity,
+  goal: Awaited<ReturnType<typeof loadHomogeneityGoal>>,
+): CampoPuntoAperturaHomogeneityTimePoint[] {
+  const groups = new Map<string, PuntoAperturaRecord[]>();
+  const meta = new Map<string, { label: string; sortDate: string }>();
+
+  for (const record of records) {
+    const info = periodInfo(record, granularity);
+    const list = groups.get(info.key) ?? [];
+    list.push(record);
+    groups.set(info.key, list);
+
+    const currentMeta = meta.get(info.key);
+    if (!currentMeta || info.sortDate < currentMeta.sortDate) {
+      meta.set(info.key, { label: info.label, sortDate: info.sortDate });
+    }
+  }
+
+  return Array.from(groups.entries())
+    .map(([periodKey, rows]) => {
+      const summary = summarizeHomogeneityRecords(rows, goal);
+      const periodMeta = meta.get(periodKey) ?? { label: periodKey, sortDate: periodKey };
+      return {
+        periodKey,
+        periodLabel: periodMeta.label,
+        sortDate: periodMeta.sortDate,
+        totalRecords: summary.totalRecords,
+        officialRecords: summary.officialRecords,
+        unofficialRecords: summary.unofficialRecords,
+        homogeneousRecords: summary.homogeneousRecords,
+        nonHomogeneousRecords: summary.nonHomogeneousRecords,
+        homogeneousPct: summary.homogeneousPct,
+        goalPct: summary.goalPct,
+        goalAttainmentPct: summary.goalAttainmentPct,
+      };
+    })
+    .sort((left, right) => left.sortDate.localeCompare(right.sortDate));
+}
+
+function buildHomogeneityDistribution(records: PuntoAperturaRecord[]) {
+  const total = records.length;
+  const homogeneous = records.filter((record) => record.estado === "Homogeneo").length;
+  const nonHomogeneous = total - homogeneous;
+  return [
+    {
+      status: "Homogeneo" as const,
+      count: homogeneous,
+      pct: total > 0 ? (homogeneous / total) * 100 : 0,
+    },
+    {
+      status: "No homogeneo" as const,
+      count: nonHomogeneous,
+      pct: total > 0 ? (nonHomogeneous / total) * 100 : 0,
+    },
+  ];
+}
+
+function buildHomogeneityNonConformityDetails(
+  records: PuntoAperturaRecord[],
+  goal: Awaited<ReturnType<typeof loadHomogeneityGoal>>,
+): CampoPuntoAperturaHomogeneityNonConformityDetail[] {
+  const groups = new Map<string, PuntoAperturaRecord[]>();
+  for (const record of records) {
+    if (!homogeneityGoalApplies(record, goal)) continue;
+    const key = record.fecha;
+    const rows = groups.get(key) ?? [];
+    rows.push(record);
+    groups.set(key, rows);
+  }
+
+  return Array.from(groups.entries())
+    .map(([key, rows]) => {
+      const homogeneousRecords = rows.filter((record) => record.estado === "Homogeneo").length;
+      const totalRecords = rows.length;
+      const nonHomogeneousRecords = totalRecords - homogeneousRecords;
+      const homogeneousPct = totalRecords > 0 ? (homogeneousRecords / totalRecords) * 100 : null;
+      return {
+        key,
+        fecha: rows[0]?.fecha ?? key,
+        totalRecords,
+        homogeneousRecords,
+        nonHomogeneousRecords,
+        homogeneousPct,
+      };
+    })
+    .filter((row) => row.homogeneousPct !== null && goal.goalPct !== null && row.homogeneousPct < goal.goalPct)
+    .sort((left, right) => right.fecha.localeCompare(left.fecha));
+}
+
+function buildHomogeneityBlockBreakdown(
+  records: PuntoAperturaRecord[],
+  goal: Awaited<ReturnType<typeof loadHomogeneityGoal>>,
+): CampoPuntoAperturaHomogeneityBlockBreakdown[] {
+  const groups = new Map<string, PuntoAperturaRecord[]>();
+  for (const record of records) {
+    const key = record.bloque || "Sin bloque";
+    const rows = groups.get(key) ?? [];
+    rows.push(record);
+    groups.set(key, rows);
+  }
+
+  return Array.from(groups.entries())
+    .map(([block, rows]) => {
+      const summary = summarizeHomogeneityRecords(rows, goal);
+      const nonConformityDetails = buildHomogeneityNonConformityDetails(rows, goal);
+      return {
+        block,
+        totalRecords: summary.totalRecords,
+        officialRecords: summary.officialRecords,
+        unofficialRecords: summary.unofficialRecords,
+        homogeneousRecords: summary.homogeneousRecords,
+        nonHomogeneousRecords: summary.nonHomogeneousRecords,
+        homogeneousPct: summary.homogeneousPct,
+        goalPct: summary.goalPct,
+        goalAttainmentPct: summary.goalAttainmentPct,
+        nonConformingBlockDays: nonConformityDetails.length,
+        totalBlockDays: new Set(rows.filter((record) => homogeneityGoalApplies(record, goal)).map((record) => record.fecha)).size,
+        nonConformityDetails,
+      };
+    })
+    .sort((left, right) => {
+      if (left.homogeneousPct === null && right.homogeneousPct === null) return right.totalRecords - left.totalRecords;
+      if (left.homogeneousPct === null) return 1;
+      if (right.homogeneousPct === null) return -1;
+      return right.homogeneousPct - left.homogeneousPct;
+    });
+}
+
+function buildHomogeneityAreaBreakdown(
+  records: PuntoAperturaRecord[],
+  goal: Awaited<ReturnType<typeof loadHomogeneityGoal>>,
+): CampoPuntoAperturaHomogeneityAreaBreakdown[] {
+  const groups = new Map<string, PuntoAperturaRecord[]>();
+  for (const record of records) {
+    const key = record.area || "Sin area";
+    const rows = groups.get(key) ?? [];
+    rows.push(record);
+    groups.set(key, rows);
+  }
+
+  return Array.from(groups.entries())
+    .map(([area, rows]) => {
+      const summary = summarizeHomogeneityRecords(rows, goal);
+      const blocks = buildHomogeneityBlockBreakdown(rows, goal);
+      return {
+        area,
+        totalRecords: summary.totalRecords,
+        officialRecords: summary.officialRecords,
+        unofficialRecords: summary.unofficialRecords,
+        homogeneousRecords: summary.homogeneousRecords,
+        nonHomogeneousRecords: summary.nonHomogeneousRecords,
+        homogeneousPct: summary.homogeneousPct,
+        goalPct: summary.goalPct,
+        goalAttainmentPct: summary.goalAttainmentPct,
+        nonConformingBlockDays: sum(blocks.map((block) => block.nonConformingBlockDays)),
+        totalBlockDays: sum(blocks.map((block) => block.totalBlockDays)),
+        blocks,
+      };
+    })
+    .sort((left, right) => {
+      if (left.homogeneousPct === null && right.homogeneousPct === null) return right.totalRecords - left.totalRecords;
+      if (left.homogeneousPct === null) return 1;
+      if (right.homogeneousPct === null) return -1;
+      return right.homogeneousPct - left.homogeneousPct;
     });
 }
 
@@ -689,6 +1279,8 @@ function buildNotes(
   if (summary.unofficialRecords > 0) {
     notes.push(`Hay ${summary.unofficialRecords} registro(s) visibles sin evaluacion oficial por quedar fuera de la vigencia o no encontrar regla operativa aplicable.`);
   }
+
+  notes.push("Las no conformidades operativas por distribución se calculan aparte del KPI, por ahora aplican solo a XLE y todavía no salen del catálogo de metas; quedan documentadas como reglas pendientes de parametrización en el módulo.");
 
   return notes;
 }
@@ -751,6 +1343,42 @@ export function createEmptyCampoPuntoAperturaKpiData(
     timeSeries: [],
     distribution: [],
     areas: [],
+    nonConformities: {
+      summary: {
+        totalBlockDays: 0,
+        nonConformingBlockDays: 0,
+        conformingBlockDays: 0,
+        nonConformityRatePct: null,
+        topRuleLabel: null,
+      },
+      timeSeries: [],
+      areas: [],
+      records: [],
+      rulesContextStatus: "pending-goals-catalog",
+    },
+    homogeneity: {
+      goal: {
+        targetCode: null,
+        targetName: null,
+        operatorCode: null,
+        goalPct: null,
+        validFrom: null,
+        validTo: null,
+      },
+      summary: {
+        totalRecords: 0,
+        officialRecords: 0,
+        unofficialRecords: 0,
+        homogeneousRecords: 0,
+        nonHomogeneousRecords: 0,
+        homogeneousPct: null,
+        goalPct: null,
+        goalAttainmentPct: null,
+      },
+      timeSeries: [],
+      distribution: [],
+      areas: [],
+    },
     notes: [],
   };
 }
@@ -771,9 +1399,10 @@ export async function getCampoPuntoAperturaKpiData(
     bloque: filters.bloque,
   };
 
-  const [sourceData, goal, rules] = await Promise.all([
+  const [sourceData, goal, homogeneityGoal, rules] = await Promise.all([
     getPuntoAperturaDashboardData(qualityFilters),
     loadOpeningGoal(),
+    loadHomogeneityGoal(),
     loadOpeningRules(),
   ]);
 
@@ -783,6 +1412,9 @@ export async function getCampoPuntoAperturaKpiData(
   });
 
   const summary = summarizeEvaluatedRecords(evaluatedRecords);
+  const nonConformityRecords = buildNonConformityRecords(evaluatedRecords);
+  const nonConformitySummary = summarizeNonConformities(nonConformityRecords);
+  const homogeneitySummary = summarizeHomogeneityRecords(sourceData.records, homogeneityGoal);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -794,6 +1426,20 @@ export async function getCampoPuntoAperturaKpiData(
     timeSeries: buildTimeSeries(evaluatedRecords, filters.granularity),
     distribution: buildDistribution(evaluatedRecords),
     areas: buildAreaBreakdown(evaluatedRecords),
+    nonConformities: {
+      summary: nonConformitySummary,
+      timeSeries: buildNonConformityTimeSeries(nonConformityRecords, filters.granularity),
+      areas: buildNonConformityAreas(nonConformityRecords),
+      records: nonConformityRecords.filter((record) => record.isNonConformity),
+      rulesContextStatus: "pending-goals-catalog",
+    },
+    homogeneity: {
+      goal: homogeneityGoal,
+      summary: homogeneitySummary,
+      timeSeries: buildHomogeneityTimeSeries(sourceData.records, filters.granularity, homogeneityGoal),
+      distribution: buildHomogeneityDistribution(sourceData.records),
+      areas: buildHomogeneityAreaBreakdown(sourceData.records, homogeneityGoal),
+    },
     notes: buildNotes(goal, summary),
   };
 }
