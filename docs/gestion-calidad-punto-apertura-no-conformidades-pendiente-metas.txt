@@ -1,0 +1,75 @@
+NO CONFORMIDADES POR DISTRIBUCION
+CAMPO / INDICADORES & KPI / PUNTO DE APERTURA
+
+Fecha: 2026-05-23
+Estado: Definicion funcional implementada en dashboard, pendiente de parametrizacion en catalogo de metas
+
+1. Proposito
+
+Separar del KPI ponderado una segunda capa de control operativo:
+- cumplimiento / incumplimiento de distribuciones de apertura
+- evaluado a nivel de bloque por dia
+
+Esta capa no reemplaza al KPI.
+La complementa.
+
+2. Nivel de evaluacion
+
+La no conformidad se calcula sobre el agregado:
+- fecha
+- area
+- bloque
+
+Es decir:
+- se suman los tallos muestreados del bloque en el dia
+- se calcula la participacion porcentual por categoria
+- y luego se disparan reglas de no conformidad
+
+3. Reglas funcionales vigentes
+
+Regla 1:
+- si la categoria "Mas de 20" supera el 2%
+- entonces se marca NO CONFORMIDAD
+
+Regla 2:
+- si la suma de "10 a 20" + "Mas de 20" llega o supera el 25%
+- entonces se marca NO CONFORMIDAD
+
+Regla 3:
+- si la categoria "4 a 9" llega o supera el 50%
+- entonces se marca NO CONFORMIDAD
+
+4. Estado de parametrizacion
+
+Estas reglas no se tomaran todavia del catalogo de metas y objetivos.
+
+Quedan por ahora:
+- implementadas en el dashboard
+- separadas del KPI
+- con estado pendiente de parametrizacion formal
+
+Estado pendiente:
+- crear las metas equivalentes dentro del modulo maestro
+- vincular despues la lectura automaticamente desde catalogo
+
+5. Lectura en dashboard
+
+El dashboard debe mostrar:
+- bloques-dia analizados
+- no conformidades detectadas
+- porcentaje de no conformidad
+- regla mas disparada
+- serie historica de no conformidad
+- detalle de los bloques-dia no conformes
+
+6. Relacion con el KPI
+
+El KPI mide calidad de ajuste respecto al objetivo operativo.
+
+La no conformidad mide situaciones graves o inaceptables de distribucion.
+
+Por eso:
+- un periodo puede tener bajo KPI sin ser no conformidad
+- y tambien puede tener no conformidad aunque el KPI general no sea el peor
+
+Ambos deben convivir en el mismo dashboard.
