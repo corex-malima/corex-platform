@@ -561,9 +561,47 @@ async function getPersonNameMap(personIds: string[]) {
   );
 }
 
-function isMultipleOfTwenty(value: number) {
-  const remainder = value % 20;
-  return Math.abs(remainder) < 0.000001 || Math.abs(remainder - 20) < 0.000001;
+/**
+ * Devuelve la fecha global del último corte registrado en la balanza 1
+ * (post-cosecha primer pesaje). Esta fecha marca el corte vivo: cualquier
+ * `event_date` posterior es proyección (planificación), cualquier fecha
+ * anterior o igual es real (medido).
+ *
+ * Reemplaza la heurística vieja `isMultipleOfTwenty` que asumía que los
+ * días de plan venían en cajas (múltiplos de 20). Esa heurística fallaba
+ * cuando un ciclo cargaba en el primer día un valor no múltiplo, marcando
+ * todo el ciclo como proyectado.
+ *
+ * Cacheable global (no depende de cycleKey). TTL 5 min para evitar lectura
+ * frecuente. Si la query falla por cualquier motivo (tabla no existe,
+ * cluster caído, etc.), devuelve null y el caller cae al comportamiento
+ * neutral (todo "real", sin proyección).
+ */
+const LAST_BALANZA_CUT_TTL_MS = 5 * 60 * 1000;
+
+async function getLastBalanzaCutDate(): Promise<string | null> {
+  return cachedAsync(
+    "fenograma:last-balanza-cut-date:v1",
+    LAST_BALANZA_CUT_TTL_MS,
+    async () => {
+      try {
+        const result = await query<{ last_cut: string | null }>(
+          `select to_char(max(event_date)::date, 'YYYY-MM-DD') as last_cut
+             from slv.prod_fact_balanza_1_cur`,
+        );
+        const value = result.rows[0]?.last_cut ?? null;
+        return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+      } catch (error) {
+        // Defensa: si la tabla no existe o falla la query, NO romper el
+        // modal del ciclo. Caer a comportamiento neutral (todo real).
+        console.warn(
+          "[fenograma] No se pudo leer slv.prod_fact_balanza_1_cur para el corte global:",
+          error instanceof Error ? error.message : error,
+        );
+        return null;
+      }
+    },
+  );
 }
 
 function formatToday() {
@@ -2331,7 +2369,7 @@ export async function getHarvestCurveByCycleKey(
   const normalizedCycleKey = cycleKey.trim();
 
   return cachedAsync(`fenograma:curve:${normalizedCycleKey}`, FENOGRAMA_CURVE_TTL_MS, async () => {
-    const [result, greenDailyResult, greenResult, postResult] = await Promise.all([
+    const [result, greenDailyResult, greenResult, postResult, lastBalanzaCutDate] = await Promise.all([
       query<HarvestCurveQueryRow>(
         `
           select
@@ -2361,6 +2399,7 @@ export async function getHarvestCurveByCycleKey(
         `select coalesce(sum(post_weight_kg), 0) as total from gld.mv_prod_productivity_post_cur where cycle_key = $1`,
         [normalizedCycleKey],
       ),
+      getLastBalanzaCutDate(),
     ]);
 
     const totalGreenWeightKg = roundValue(Number(greenResult.rows[0]?.total ?? 0));
@@ -2387,7 +2426,21 @@ export async function getHarvestCurveByCycleKey(
       };
     });
 
-    const projectionStartIndex = rawPoints.findIndex((point) => !isMultipleOfTwenty(point.dailyStems));
+    // Criterio nuevo (source of truth única): el corte real global es la
+    // fecha máxima registrada en `slv.prod_fact_balanza_1_cur` (la balanza
+    // de entrada al proceso post-cosecha). Cualquier event_date posterior
+    // a esa fecha es PROYECCIÓN (planificación); cualquiera anterior o
+    // igual es REAL. Reemplaza la heurística vieja `isMultipleOfTwenty`,
+    // que fallaba cuando el primer día del ciclo tenía un stems_count
+    // no múltiplo (marcaba todo el ciclo como proyectado).
+    //
+    // Si la fecha de balanza no está disponible (tabla no existe, vacía o
+    // query falló), se cae al comportamiento neutral: todo "real",
+    // sin proyección. Ver `getLastBalanzaCutDate`.
+    const projectionStartIndex =
+      lastBalanzaCutDate === null
+        ? -1
+        : rawPoints.findIndex((point) => point.eventDate > lastBalanzaCutDate);
     let cumulativeGreenKg = 0;
     const points = rawPoints.map((point, index) => {
       const isProjected = projectionStartIndex !== -1 && index >= projectionStartIndex;
