@@ -42,10 +42,10 @@ export type AlturasDronStatsRow = {
   rCvmad: number | null; // r_cvmad_x
 
   // Percentiles
-  p10: number | null; // q_0_1_x
-  p25: number | null; // q_0_25_x
-  p75: number | null; // q_0_75_x
-  p90: number | null; // q_0_9_x
+  p10: number | null; // q0_1_x (solo disponible vía height_ranges_cur)
+  p25: number | null; // q0_25_x
+  p75: number | null; // q0_75_x
+  p90: number | null; // q0_9_x
 
   // Asimetría
   bowleyV1: number | null; // sesgo_bowley_v1 (P10/P90)
@@ -272,7 +272,10 @@ type RawRangeRow = {
 // SQL builders
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Intento 1: statistics_cur (más eficiente)
+// Intento 1: statistics_cur (más eficiente, ~2.2M). Esta tabla tiene 13 medidas
+// agregadas pero NO percentiles, iqr ni mad. Los devolvemos como NULL: la tabla
+// (Sección 4) los muestra como "—" y el histograma (Sección 1) cae al fallback
+// de ranges_cur que SÍ los tiene. NO usa is_valid ni loaded_at (no existen acá).
 async function queryStatsFromStatisticsCur(
   dateFrom: string,
   dateTo: string,
@@ -288,17 +291,17 @@ async function queryStatsFromStatisticsCur(
       e_x         AS mean,
       me_x        AS median,
       s_x         AS sd,
-      iqr_x       AS iqr,
-      mad_x       AS mad,
+      NULL::float8 AS iqr,
+      NULL::float8 AS mad,
       r_siqr_x    AS r_siqr,
       r_smad_x    AS r_smad,
       cv_x        AS cv,
       r_cviqr_x   AS r_cviqr,
       r_cvmad_x   AS r_cvmad,
-      q_0_1_x     AS p10,
-      q_0_25_x    AS p25,
-      q_0_75_x    AS p75,
-      q_0_9_x     AS p90,
+      NULL::float8 AS p10,
+      NULL::float8 AS p25,
+      NULL::float8 AS p75,
+      NULL::float8 AS p90,
       sesgo_bowley_v1 AS bowley_v1,
       sesgo_bowley_v2 AS bowley_v2,
       sesgo_fisher    AS fisher,
@@ -306,16 +309,19 @@ async function queryStatsFromStatisticsCur(
       hn              AS entropy_norm
     FROM slv.camp_fact_drone_statistics_cur
     WHERE event_date BETWEEN $1::date AND $2::date
-      AND is_valid = true
       AND ($3::text[] IS NULL OR parent_block = ANY($3::text[]))
-    ORDER BY event_date, parent_block, loaded_at DESC
+    ORDER BY event_date, parent_block, event_at DESC
   `;
   const result = await query<RawStatsRow>(sql, [dateFrom, dateTo, blocksParam]);
   return result.rows;
 }
 
-// Intento 2 (fallback): derivar stats desde ranges_cur con DISTINCT ON
-// Las stats están denormalizadas — todas las filas de un bloque/fecha las repiten
+// Intento 2 (fallback): derivar stats desde ranges_cur con DISTINCT ON.
+// Esta tabla tiene TODOS los campos (percentiles q0_*_x, iqr, mad, etc.)
+// porque incluye una fila por bin del histograma con stats denormalizadas.
+// Nombres reales de la tabla:
+//   q0_1_x, q0_25_x, q0_75_x, q0_9_x (sin underscore tras la "q")
+// NO usa is_valid ni loaded_at (no existen). Ordena por event_at DESC.
 async function queryStatsFromRangesCur(
   dateFrom: string,
   dateTo: string,
@@ -339,10 +345,10 @@ async function queryStatsFromRangesCur(
         cv_x        AS cv,
         r_cviqr_x   AS r_cviqr,
         r_cvmad_x   AS r_cvmad,
-        q_0_1_x     AS p10,
-        q_0_25_x    AS p25,
-        q_0_75_x    AS p75,
-        q_0_9_x     AS p90,
+        q0_1_x      AS p10,
+        q0_25_x     AS p25,
+        q0_75_x     AS p75,
+        q0_9_x      AS p90,
         sesgo_bowley_v1 AS bowley_v1,
         sesgo_bowley_v2 AS bowley_v2,
         sesgo_fisher    AS fisher,
@@ -350,9 +356,8 @@ async function queryStatsFromRangesCur(
         hn              AS entropy_norm
       FROM slv.camp_fact_drone_height_ranges_cur
       WHERE event_date BETWEEN $1::date AND $2::date
-        AND is_valid = true
         AND ($3::text[] IS NULL OR parent_block = ANY($3::text[]))
-      ORDER BY event_date, parent_block, loaded_at DESC
+      ORDER BY event_date, parent_block, event_at DESC
     )
     SELECT * FROM stats
     ORDER BY parent_block, event_date
@@ -419,7 +424,8 @@ export async function getAlturasDronData(
   return cachedAsync(cacheKey, TTL_MS, async () => {
     const blocksParam = toTextArrayParam(filters.block);
 
-    // Ranges: todas las fechas del rango (para histograma con scrubber)
+    // Ranges: todas las fechas del rango (para histograma con scrubber).
+    // height_ranges_cur NO tiene is_valid (verificado vs schema real).
     const rangesSql = `
       SELECT
         to_char(event_date::date, 'YYYY-MM-DD') AS event_date,
@@ -428,7 +434,6 @@ export async function getAlturasDronData(
         dist_prc::float8 AS dist_prc
       FROM slv.camp_fact_drone_height_ranges_cur
       WHERE event_date BETWEEN $1::date AND $2::date
-        AND is_valid = true
         AND ($3::text[] IS NULL OR parent_block = ANY($3::text[]))
       ORDER BY parent_block, event_date, altura_m
     `;
