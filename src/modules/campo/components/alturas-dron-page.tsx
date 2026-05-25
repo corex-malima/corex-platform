@@ -4,35 +4,38 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { Download, Plane, X } from "lucide-react";
 import useSWR from "swr";
 
+import { fetchJson } from "@/lib/fetch-json";
+import type {
+  AlturasDronData,
+  AlturasDronFilters,
+} from "@/lib/campo-alturas-dron";
+
 import { Button } from "@/shared/ui/button";
 import { SectionPageShell } from "@/shared/layout/section-page-shell";
 import { FilterPanel, KpiGrid } from "@/shared/layout/filter-panel";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import { MetricTile } from "@/shared/data-display/metric-tile";
 import { DateField, MultiSelectField } from "@/shared/filters";
-import { fetchJson } from "@/lib/fetch-json";
+import { SearchInput } from "@/shared/forms/search-input";
 import {
   formatDateSlash,
   formatDecimal,
   formatInteger,
   formatPercent,
 } from "@/shared/lib/format";
-import type {
-  AlturasDronData,
-  AlturasDronFilters,
-} from "@/lib/campo-alturas-dron";
-import { SearchInput } from "@/shared/forms/search-input";
-import { AlturasDronBarCharts } from "./alturas-dron-bar-charts";
-import { AlturasDronTable } from "./alturas-dron-table";
-import { AlturasDronMulti } from "./alturas-dron-multi";
-import { AlturasDronDistribution } from "./alturas-dron-distribution";
+
+import { AlturasDronHistogramScrubber } from "./alturas-dron-histogram-scrubber";
+import { AlturasDronCentralEvolution } from "./alturas-dron-central-evolution";
+import { AlturasDronCvHeatmap } from "./alturas-dron-cv-heatmap";
+import { AlturasDronStatsTable } from "./alturas-dron-stats-table";
+import { AlturasDronVariabilityCharts } from "./alturas-dron-variability-charts";
 
 function buildQueryString(filters: AlturasDronFilters): string {
   const params = new URLSearchParams();
   params.set("dateFrom", filters.dateFrom);
   params.set("dateTo", filters.dateTo);
   if (filters.block) params.set("block", filters.block);
-  if (filters.cycleKey) params.set("cycleKey", filters.cycleKey);
+  if (filters.variety) params.set("variety", filters.variety);
   if (filters.q) params.set("q", filters.q);
   return params.toString();
 }
@@ -48,7 +51,7 @@ function defaultFilters(dateFrom: string, dateTo: string): AlturasDronFilters {
     dateFrom,
     dateTo,
     block: "all",
-    cycleKey: "all",
+    variety: "all",
     q: "",
   };
 }
@@ -56,6 +59,7 @@ function defaultFilters(dateFrom: string, dateTo: string): AlturasDronFilters {
 export function AlturasDronPage({ initialData }: { initialData: AlturasDronData }) {
   const [filters, setFilters] = useState<AlturasDronFilters>(initialData.filters);
   const [searchValue, setSearchValue] = useState(filters.q);
+  const [selectedBlock, setSelectedBlock] = useState<string | undefined>(undefined);
   const deferredFilters = useDeferredValue(filters);
 
   const initialKey = useMemo(
@@ -77,9 +81,10 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
   const payload = data ?? initialData;
   const { summary, stats, ranges, options } = payload;
 
-  const lastDateStats = stats.filter(
-    (row) => row.eventDate === summary.lastDate,
-  );
+  const lastDateStats = useMemo(() => {
+    if (!summary.lastDate) return [];
+    return stats.filter((row) => row.eventDate === summary.lastDate);
+  }, [stats, summary.lastDate]);
 
   function updateFilter<K extends keyof AlturasDronFilters>(
     key: K,
@@ -92,6 +97,7 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
     const defaults = defaultFilters(payload.filters.dateFrom, payload.filters.dateTo);
     setFilters(defaults);
     setSearchValue("");
+    setSelectedBlock(undefined);
   }
 
   function handleExport() {
@@ -99,15 +105,23 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
     window.location.href = `/api/campo/alturas-dron/export-xlsx?${qs}`;
   }
 
+  function handleHeatmapCellClick(parentBlock: string) {
+    setSelectedBlock(parentBlock);
+    document.getElementById("alturas-dron-histogram")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
   const hasData = stats.length > 0;
 
   return (
     <div className="min-w-0 space-y-4">
       <SectionPageShell
-        eyebrow="Analítica / Campo / Análisis"
-        title="Alturas Dron (CHN)"
-        subtitle="Altura normalizada del cultivo por bloque y fecha de monitoreo dron."
-        icon={<Plane className="size-6" aria-hidden="true" />}
+        eyebrow="Analítica / Campo / Indicadores & KPI"
+        title="Alturas Dron"
+        subtitle="Histograma de alturas, evolución temporal, heterogeneidad y métricas estadísticas por bloque."
+        icon={<Plane className="size-6" />}
         actions={
           <Button
             variant="outline"
@@ -142,11 +156,11 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
               onChange={(val) => updateFilter("block", val)}
             />
             <MultiSelectField
-              id="ad-cycle"
-              label="Ciclo"
-              value={filters.cycleKey}
-              options={options.cycles}
-              onChange={(val) => updateFilter("cycleKey", val)}
+              id="ad-variety"
+              label="Variedad"
+              value={filters.variety}
+              options={options.varieties}
+              onChange={(val) => updateFilter("variety", val)}
             />
             <SearchInput
               value={searchValue}
@@ -164,29 +178,22 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
 
           <KpiGrid columns={4}>
             <MetricTile
-              label="Fechas analizadas"
-              value={formatInteger(summary.totalDates)}
+              label="Bloques medidos"
+              value={formatInteger(summary.totalBlocks)}
               hint={
                 summary.lastDate
-                  ? `Últimas mediciones: ${formatDateSlash(summary.lastDate)}`
+                  ? `Último día: ${formatDateSlash(summary.lastDate)}`
                   : undefined
               }
             />
             <MetricTile
-              label="Bloques activos"
-              value={formatInteger(summary.totalBlocks)}
-              hint={`Periodo: ${formatDateSlash(filters.dateFrom)} a ${formatDateSlash(filters.dateTo)}`}
-            />
-            <MetricTile
               label="Altura promedio último día"
               value={
-                summary.avgHeightLastDate !== null
-                  ? `${formatDecimal(summary.avgHeightLastDate)} m`
+                summary.avgMeanLastDate !== null
+                  ? `${formatDecimal(summary.avgMeanLastDate)} m`
                   : "—"
               }
-              hint={
-                summary.lastDate ? formatDateSlash(summary.lastDate) : undefined
-              }
+              hint="E[x] medio"
             />
             <MetricTile
               label="CV promedio último día"
@@ -199,7 +206,7 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
                     })
                   : "—"
               }
-              hint={`${summary.highCvBlockCount} bloque(s) con CV > 40%`}
+              hint={`${summary.highCvBlockCount} bloque(s) > 40%`}
               accent={
                 summary.avgCvLastDate !== null
                   ? summary.avgCvLastDate >= 0.4
@@ -210,6 +217,15 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
                   : "default"
               }
             />
+            <MetricTile
+              label="Gini promedio último día"
+              value={
+                summary.avgGiniLastDate !== null
+                  ? formatDecimal(summary.avgGiniLastDate)
+                  : "—"
+              }
+              hint="Desigualdad interna"
+            />
           </KpiGrid>
         </FilterPanel>
       </SectionPageShell>
@@ -218,18 +234,17 @@ export function AlturasDronPage({ initialData }: { initialData: AlturasDronData 
         <EmptyState label="Sin mediciones de dron para los filtros aplicados." />
       ) : (
         <>
-          <AlturasDronBarCharts statsLastDate={lastDateStats} />
-          <AlturasDronTable
-            rows={lastDateStats}
-            allStats={stats}
-            searchValue={searchValue}
-            onSearchChange={(val) => {
-              setSearchValue(val);
-              updateFilter("q", val);
-            }}
-          />
-          <AlturasDronMulti stats={stats} />
-          <AlturasDronDistribution ranges={ranges} blocks={options.blocks} />
+          <div id="alturas-dron-histogram">
+            <AlturasDronHistogramScrubber
+              stats={stats}
+              ranges={ranges}
+              initialBlock={selectedBlock}
+            />
+          </div>
+          <AlturasDronCentralEvolution stats={stats} selectedBlock={selectedBlock} />
+          <AlturasDronCvHeatmap stats={stats} onCellClick={handleHeatmapCellClick} />
+          <AlturasDronStatsTable stats={stats} />
+          <AlturasDronVariabilityCharts stats={lastDateStats} />
         </>
       )}
     </div>

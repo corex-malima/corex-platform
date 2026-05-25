@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       dateFrom: sp.get("dateFrom") ?? undefined,
       dateTo: sp.get("dateTo") ?? undefined,
       block: sp.get("block") ?? undefined,
-      cycleKey: sp.get("cycleKey") ?? undefined,
+      variety: sp.get("variety") ?? undefined,
       q: sp.get("q") ?? undefined,
     });
 

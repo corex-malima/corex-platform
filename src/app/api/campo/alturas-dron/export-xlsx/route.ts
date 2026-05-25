@@ -5,6 +5,7 @@ import { handleApiError } from "@/lib/api-error";
 import {
   getAlturasDronData,
   normalizeAlturasDronFilters,
+  type AlturasDronRangeRow,
   type AlturasDronStatsRow,
 } from "@/lib/campo-alturas-dron";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// XML helpers (mismo patrón que cumpleanos/export-xlsx)
+// XML helpers (mismo patrón que otros export-xlsx del proyecto)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function xml(value: unknown): string {
@@ -41,47 +42,74 @@ function cellString(value: unknown, rowIndex: number, columnIndex: number): stri
 }
 
 function fmtNum(value: number | null | undefined, decimals = 4): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  if (value === null || value === undefined || !Number.isFinite(value)) return "";
   return value.toFixed(decimals);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Worksheet builder
+// Worksheet builders
 // ─────────────────────────────────────────────────────────────────────────────
 
-const HEADERS = [
+const STATS_HEADERS = [
   "Fecha",
   "Bloque",
+  "Block ID",
   "Ciclo",
-  "Altura (m)",
-  "CV",
-  "Mediana (m)",
-  "SD",
-  "P10",
-  "P90",
+  "Variedad",
+  "Media (e_x)",
+  "Mediana (me_x)",
+  "DS (s_x)",
   "IQR",
   "MAD",
+  "R-SIQR",
+  "R-SMAD",
+  "CV",
+  "R-CVIQR",
+  "R-CVMAD",
+  "P10",
+  "P25",
+  "P75",
+  "P90",
+  "Bowley V1",
+  "Bowley V2",
+  "Fisher",
+  "Gini (g)",
+  "Entropía norm. (hn)",
 ];
 
-function buildWorksheet(rows: AlturasDronStatsRow[]): string {
-  const headerCells = HEADERS.map((value, index) => cellString(value, 1, index)).join("");
+function buildStatsWorksheet(rows: AlturasDronStatsRow[]): string {
+  const headerCells = STATS_HEADERS.map((h, i) => cellString(h, 1, i)).join("");
   const headerRow = `<row r="1">${headerCells}</row>`;
 
   const dataRows = rows
     .map((row, dataIndex) => {
       const excelRow = dataIndex + 2;
-      const cells: string[] = [];
-      cells.push(cellString(row.eventDate, excelRow, 0));
-      cells.push(cellString(row.parentBlock, excelRow, 1));
-      cells.push(cellString(row.cycleKey ?? "—", excelRow, 2));
-      cells.push(cellString(fmtNum(row.alturaM, 4), excelRow, 3));
-      cells.push(cellString(fmtNum(row.cv, 4), excelRow, 4));
-      cells.push(cellString(fmtNum(row.mediana, 4), excelRow, 5));
-      cells.push(cellString(fmtNum(row.sd, 4), excelRow, 6));
-      cells.push(cellString(fmtNum(row.p10, 4), excelRow, 7));
-      cells.push(cellString(fmtNum(row.p90, 4), excelRow, 8));
-      cells.push(cellString(fmtNum(row.iqr, 4), excelRow, 9));
-      cells.push(cellString(fmtNum(row.mad, 4), excelRow, 10));
+      const cells: string[] = [
+        cellString(row.eventDate, excelRow, 0),
+        cellString(row.parentBlock, excelRow, 1),
+        cellString(row.blockId ?? "", excelRow, 2),
+        cellString(row.cycleKey ?? "", excelRow, 3),
+        cellString(row.variety ?? "", excelRow, 4),
+        cellString(fmtNum(row.mean, 4), excelRow, 5),
+        cellString(fmtNum(row.median, 4), excelRow, 6),
+        cellString(fmtNum(row.sd, 4), excelRow, 7),
+        cellString(fmtNum(row.iqr, 4), excelRow, 8),
+        cellString(fmtNum(row.mad, 4), excelRow, 9),
+        cellString(fmtNum(row.rSiqr, 4), excelRow, 10),
+        cellString(fmtNum(row.rSmad, 4), excelRow, 11),
+        cellString(fmtNum(row.cv, 4), excelRow, 12),
+        cellString(fmtNum(row.rCviqr, 4), excelRow, 13),
+        cellString(fmtNum(row.rCvmad, 4), excelRow, 14),
+        cellString(fmtNum(row.p10, 4), excelRow, 15),
+        cellString(fmtNum(row.p25, 4), excelRow, 16),
+        cellString(fmtNum(row.p75, 4), excelRow, 17),
+        cellString(fmtNum(row.p90, 4), excelRow, 18),
+        cellString(fmtNum(row.bowleyV1, 4), excelRow, 19),
+        cellString(fmtNum(row.bowleyV2, 4), excelRow, 20),
+        cellString(fmtNum(row.fisher, 4), excelRow, 21),
+        cellString(fmtNum(row.gini, 4), excelRow, 22),
+        cellString(fmtNum(row.entropyNorm, 4), excelRow, 23),
+      ];
       return `<row r="${excelRow}">${cells.join("")}</row>`;
     })
     .join("");
@@ -90,25 +118,50 @@ function buildWorksheet(rows: AlturasDronStatsRow[]): string {
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <cols>
     <col min="1" max="1" width="14" customWidth="1"/>
-    <col min="2" max="2" width="10" customWidth="1"/>
-    <col min="3" max="3" width="28" customWidth="1"/>
-    <col min="4" max="4" width="12" customWidth="1"/>
-    <col min="5" max="5" width="10" customWidth="1"/>
-    <col min="6" max="6" width="12" customWidth="1"/>
-    <col min="7" max="7" width="10" customWidth="1"/>
-    <col min="8" max="8" width="10" customWidth="1"/>
-    <col min="9" max="9" width="10" customWidth="1"/>
-    <col min="10" max="10" width="10" customWidth="1"/>
-    <col min="11" max="11" width="10" customWidth="1"/>
+    <col min="2" max="3" width="12" customWidth="1"/>
+    <col min="4" max="5" width="20" customWidth="1"/>
+    <col min="6" max="24" width="12" customWidth="1"/>
+  </cols>
+  <sheetData>${headerRow}${dataRows}</sheetData>
+</worksheet>`;
+}
+
+const RANGES_HEADERS = ["Fecha", "Bloque", "Altura (m)", "Distribución (%)"];
+
+function buildRangesWorksheet(rows: AlturasDronRangeRow[]): string {
+  const headerCells = RANGES_HEADERS.map((h, i) => cellString(h, 1, i)).join("");
+  const headerRow = `<row r="1">${headerCells}</row>`;
+
+  const dataRows = rows
+    .map((row, dataIndex) => {
+      const excelRow = dataIndex + 2;
+      const cells: string[] = [
+        cellString(row.eventDate, excelRow, 0),
+        cellString(row.parentBlock, excelRow, 1),
+        cellString(fmtNum(row.alturaM, 2), excelRow, 2),
+        cellString(fmtNum(row.distPrc, 4), excelRow, 3),
+      ];
+      return `<row r="${excelRow}">${cells.join("")}</row>`;
+    })
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <cols>
+    <col min="1" max="1" width="14" customWidth="1"/>
+    <col min="2" max="2" width="12" customWidth="1"/>
+    <col min="3" max="3" width="14" customWidth="1"/>
+    <col min="4" max="4" width="18" customWidth="1"/>
   </cols>
   <sheetData>${headerRow}${dataRows}</sheetData>
 </worksheet>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ZIP inline (idéntico al patrón cumpleanos)
+// ZIP inline (idéntico al patrón existente en otros export-xlsx del proyecto)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Static XLSX structure with 2 sheets
 const XLSX_STATIC_FILES: Array<{ path: string; content: string }> = [
   {
     path: "[Content_Types].xml",
@@ -118,6 +171,7 @@ const XLSX_STATIC_FILES: Array<{ path: string; content: string }> = [
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
 </Types>`,
   },
   {
@@ -132,7 +186,8 @@ const XLSX_STATIC_FILES: Array<{ path: string; content: string }> = [
     content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets>
-    <sheet name="Detalle Alturas" sheetId="1" r:id="rId1"/>
+    <sheet name="Estadísticas" sheetId="1" r:id="rId1"/>
+    <sheet name="Histogramas" sheetId="2" r:id="rId2"/>
   </sheets>
 </workbook>`,
   },
@@ -141,6 +196,7 @@ const XLSX_STATIC_FILES: Array<{ path: string; content: string }> = [
     content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>
 </Relationships>`,
   },
 ];
@@ -236,7 +292,7 @@ export async function GET(request: NextRequest) {
       dateFrom: sp.get("dateFrom") ?? undefined,
       dateTo: sp.get("dateTo") ?? undefined,
       block: sp.get("block") ?? undefined,
-      cycleKey: sp.get("cycleKey") ?? undefined,
+      variety: sp.get("variety") ?? undefined,
       q: sp.get("q") ?? undefined,
     });
 
@@ -244,7 +300,8 @@ export async function GET(request: NextRequest) {
 
     const xlsx = createZip([
       ...XLSX_STATIC_FILES,
-      { path: "xl/worksheets/sheet1.xml", content: buildWorksheet(data.stats) },
+      { path: "xl/worksheets/sheet1.xml", content: buildStatsWorksheet(data.stats) },
+      { path: "xl/worksheets/sheet2.xml", content: buildRangesWorksheet(data.ranges) },
     ]);
 
     const stampDate = new Date().toISOString().slice(0, 10).replace(/-/g, "");

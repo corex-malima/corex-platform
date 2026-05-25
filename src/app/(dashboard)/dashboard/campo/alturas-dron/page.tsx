@@ -32,7 +32,7 @@ export default async function Page({
           dateFrom: sp.dateFrom ? String(sp.dateFrom) : defaultDateFrom,
           dateTo: sp.dateTo ? String(sp.dateTo) : defaultDateTo,
           block: sp.block ? String(sp.block) : "",
-          cycleKey: sp.cycleKey ? String(sp.cycleKey) : "",
+          variety: sp.variety ? String(sp.variety) : "",
           q: sp.q ? String(sp.q) : "",
         }),
       ),
