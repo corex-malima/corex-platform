@@ -50,12 +50,16 @@ function fmtNum(value: number | null | undefined, decimals = 4): string {
 // Worksheet builders
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Hoja 1 — Estadísticas: Ciclo, Bloque, SP Type, Variedad, Área, Día Vegetativo al inicio + 13 medidas
 const STATS_HEADERS = [
   "Fecha",
+  "Ciclo",
   "Bloque",
   "Block ID",
-  "Ciclo",
+  "SP Type",
   "Variedad",
+  "Área",
+  "Día Vegetativo",
   "Media (e_x)",
   "Mediana (me_x)",
   "DS (s_x)",
@@ -86,29 +90,32 @@ function buildStatsWorksheet(rows: AlturasDronStatsRow[]): string {
       const excelRow = dataIndex + 2;
       const cells: string[] = [
         cellString(row.eventDate, excelRow, 0),
-        cellString(row.parentBlock, excelRow, 1),
-        cellString(row.blockId ?? "", excelRow, 2),
-        cellString(row.cycleKey ?? "", excelRow, 3),
-        cellString(row.variety ?? "", excelRow, 4),
-        cellString(fmtNum(row.mean, 4), excelRow, 5),
-        cellString(fmtNum(row.median, 4), excelRow, 6),
-        cellString(fmtNum(row.sd, 4), excelRow, 7),
-        cellString(fmtNum(row.iqr, 4), excelRow, 8),
-        cellString(fmtNum(row.mad, 4), excelRow, 9),
-        cellString(fmtNum(row.rSiqr, 4), excelRow, 10),
-        cellString(fmtNum(row.rSmad, 4), excelRow, 11),
-        cellString(fmtNum(row.cv, 4), excelRow, 12),
-        cellString(fmtNum(row.rCviqr, 4), excelRow, 13),
-        cellString(fmtNum(row.rCvmad, 4), excelRow, 14),
-        cellString(fmtNum(row.p10, 4), excelRow, 15),
-        cellString(fmtNum(row.p25, 4), excelRow, 16),
-        cellString(fmtNum(row.p75, 4), excelRow, 17),
-        cellString(fmtNum(row.p90, 4), excelRow, 18),
-        cellString(fmtNum(row.bowleyV1, 4), excelRow, 19),
-        cellString(fmtNum(row.bowleyV2, 4), excelRow, 20),
-        cellString(fmtNum(row.fisher, 4), excelRow, 21),
-        cellString(fmtNum(row.gini, 4), excelRow, 22),
-        cellString(fmtNum(row.entropyNorm, 4), excelRow, 23),
+        cellString(row.cycleKey, excelRow, 1),
+        cellString(row.parentBlock, excelRow, 2),
+        cellString(row.blockId ?? "", excelRow, 3),
+        cellString(row.spType ?? "", excelRow, 4),
+        cellString(row.variety ?? "", excelRow, 5),
+        cellString(row.areaId ?? "", excelRow, 6),
+        cellString(row.vegetativeDay !== null ? String(row.vegetativeDay) : "", excelRow, 7),
+        cellString(fmtNum(row.mean, 4), excelRow, 8),
+        cellString(fmtNum(row.median, 4), excelRow, 9),
+        cellString(fmtNum(row.sd, 4), excelRow, 10),
+        cellString(fmtNum(row.iqr, 4), excelRow, 11),
+        cellString(fmtNum(row.mad, 4), excelRow, 12),
+        cellString(fmtNum(row.rSiqr, 4), excelRow, 13),
+        cellString(fmtNum(row.rSmad, 4), excelRow, 14),
+        cellString(fmtNum(row.cv, 4), excelRow, 15),
+        cellString(fmtNum(row.rCviqr, 4), excelRow, 16),
+        cellString(fmtNum(row.rCvmad, 4), excelRow, 17),
+        cellString(fmtNum(row.p10, 4), excelRow, 18),
+        cellString(fmtNum(row.p25, 4), excelRow, 19),
+        cellString(fmtNum(row.p75, 4), excelRow, 20),
+        cellString(fmtNum(row.p90, 4), excelRow, 21),
+        cellString(fmtNum(row.bowleyV1, 4), excelRow, 22),
+        cellString(fmtNum(row.bowleyV2, 4), excelRow, 23),
+        cellString(fmtNum(row.fisher, 4), excelRow, 24),
+        cellString(fmtNum(row.gini, 4), excelRow, 25),
+        cellString(fmtNum(row.entropyNorm, 4), excelRow, 26),
       ];
       return `<row r="${excelRow}">${cells.join("")}</row>`;
     })
@@ -118,15 +125,25 @@ function buildStatsWorksheet(rows: AlturasDronStatsRow[]): string {
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <cols>
     <col min="1" max="1" width="14" customWidth="1"/>
-    <col min="2" max="3" width="12" customWidth="1"/>
-    <col min="4" max="5" width="20" customWidth="1"/>
-    <col min="6" max="24" width="12" customWidth="1"/>
+    <col min="2" max="2" width="22" customWidth="1"/>
+    <col min="3" max="4" width="12" customWidth="1"/>
+    <col min="5" max="7" width="16" customWidth="1"/>
+    <col min="8" max="8" width="14" customWidth="1"/>
+    <col min="9" max="27" width="12" customWidth="1"/>
   </cols>
   <sheetData>${headerRow}${dataRows}</sheetData>
 </worksheet>`;
 }
 
-const RANGES_HEADERS = ["Fecha", "Bloque", "Altura (m)", "Distribución (%)"];
+// Hoja 2 — Histogramas: Fecha, Ciclo, Bloque, Día Vegetativo, Altura, Distribución
+const RANGES_HEADERS = [
+  "Fecha",
+  "Ciclo",
+  "Bloque",
+  "Día Vegetativo",
+  "Altura (m)",
+  "Distribución (%)",
+];
 
 function buildRangesWorksheet(rows: AlturasDronRangeRow[]): string {
   const headerCells = RANGES_HEADERS.map((h, i) => cellString(h, 1, i)).join("");
@@ -137,9 +154,11 @@ function buildRangesWorksheet(rows: AlturasDronRangeRow[]): string {
       const excelRow = dataIndex + 2;
       const cells: string[] = [
         cellString(row.eventDate, excelRow, 0),
-        cellString(row.parentBlock, excelRow, 1),
-        cellString(fmtNum(row.alturaM, 2), excelRow, 2),
-        cellString(fmtNum(row.distPrc, 4), excelRow, 3),
+        cellString(row.cycleKey, excelRow, 1),
+        cellString(row.parentBlock, excelRow, 2),
+        cellString(row.vegetativeDay !== null ? String(row.vegetativeDay) : "", excelRow, 3),
+        cellString(fmtNum(row.alturaM, 2), excelRow, 4),
+        cellString(fmtNum(row.distPrc, 4), excelRow, 5),
       ];
       return `<row r="${excelRow}">${cells.join("")}</row>`;
     })
@@ -149,9 +168,11 @@ function buildRangesWorksheet(rows: AlturasDronRangeRow[]): string {
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <cols>
     <col min="1" max="1" width="14" customWidth="1"/>
-    <col min="2" max="2" width="12" customWidth="1"/>
-    <col min="3" max="3" width="14" customWidth="1"/>
-    <col min="4" max="4" width="18" customWidth="1"/>
+    <col min="2" max="2" width="22" customWidth="1"/>
+    <col min="3" max="3" width="12" customWidth="1"/>
+    <col min="4" max="4" width="14" customWidth="1"/>
+    <col min="5" max="5" width="14" customWidth="1"/>
+    <col min="6" max="6" width="18" customWidth="1"/>
   </cols>
   <sheetData>${headerRow}${dataRows}</sheetData>
 </worksheet>`;
@@ -292,7 +313,12 @@ export async function GET(request: NextRequest) {
       dateFrom: sp.get("dateFrom") ?? undefined,
       dateTo: sp.get("dateTo") ?? undefined,
       block: sp.get("block") ?? undefined,
+      cycleKey: sp.get("cycleKey") ?? undefined,
       variety: sp.get("variety") ?? undefined,
+      spType: sp.get("spType") ?? undefined,
+      areaId: sp.get("areaId") ?? undefined,
+      vegDayFrom: sp.get("vegDayFrom") ?? undefined,
+      vegDayTo: sp.get("vegDayTo") ?? undefined,
       q: sp.get("q") ?? undefined,
     });
 

@@ -16,12 +16,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 type DateMode = "last" | "all";
 
 type SortKey =
+  | "cycleKey"
   | "eventDate"
   | "parentBlock"
   | "variety"
+  | "spType"
+  | "areaId"
+  | "vegetativeDay"
   | "mean"
   | "median"
   | "sd"
+  | "rSmad"
+  | "rSiqr"
   | "cv"
   | "rCviqr"
   | "rCvmad"
@@ -50,25 +56,31 @@ function compareVal(a: unknown, b: unknown): number {
 
 function rowSortVal(row: AlturasDronStatsRow, key: SortKey): string | number | null {
   switch (key) {
-    case "eventDate":   return row.eventDate;
-    case "parentBlock": return row.parentBlock;
-    case "variety":     return row.variety ?? null;
-    case "mean":        return row.mean;
-    case "median":      return row.median ?? null;
-    case "sd":          return row.sd ?? null;
-    case "cv":          return row.cv ?? null;
-    case "rCviqr":      return row.rCviqr ?? null;
-    case "rCvmad":      return row.rCvmad ?? null;
-    case "bowleyV1":    return row.bowleyV1 ?? null;
-    case "bowleyV2":    return row.bowleyV2 ?? null;
-    case "fisher":      return row.fisher ?? null;
-    case "gini":        return row.gini ?? null;
-    case "entropyNorm": return row.entropyNorm ?? null;
-    default:            return null;
+    case "cycleKey":      return row.cycleKey;
+    case "eventDate":     return row.eventDate;
+    case "parentBlock":   return row.parentBlock;
+    case "variety":       return row.variety ?? null;
+    case "spType":        return row.spType ?? null;
+    case "areaId":        return row.areaId ?? null;
+    case "vegetativeDay": return row.vegetativeDay ?? null;
+    case "mean":          return row.mean;
+    case "median":        return row.median ?? null;
+    case "sd":            return row.sd ?? null;
+    case "rSmad":         return row.rSmad ?? null;
+    case "rSiqr":         return row.rSiqr ?? null;
+    case "cv":            return row.cv ?? null;
+    case "rCviqr":        return row.rCviqr ?? null;
+    case "rCvmad":        return row.rCvmad ?? null;
+    case "bowleyV1":      return row.bowleyV1 ?? null;
+    case "bowleyV2":      return row.bowleyV2 ?? null;
+    case "fisher":        return row.fisher ?? null;
+    case "gini":          return row.gini ?? null;
+    case "entropyNorm":   return row.entropyNorm ?? null;
+    default:              return null;
   }
 }
 
-// Semáforo CV / rCViqr / rCVmad: verde < 0.25, amarillo < 0.40, rojo ≥ 0.40
+// Semáforo CV / rCViqr / rCVmad: verde < 0.25, amarillo < 0.40, rojo >= 0.40
 function cvVariant(val: number | null): "success" | "warning" | "danger" | "secondary" {
   if (val === null) return "secondary";
   if (val < 0.25) return "success";
@@ -93,7 +105,7 @@ function giniVariant(val: number | null): "success" | "warning" | "danger" | "se
 }
 
 // Hn 0-1: gris bajo, azul alto
-function hnVariant(val: number | null): "secondary" | "info" | "secondary" {
+function hnVariant(val: number | null): "secondary" | "info" {
   if (val === null) return "secondary";
   if (val < 0.4) return "secondary";
   return "info";
@@ -108,35 +120,41 @@ function fmtDec(val: number | null, digits = 3) {
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", initialSortDir = "asc" }: Props) {
+export function AlturasDronStatsTable({
+  stats,
+  initialSortKey = "cycleKey",
+  initialSortDir = "asc",
+}: Props) {
   const [dateMode, setDateMode] = useState<DateMode>("last");
   const [sortKey, setSortKey] = useState<SortKey>(initialSortKey);
   const [direction, setDirection] = useState<SortDirection>(initialSortDir);
   const [search, setSearch] = useState("");
 
-  // En modo "last": para cada bloque tomar solo la fila con la fecha más reciente
+  // En modo "last": para cada cycleKey tomar solo la fila con la fecha más reciente
   const baseRows = useMemo<AlturasDronStatsRow[]>(() => {
     if (dateMode === "all") return stats;
 
-    // Agrupar por parentBlock → mantener fila con eventDate max
     const map = new Map<string, AlturasDronStatsRow>();
     for (const row of stats) {
-      const existing = map.get(row.parentBlock);
+      const existing = map.get(row.cycleKey);
       if (!existing || row.eventDate > existing.eventDate) {
-        map.set(row.parentBlock, row);
+        map.set(row.cycleKey, row);
       }
     }
     return [...map.values()];
   }, [stats, dateMode]);
 
-  // Filtro de búsqueda por bloque y variedad
+  // Filtro de búsqueda: cycleKey + parentBlock + variety + spType + areaId
   const filtered = useMemo<AlturasDronStatsRow[]>(() => {
     const q = search.trim().toLowerCase();
     if (!q) return baseRows;
     return baseRows.filter(
       (r) =>
+        r.cycleKey.toLowerCase().includes(q) ||
         r.parentBlock.toLowerCase().includes(q) ||
-        (r.variety ?? "").toLowerCase().includes(q),
+        (r.variety ?? "").toLowerCase().includes(q) ||
+        (r.spType ?? "").toLowerCase().includes(q) ||
+        (r.areaId ?? "").toLowerCase().includes(q),
     );
   }, [baseRows, search]);
 
@@ -157,8 +175,8 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
     }
   };
 
-  // min-width depende de si mostramos la columna de fecha
-  const minWidth = dateMode === "all" ? "min-w-[1520px]" : "min-w-[1380px]";
+  // 19 cols en modo "last", 20 en modo "all" (+ Fecha como 1ra)
+  const colCount = dateMode === "all" ? 20 : 19;
 
   return (
     <DetailSection>
@@ -166,7 +184,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="text-lg font-semibold">
-              Estadísticas por bloque
+              Estadísticas por ciclo
             </CardTitle>
 
             {/* Toggle modo fecha */}
@@ -187,12 +205,12 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
           </div>
 
           {/* Buscador */}
-          <div className="w-full max-w-xs">
+          <div className="w-full max-w-sm">
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder="Buscar bloque o variedad..."
-              ariaLabel="Buscar bloque o variedad"
+              placeholder="Buscar ciclo, bloque, variedad, SP type, área..."
+              ariaLabel="Buscar en estadísticas de alturas dron"
               debounceMs={200}
             />
           </div>
@@ -205,9 +223,10 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
 
         <CardContent>
           <ScrollFadeTable topScrollbar>
-            <StandardTable className={minWidth}>
+            <StandardTable className="min-w-[1900px]">
               <thead>
                 <tr>
+                  {/* Fecha — solo en modo "all" */}
                   {dateMode === "all" && (
                     <SortableHeader
                       label="Fecha"
@@ -217,13 +236,15 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                       onSort={handleSort}
                     />
                   )}
+                  {/* 1. Ciclo */}
                   <SortableHeader
-                    label="Bloque"
-                    sortKey="parentBlock"
+                    label="Ciclo"
+                    sortKey="cycleKey"
                     activeSortKey={sortKey}
                     direction={direction}
                     onSort={handleSort}
                   />
+                  {/* 2. Variedad */}
                   <SortableHeader
                     label="Variedad"
                     sortKey="variety"
@@ -231,6 +252,40 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     direction={direction}
                     onSort={handleSort}
                   />
+                  {/* 3. SP Type */}
+                  <SortableHeader
+                    label="SP Type"
+                    sortKey="spType"
+                    activeSortKey={sortKey}
+                    direction={direction}
+                    onSort={handleSort}
+                  />
+                  {/* 4. Área */}
+                  <SortableHeader
+                    label="Área"
+                    sortKey="areaId"
+                    activeSortKey={sortKey}
+                    direction={direction}
+                    onSort={handleSort}
+                  />
+                  {/* 5. Bloque */}
+                  <SortableHeader
+                    label="Bloque"
+                    sortKey="parentBlock"
+                    activeSortKey={sortKey}
+                    direction={direction}
+                    onSort={handleSort}
+                  />
+                  {/* 6. Día Veg */}
+                  <SortableHeader
+                    label="Día Veg"
+                    sortKey="vegetativeDay"
+                    activeSortKey={sortKey}
+                    direction={direction}
+                    onSort={handleSort}
+                    align="right"
+                  />
+                  {/* 7. E[x] */}
                   <SortableHeader
                     label="E[x] (m)"
                     sortKey="mean"
@@ -239,6 +294,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 8. Me(x) */}
                   <SortableHeader
                     label="Me(x) (m)"
                     sortKey="median"
@@ -247,6 +303,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 9. S(x) */}
                   <SortableHeader
                     label="S(x) (m)"
                     sortKey="sd"
@@ -255,6 +312,25 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 10. rSmad */}
+                  <SortableHeader
+                    label="rSmad (m)"
+                    sortKey="rSmad"
+                    activeSortKey={sortKey}
+                    direction={direction}
+                    onSort={handleSort}
+                    align="right"
+                  />
+                  {/* 11. rSiqr */}
+                  <SortableHeader
+                    label="rSiqr (m)"
+                    sortKey="rSiqr"
+                    activeSortKey={sortKey}
+                    direction={direction}
+                    onSort={handleSort}
+                    align="right"
+                  />
+                  {/* 12. CV */}
                   <SortableHeader
                     label="CV"
                     sortKey="cv"
@@ -263,6 +339,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 13. rCViqr */}
                   <SortableHeader
                     label="rCViqr"
                     sortKey="rCviqr"
@@ -271,6 +348,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 14. rCVmad */}
                   <SortableHeader
                     label="rCVmad"
                     sortKey="rCvmad"
@@ -279,6 +357,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 15. Bowley V1 */}
                   <SortableHeader
                     label="Bowley V1"
                     sortKey="bowleyV1"
@@ -287,6 +366,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 16. Bowley V2 */}
                   <SortableHeader
                     label="Bowley V2"
                     sortKey="bowleyV2"
@@ -295,6 +375,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 17. Fisher */}
                   <SortableHeader
                     label="Fisher"
                     sortKey="fisher"
@@ -303,6 +384,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 18. Gini */}
                   <SortableHeader
                     label="Gini"
                     sortKey="gini"
@@ -311,6 +393,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                     onSort={handleSort}
                     align="right"
                   />
+                  {/* 19. Hn */}
                   <SortableHeader
                     label="Hn"
                     sortKey="entropyNorm"
@@ -325,7 +408,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                 {sorted.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={dateMode === "all" ? 15 : 14}
+                      colSpan={colCount}
                       className="px-4 py-8 text-center text-sm text-muted-foreground"
                     >
                       Sin resultados para la búsqueda.
@@ -334,7 +417,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
                 ) : (
                   sorted.map((row, idx) => (
                     <StatsRow
-                      key={`${row.parentBlock}|${row.eventDate}|${idx}`}
+                      key={`${row.cycleKey}|${row.eventDate}|${idx}`}
                       row={row}
                       showDate={dateMode === "all"}
                     />
@@ -353,6 +436,7 @@ export function AlturasDronStatsTable({ stats, initialSortKey = "parentBlock", i
 function StatsRow({ row, showDate }: { row: AlturasDronStatsRow; showDate: boolean }) {
   return (
     <tr className="border-t border-border/60 hover:bg-muted/30">
+      {/* Fecha (modo "all") */}
       {showDate && (
         <StandardTd>
           <span className="tabular-nums text-muted-foreground">
@@ -361,84 +445,117 @@ function StatsRow({ row, showDate }: { row: AlturasDronStatsRow; showDate: boole
         </StandardTd>
       )}
 
-      {/* Bloque */}
+      {/* 1. Ciclo */}
       <StandardTd>
-        <span className="font-medium text-foreground">{row.parentBlock}</span>
-        {row.blockId ? (
-          <span className="ml-1 text-xs text-muted-foreground">({row.blockId})</span>
-        ) : null}
+        <span className="font-mono text-xs font-medium text-foreground">
+          {row.cycleKey}
+        </span>
       </StandardTd>
 
-      {/* Variedad */}
+      {/* 2. Variedad */}
       <StandardTd>
         {row.variety ?? <span className="text-muted-foreground">—</span>}
       </StandardTd>
 
-      {/* E[x] */}
+      {/* 3. SP Type */}
+      <StandardTd>
+        {row.spType ?? <span className="text-muted-foreground">—</span>}
+      </StandardTd>
+
+      {/* 4. Área */}
+      <StandardTd>
+        {row.areaId ?? <span className="text-muted-foreground">—</span>}
+      </StandardTd>
+
+      {/* 5. Bloque */}
+      <StandardTd>
+        <span className="font-medium text-foreground">{row.parentBlock}</span>
+      </StandardTd>
+
+      {/* 6. Día Veg */}
+      <StandardTd align="right">
+        {row.vegetativeDay != null ? (
+          <span className="tabular-nums">{row.vegetativeDay}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </StandardTd>
+
+      {/* 7. E[x] */}
       <StandardTd align="right">
         <span className="tabular-nums font-medium">{fmtDec(row.mean)}</span>
       </StandardTd>
 
-      {/* Me(x) */}
+      {/* 8. Me(x) */}
       <StandardTd align="right">
         <span className="tabular-nums">{fmtDec(row.median)}</span>
       </StandardTd>
 
-      {/* S(x) */}
+      {/* 9. S(x) */}
       <StandardTd align="right">
         <span className="tabular-nums">{fmtDec(row.sd)}</span>
       </StandardTd>
 
-      {/* CV */}
+      {/* 10. rSmad */}
+      <StandardTd align="right">
+        <span className="tabular-nums">{fmtDec(row.rSmad)}</span>
+      </StandardTd>
+
+      {/* 11. rSiqr */}
+      <StandardTd align="right">
+        <span className="tabular-nums">{fmtDec(row.rSiqr)}</span>
+      </StandardTd>
+
+      {/* 12. CV */}
       <StandardTd align="right">
         <Badge variant={cvVariant(row.cv)} className="tabular-nums">
           {fmtRatio(row.cv)}
         </Badge>
       </StandardTd>
 
-      {/* rCViqr */}
+      {/* 13. rCViqr */}
       <StandardTd align="right">
         <Badge variant={cvVariant(row.rCviqr)} className="tabular-nums">
           {fmtRatio(row.rCviqr)}
         </Badge>
       </StandardTd>
 
-      {/* rCVmad */}
+      {/* 14. rCVmad */}
       <StandardTd align="right">
         <Badge variant={cvVariant(row.rCvmad)} className="tabular-nums">
           {fmtRatio(row.rCvmad)}
         </Badge>
       </StandardTd>
 
-      {/* Bowley V1 */}
+      {/* 15. Bowley V1 */}
       <StandardTd align="right">
         <Badge variant={bowleyVariant(row.bowleyV1)} className="tabular-nums">
           {fmtDec(row.bowleyV1)}
         </Badge>
       </StandardTd>
 
-      {/* Bowley V2 */}
+      {/* 16. Bowley V2 */}
       <StandardTd align="right">
         <Badge variant={bowleyVariant(row.bowleyV2)} className="tabular-nums">
           {fmtDec(row.bowleyV2)}
         </Badge>
       </StandardTd>
 
-      {/* Fisher */}
+      {/* 17. Fisher */}
       <StandardTd align="right">
         <Badge variant={bowleyVariant(row.fisher)} className="tabular-nums">
           {fmtDec(row.fisher)}
         </Badge>
       </StandardTd>
 
-      {/* Gini */}
+      {/* 18. Gini */}
       <StandardTd align="right">
         <Badge variant={giniVariant(row.gini)} className="tabular-nums">
           {fmtDec(row.gini)}
         </Badge>
       </StandardTd>
 
-      {/* Hn */}
+      {/* 19. Hn */}
       <StandardTd align="right">
         <Badge variant={hnVariant(row.entropyNorm)} className="tabular-nums">
           {fmtDec(row.entropyNorm)}
