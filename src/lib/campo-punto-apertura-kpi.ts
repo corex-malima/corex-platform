@@ -7,6 +7,7 @@ import {
   type PuntoAperturaDashboardData,
   type PuntoAperturaFilters,
   type PuntoAperturaRecord,
+  type PuntoAperturaStatus,
 } from "@/lib/calidad-punto-apertura";
 import { queryAdmin } from "@/lib/admin-db";
 import { initializeGeneralOpeningTargetRules } from "@/lib/general-opening-target-rules";
