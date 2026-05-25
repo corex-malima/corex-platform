@@ -1277,8 +1277,8 @@ export async function getBlockModalRowsByParentBlocks(parentBlocks: string[]) {
           nullif(mv.variety, '') as variety,
           nullif(mv.sp_type, '') as sp_type,
           coalesce(cp_dates.cp_sp_date, mv.sp_date) as sp_date,
-          coalesce(cp_dates.cp_harvest_start_date, mv.harvest_start_date) as harvest_start_date,
-          coalesce(cp_dates.cp_harvest_end_date, mv.harvest_end_date) as harvest_end_date,
+          coalesce(ml_dates.ml_harvest_start, cp_dates.cp_harvest_start_date, mv.harvest_start_date) as harvest_start_date,
+          coalesce(ml_dates.ml_harvest_end,   cp_dates.cp_harvest_end_date,   mv.harvest_end_date  ) as harvest_end_date,
           sum(coalesce(mv.stems_count, 0)) as total_stems
         from ${FENOGRAMA_SOURCE} mv
         left join lateral (
@@ -1291,6 +1291,13 @@ export async function getBlockModalRowsByParentBlocks(parentBlocks: string[]) {
           order by cp2.valid_from desc nulls last
           limit 1
         ) cp_dates on true
+        left join lateral (
+          select
+            min(event_date)::date as ml_harvest_start,
+            max(event_date)::date as ml_harvest_end
+          from mdl.prod_fact_ml2_operational_subset_cur
+          where model_cycle_id = mv.cycle_key
+        ) ml_dates on true
         where nullif(mv.parent_block, '') = any($1::text[])
         group by 1, 2, 3, 4, 5, 6, 7, 8
       ),
@@ -1359,8 +1366,8 @@ export async function getBlockModalRowsByParentBlocks(parentBlocks: string[]) {
           nullif(cp.variety, '') as variety,
           nullif(cp.sp_type, '') as sp_type,
           to_char(bp.valid_from, 'YYYY-MM-DD') as sp_date,
-          to_char(cp.harvest_start_date, 'YYYY-MM-DD') as harvest_start_date,
-          to_char(cp.harvest_end_date, 'YYYY-MM-DD') as harvest_end_date,
+          to_char(coalesce(ml_dates.ml_harvest_start, cp.harvest_start_date), 'YYYY-MM-DD') as harvest_start_date,
+          to_char(coalesce(ml_dates.ml_harvest_end,   cp.harvest_end_date  ), 'YYYY-MM-DD') as harvest_end_date,
           0::numeric as total_stems,
           row_number() over (
             partition by bp.parent_block
@@ -1372,6 +1379,13 @@ export async function getBlockModalRowsByParentBlocks(parentBlocks: string[]) {
         from slv.camp_dim_block_profile_scd2 bp
         left join slv.camp_dim_cycle_profile_scd2 cp
           on cp.cycle_key = bp.cycle_key
+        left join lateral (
+          select
+            min(event_date)::date as ml_harvest_start,
+            max(event_date)::date as ml_harvest_end
+          from mdl.prod_fact_ml2_operational_subset_cur
+          where model_cycle_id = bp.cycle_key
+        ) ml_dates on true
         where nullif(bp.parent_block, '') = any($1::text[])
       )
       select
@@ -1443,8 +1457,8 @@ export async function getCycleProfilesByBlock(
           plants.availability_vs_scheduled_pct,
           plants.availability_vs_initial_pct,
           plants.mortality_pct,
-          to_char(cp.harvest_start_date, 'YYYY-MM-DD') as harvest_start_date,
-          to_char(coalesce(feno_days.last_harvest_date, cp.harvest_end_date), 'YYYY-MM-DD') as harvest_end_date,
+          to_char(coalesce(ml_dates.ml_harvest_start, cp.harvest_start_date), 'YYYY-MM-DD') as harvest_start_date,
+          to_char(coalesce(ml_dates.ml_harvest_end, feno_days.last_harvest_date, cp.harvest_end_date), 'YYYY-MM-DD') as harvest_end_date,
           feno.total_stems,
           green.green_weight_kg,
           post.post_weight_kg,
@@ -1525,6 +1539,13 @@ export async function getCycleProfilesByBlock(
           from ${PROD_HOURS_APPEND_SOURCE}
           where cycle_key = cp.cycle_key
         ) labor on true
+        left join lateral (
+          select
+            min(event_date)::date as ml_harvest_start,
+            max(event_date)::date as ml_harvest_end
+          from mdl.prod_fact_ml2_operational_subset_cur
+          where model_cycle_id = cp.cycle_key
+        ) ml_dates on true
         where cp.parent_block = $1
           and ($2::text is null or cp.cycle_key = $2)
         order by
