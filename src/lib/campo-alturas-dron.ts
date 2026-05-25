@@ -32,6 +32,8 @@ export type AlturasDronStatsRow = {
   spType: string | null;       // P1, P2, P3... (nuevo)
   areaId: string | null;       // área del ciclo (nuevo)
   spDate: string | null;       // fecha siembra/plantación (nuevo)
+  harvestStartDate: string | null; // inicio cosecha del ciclo
+  harvestEndDate: string | null;   // fin cosecha del ciclo
   vegetativeDay: number | null; // (eventDate - spDate + 1) (nuevo)
 
   // Medidas centrales
@@ -294,6 +296,8 @@ type RawStatsRow = {
   sp_type: string | null;
   area_id: string | null;
   sp_date: string | null;
+  harvest_start_date: string | null;
+  harvest_end_date: string | null;
   vegetative_day: string | number | null;
   mean: string | number | null;
   median: string | number | null;
@@ -369,50 +373,70 @@ async function queryStatsFromStatisticsCur(
         AND ($3::text[] IS NULL OR parent_block = ANY($3::text[]))
         AND ($4::text[] IS NULL OR cycle_key = ANY($4::text[]))
       ORDER BY event_date, cycle_key, event_at DESC
+    ),
+    filtered AS (
+      SELECT
+        b.event_date,
+        b.cycle_key,
+        b.parent_block,
+        b.block_id,
+        b.mean,
+        b.median,
+        b.sd,
+        b.iqr,
+        b.mad,
+        b.r_siqr,
+        b.r_smad,
+        b.cv,
+        b.r_cviqr,
+        b.r_cvmad,
+        b.p10,
+        b.p25,
+        b.p75,
+        b.p90,
+        b.bowley_v1,
+        b.bowley_v2,
+        b.fisher,
+        b.gini,
+        b.entropy_norm,
+        to_char(profile.sp_date, 'YYYY-MM-DD') AS sp_date,
+        profile.sp_type,
+        profile.variety,
+        profile.area_id,
+        to_char(profile.harvest_start_date, 'YYYY-MM-DD') AS harvest_start_date,
+        to_char(profile.harvest_end_date, 'YYYY-MM-DD') AS harvest_end_date,
+        CASE
+          WHEN profile.sp_date IS NULL THEN NULL
+          ELSE (b.event_date::date - profile.sp_date + 1)::int
+        END AS vegetative_day
+      FROM base b
+      LEFT JOIN LATERAL (
+        SELECT
+          cp.sp_date,
+          cp.sp_type,
+          cp.variety,
+          cp.area_id,
+          cp.harvest_start_date,
+          cp.harvest_end_date
+        FROM slv.camp_dim_cycle_profile_scd2 cp
+        WHERE cp.cycle_key = b.cycle_key
+          AND cp.is_valid = true
+        ORDER BY cp.valid_from DESC NULLS LAST
+        LIMIT 1
+      ) profile ON true
+      WHERE
+        profile.sp_date IS NULL
+        OR (
+          b.event_date::date >= profile.sp_date
+          AND b.event_date::date <= COALESCE(
+            profile.harvest_end_date,
+            profile.harvest_start_date + INTERVAL '180 days',
+            CURRENT_DATE
+          )::date
+        )
     )
-    SELECT
-      b.event_date,
-      b.cycle_key,
-      b.parent_block,
-      b.block_id,
-      b.mean,
-      b.median,
-      b.sd,
-      b.iqr,
-      b.mad,
-      b.r_siqr,
-      b.r_smad,
-      b.cv,
-      b.r_cviqr,
-      b.r_cvmad,
-      b.p10,
-      b.p25,
-      b.p75,
-      b.p90,
-      b.bowley_v1,
-      b.bowley_v2,
-      b.fisher,
-      b.gini,
-      b.entropy_norm,
-      to_char(profile.sp_date, 'YYYY-MM-DD') AS sp_date,
-      profile.sp_type,
-      profile.variety,
-      profile.area_id,
-      CASE
-        WHEN profile.sp_date IS NULL THEN NULL
-        ELSE (b.event_date::date - profile.sp_date + 1)::int
-      END AS vegetative_day
-    FROM base b
-    LEFT JOIN LATERAL (
-      SELECT cp.sp_date, cp.sp_type, cp.variety, cp.area_id
-      FROM slv.camp_dim_cycle_profile_scd2 cp
-      WHERE cp.cycle_key = b.cycle_key
-        AND cp.is_current = true
-        AND cp.is_valid = true
-      ORDER BY cp.valid_from DESC NULLS LAST
-      LIMIT 1
-    ) profile ON true
-    ORDER BY b.cycle_key, b.event_date
+    SELECT * FROM filtered
+    ORDER BY cycle_key, event_date
   `;
   const result = await query<RawStatsRow>(sql, [dateFrom, dateTo, blocksParam, cyclesParam]);
   return result.rows;
@@ -458,50 +482,70 @@ async function queryStatsFromRangesCur(
         AND ($3::text[] IS NULL OR parent_block = ANY($3::text[]))
         AND ($4::text[] IS NULL OR cycle_key = ANY($4::text[]))
       ORDER BY event_date, cycle_key, event_at DESC
+    ),
+    filtered AS (
+      SELECT
+        s.event_date,
+        s.cycle_key,
+        s.parent_block,
+        s.block_id,
+        s.mean,
+        s.median,
+        s.sd,
+        s.iqr,
+        s.mad,
+        s.r_siqr,
+        s.r_smad,
+        s.cv,
+        s.r_cviqr,
+        s.r_cvmad,
+        s.p10,
+        s.p25,
+        s.p75,
+        s.p90,
+        s.bowley_v1,
+        s.bowley_v2,
+        s.fisher,
+        s.gini,
+        s.entropy_norm,
+        to_char(profile.sp_date, 'YYYY-MM-DD') AS sp_date,
+        profile.sp_type,
+        profile.variety,
+        profile.area_id,
+        to_char(profile.harvest_start_date, 'YYYY-MM-DD') AS harvest_start_date,
+        to_char(profile.harvest_end_date, 'YYYY-MM-DD') AS harvest_end_date,
+        CASE
+          WHEN profile.sp_date IS NULL THEN NULL
+          ELSE (s.event_date::date - profile.sp_date + 1)::int
+        END AS vegetative_day
+      FROM stats s
+      LEFT JOIN LATERAL (
+        SELECT
+          cp.sp_date,
+          cp.sp_type,
+          cp.variety,
+          cp.area_id,
+          cp.harvest_start_date,
+          cp.harvest_end_date
+        FROM slv.camp_dim_cycle_profile_scd2 cp
+        WHERE cp.cycle_key = s.cycle_key
+          AND cp.is_valid = true
+        ORDER BY cp.valid_from DESC NULLS LAST
+        LIMIT 1
+      ) profile ON true
+      WHERE
+        profile.sp_date IS NULL
+        OR (
+          s.event_date::date >= profile.sp_date
+          AND s.event_date::date <= COALESCE(
+            profile.harvest_end_date,
+            profile.harvest_start_date + INTERVAL '180 days',
+            CURRENT_DATE
+          )::date
+        )
     )
-    SELECT
-      s.event_date,
-      s.cycle_key,
-      s.parent_block,
-      s.block_id,
-      s.mean,
-      s.median,
-      s.sd,
-      s.iqr,
-      s.mad,
-      s.r_siqr,
-      s.r_smad,
-      s.cv,
-      s.r_cviqr,
-      s.r_cvmad,
-      s.p10,
-      s.p25,
-      s.p75,
-      s.p90,
-      s.bowley_v1,
-      s.bowley_v2,
-      s.fisher,
-      s.gini,
-      s.entropy_norm,
-      to_char(profile.sp_date, 'YYYY-MM-DD') AS sp_date,
-      profile.sp_type,
-      profile.variety,
-      profile.area_id,
-      CASE
-        WHEN profile.sp_date IS NULL THEN NULL
-        ELSE (s.event_date::date - profile.sp_date + 1)::int
-      END AS vegetative_day
-    FROM stats s
-    LEFT JOIN LATERAL (
-      SELECT cp.sp_date, cp.sp_type, cp.variety, cp.area_id
-      FROM slv.camp_dim_cycle_profile_scd2 cp
-      WHERE cp.cycle_key = s.cycle_key
-        AND cp.is_current = true
-        AND cp.is_valid = true
-      ORDER BY cp.valid_from DESC NULLS LAST
-      LIMIT 1
-    ) profile ON true
-    ORDER BY s.cycle_key, s.event_date
+    SELECT * FROM filtered
+    ORDER BY cycle_key, event_date
   `;
   const result = await query<RawStatsRow>(sql, [dateFrom, dateTo, blocksParam, cyclesParam]);
   return result.rows;
@@ -532,6 +576,8 @@ function mapRawStats(raw: RawStatsRow): AlturasDronStatsRow {
     spType: raw.sp_type,
     areaId: raw.area_id,
     spDate: raw.sp_date,
+    harvestStartDate: raw.harvest_start_date,
+    harvestEndDate: raw.harvest_end_date,
     vegetativeDay: toIntOrNull(raw.vegetative_day),
     mean: toFloatRequired(raw.mean),
     median: toFloat(raw.median),
@@ -573,6 +619,7 @@ export async function getAlturasDronData(
 
     // Ranges: todas las fechas del rango (para histograma con scrubber).
     // Agrega JOIN LATERAL a scd2 para obtener sp_date → vegetative_day.
+    // Solo incluye mediciones dentro del ciclo (event_date >= sp_date y <= harvest_end_date).
     const rangesSql = `
       SELECT
         to_char(r.event_date::date, 'YYYY-MM-DD') AS event_date,
@@ -583,10 +630,12 @@ export async function getAlturasDronData(
         r.dist_prc::float8 AS dist_prc
       FROM slv.camp_fact_drone_height_ranges_cur r
       LEFT JOIN LATERAL (
-        SELECT cp.sp_date
+        SELECT
+          cp.sp_date,
+          cp.harvest_start_date,
+          cp.harvest_end_date
         FROM slv.camp_dim_cycle_profile_scd2 cp
         WHERE cp.cycle_key = r.cycle_key
-          AND cp.is_current = true
           AND cp.is_valid = true
         ORDER BY cp.valid_from DESC NULLS LAST
         LIMIT 1
@@ -594,6 +643,17 @@ export async function getAlturasDronData(
       WHERE r.event_date BETWEEN $1::date AND $2::date
         AND ($3::text[] IS NULL OR r.parent_block = ANY($3::text[]))
         AND ($4::text[] IS NULL OR r.cycle_key = ANY($4::text[]))
+        AND (
+          profile.sp_date IS NULL
+          OR (
+            r.event_date::date >= profile.sp_date
+            AND r.event_date::date <= COALESCE(
+              profile.harvest_end_date,
+              profile.harvest_start_date + INTERVAL '180 days',
+              CURRENT_DATE
+            )::date
+          )
+        )
       ORDER BY r.cycle_key, r.event_date, r.altura_m
     `;
 

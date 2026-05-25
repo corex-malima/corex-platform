@@ -21,6 +21,8 @@ function makeRow(overrides: Partial<AlturasDronStatsRow> = {}): AlturasDronStats
     spType: "P2",
     areaId: "A1",
     spDate: "2023-10-01",
+    harvestStartDate: null,
+    harvestEndDate: null,
     vegetativeDay: 101,
     mean: 1.5,
     median: 1.45,
