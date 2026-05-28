@@ -242,7 +242,9 @@ function BasicSection({ detail }: { detail: CollaboratorDetailPayload }) {
 }
 
 function MedicalSection({ personId, fallbackName }: { personId: string; fallbackName: string }) {
-  return <PersonMedicalPanel personId={personId} fallbackName={fallbackName} />;
+  // source="colaboradores" hace que el endpoint exija
+  // panel:tthh.collaborators.medical (granularidad por contexto).
+  return <PersonMedicalPanel personId={personId} fallbackName={fallbackName} source="colaboradores" />;
 }
 
 function ExitsSection({ rows }: { rows: NonNullable<CollaboratorDetailPayload["exits"]> }) {

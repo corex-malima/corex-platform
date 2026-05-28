@@ -26,12 +26,13 @@ type MarkerTrendPoint = {
   marker: MedicalExamMarker;
 };
 
-function buildMedicalPersonRequest(personId: string) {
-  return [
-    `/api/medical/person/${encodeURIComponent(personId)}`,
-    "No se pudo cargar la ficha medica del personal.",
-  ] as const;
+function buildMedicalPersonRequest(personId: string, source?: MedicalSource) {
+  const base = `/api/medical/person/${encodeURIComponent(personId)}`;
+  const url = source ? `${base}?source=${encodeURIComponent(source)}` : base;
+  return [url, "No se pudo cargar la ficha medica del personal."] as const;
 }
+
+export type MedicalSource = "fenograma" | "colaboradores";
 
 async function medicalFetcher<T>([url, fallbackMessage]: readonly [string, string]) {
   return fetchJson<T>(url, fallbackMessage);
@@ -431,11 +432,19 @@ function MedicalMarkerOverlay({
 export function PersonMedicalPanel({
   personId,
   fallbackName,
+  source,
 }: {
   personId: string;
   fallbackName: string;
+  /**
+   * Contexto desde el que se invoca el panel. Se propaga al endpoint
+   * `/api/medical/person/[id]?source=...` para que el handler valide el
+   * panel RBAC correspondiente (panel:tthh.collaborators.medical si
+   * "colaboradores", panel:person-sheet.medical si "fenograma" o ausente).
+   */
+  source?: MedicalSource;
 }) {
-  const request = useMemo(() => buildMedicalPersonRequest(personId), [personId]);
+  const request = useMemo(() => buildMedicalPersonRequest(personId, source), [personId, source]);
   const {
     data,
     error,
