@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
       spType: request.nextUrl.searchParams.get("spType") ?? undefined,
       startWeek: request.nextUrl.searchParams.get("startWeek") ?? undefined,
       endWeek: request.nextUrl.searchParams.get("endWeek") ?? undefined,
+      whiteBoxesBasis: request.nextUrl.searchParams.get("whiteBoxesBasis") ?? undefined,
     });
     const data = await getFenogramaDashboardData(filters);
 

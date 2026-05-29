@@ -14,6 +14,7 @@ import type {
   FenogramaMetric,
   FenogramaMetricMeta,
   FenogramaWeekMetricValues,
+  FenogramaWhiteBoxesBasis,
   BlockModalRow,
   FenogramaPivotRow,
   FenogramaWeeklyTotal,
@@ -37,6 +38,10 @@ import type {
   CycleLaborPersonProfile,
   CycleLaborPersonActivityTypeSummary,
   CycleLaborPersonDetailPayload,
+} from "@/lib/fenograma-types";
+import {
+  FENOGRAMA_WHITE_BOXES_BASIS_DEFAULT,
+  isValidWhiteBoxesBasis,
 } from "@/lib/fenograma-types";
 
 export type {
@@ -618,6 +623,8 @@ function serializeFilters(filters: FenogramaFilters) {
     filters.spType,
     filters.startWeek,
     filters.endWeek,
+    // whiteBoxesBasis afecta el SQL del query → debe formar parte del cache key.
+    filters.whiteBoxesBasis ?? FENOGRAMA_WHITE_BOXES_BASIS_DEFAULT,
   ].join("|");
 }
 
@@ -960,6 +967,12 @@ async function getBedProfiles(
 export function normalizeFenogramaFilters(
   input: Partial<Record<keyof FenogramaFilters, string | boolean | number | undefined>> = {},
 ): FenogramaFilters {
+  // whiteBoxesBasis: valida con guard y cae a default si invalid/missing.
+  const rawBasis =
+    typeof input.whiteBoxesBasis === "string" ? input.whiteBoxesBasis : undefined;
+  const whiteBoxesBasis: FenogramaWhiteBoxesBasis = isValidWhiteBoxesBasis(rawBasis)
+    ? rawBasis
+    : FENOGRAMA_WHITE_BOXES_BASIS_DEFAULT;
   return {
     includeActive: parseBoolean(
       typeof input.includeActive === "boolean" || typeof input.includeActive === "string"
@@ -984,6 +997,7 @@ export function normalizeFenogramaFilters(
     spType: parseSelectValue(typeof input.spType === "string" ? input.spType : undefined),
     startWeek: parseWeekFilter(typeof input.startWeek === "string" ? input.startWeek : undefined),
     endWeek: parseWeekFilter(typeof input.endWeek === "string" ? input.endWeek : undefined),
+    whiteBoxesBasis,
   };
 }
 
@@ -1048,43 +1062,103 @@ export async function getFenogramaDashboardData(
     async () => {
       const { whereClause, values } = buildWhereClause(filters);
       const optionsPromise = getFenogramaFilterOptions();
+      // Inyección de la base de fecha para cajas blanco.
+      // basis=event_date → JOIN canon contra event_date.
+      // basis=post_event_at → JOIN contra post_event_at::date.
+      const basis: FenogramaWhiteBoxesBasis =
+        filters.whiteBoxesBasis ?? FENOGRAMA_WHITE_BOXES_BASIS_DEFAULT;
+      const whiteDateColumn = basis === "post_event_at" ? "e.post_date" : "e.event_date";
+      const whiteDateJoin = `join slv.common_dim_calendar_date_scd0 cal
+              on cal.calendar_date = ${whiteDateColumn}`;
+      const whiteDateNotNullClause = `where ${whiteDateColumn} is not null`;
       const result = await query<FenogramaQueryRow>(
         `
-          with cycle_weeks as (
-            -- Union de TODAS las (cycle_key, iso_week_id) que existen en cualquiera
-            -- de las 3 MVs (fenograma, productivity_green, productivity_post).
-            -- Esto recupera kg verde / kg blanco "huerfanos": ciclos cuyo POST
-            -- (balanza) o GREEN cae en una iso_week posterior al ultimo corte
-            -- de tallos. Antes el LEFT JOIN partia desde fenograma y los perdia.
-            select cycle_key, iso_week_id from ${FENOGRAMA_SOURCE}
-            union
-            select cycle_key, iso_week_id from gld.mv_prod_productivity_green_cur
-            union
-            select cycle_key, iso_week_id from gld.mv_prod_productivity_post_cur
-          ),
-          mv_unified as (
-            -- Reconstruye el alias "mv" con todas las columnas que AREA_SQL,
-            -- AREA_ALIAS_SQL y buildWhereClause esperan. Para los huerfanos
-            -- (sin fila en fenograma), las dimensiones vienen del SCD2 del ciclo.
+          with raw_post as (
+            -- Fuente RAW canon: mdl.prod_fact_ml2_operational_subset_cur (5M+ filas).
+            -- Mismos filtros que aplican las views gld.vw_prod_*_cur.
             select
-              cw.cycle_key,
-              cw.iso_week_id,
-              coalesce(fen.parent_block, cp.parent_block) as parent_block,
-              coalesce(nullif(fen.variety, ''), nullif(cp.variety, '')) as variety,
-              coalesce(nullif(fen.sp_type, ''), nullif(cp.sp_type, '')) as sp_type,
-              coalesce(fen.sp_date,            cp.sp_date)            as sp_date,
-              coalesce(fen.harvest_start_date, cp.harvest_start_date) as harvest_start_date,
-              coalesce(fen.harvest_end_date,   cp.harvest_end_date)   as harvest_end_date,
-              fen.stems_count
-            from cycle_weeks cw
-            left join ${FENOGRAMA_SOURCE} fen
-              on fen.cycle_key   = cw.cycle_key
-              and fen.iso_week_id = cw.iso_week_id
+              event_id            as grain_row_id,
+              model_cycle_id      as cycle_key,
+              event_date,
+              post_event_at::date as post_date,
+              post_stems,
+              green_weight_kg,
+              post_weight_kg
+            from mdl.prod_fact_ml2_operational_subset_cur
+            where is_valid = true
+              and model_stage = 'POST'
+              and model_cycle_id is not null
+              and event_date is not null
+          ),
+          event_agg as (
+            -- Dedup canon: MAX por grain_row_id (event_id) para que las 3 destinations
+            -- (BLANCO / TINTURADO / ARCOIRIS) no tripliquen valores. Replica el
+            -- "GROUP BY grain_row_id ... MAX(...)" de gld.vw_prod_*_cur.
+            select
+              grain_row_id,
+              cycle_key,
+              max(event_date)        as event_date,
+              max(post_date)         as post_date,
+              max(post_stems)        as post_stems,
+              max(green_weight_kg)   as green_weight_kg,
+              max(post_weight_kg)    as post_weight_kg
+            from raw_post
+            group by grain_row_id, cycle_key
+          ),
+          agg_stems_green as (
+            -- Tallos + cajas verde SIEMPRE por event_date (semana del corte).
+            -- iso_week_id viene del calendario canon (slv.common_dim_calendar_date_scd0).
+            select
+              e.cycle_key,
+              cal.iso_week_id,
+              sum(e.post_stems)       as stems_count,
+              sum(e.green_weight_kg)  as green_weight_kg
+            from event_agg e
+            join slv.common_dim_calendar_date_scd0 cal
+              on cal.calendar_date = e.event_date
+            where e.event_date is not null
+            group by e.cycle_key, cal.iso_week_id
+          ),
+          agg_white as (
+            -- Cajas blanco — fecha base segun whiteBoxesBasis:
+            --   event_date     (default): semana del corte (alineado con tallos+verde)
+            --   post_event_at: semana del procesado en balanza (canon legacy)
+            select
+              e.cycle_key,
+              cal.iso_week_id,
+              sum(e.post_weight_kg) as post_weight_kg
+            from event_agg e
+            ${whiteDateJoin}
+            ${whiteDateNotNullClause}
+            group by e.cycle_key, cal.iso_week_id
+          ),
+          mv as (
+            -- FULL OUTER JOIN: preserva claves que existen solo en uno de los dos lados.
+            -- Cuando basis = post_event_at y un ciclo tiene blanco procesado en una
+            -- semana donde NO corto tallos, el FULL OUTER JOIN incluye la fila
+            -- con stems=0, green=0 y blanco>0. SCD2 LATERAL aporta las dimensiones.
+            select
+              coalesce(sg.cycle_key, w.cycle_key)         as cycle_key,
+              coalesce(sg.iso_week_id, w.iso_week_id)     as iso_week_id,
+              coalesce(sg.stems_count, 0)     as stems_count,
+              coalesce(sg.green_weight_kg, 0) as green_weight_kg,
+              coalesce(w.post_weight_kg, 0)   as post_weight_kg,
+              coalesce(cp.parent_block, '')   as parent_block,
+              cp.variety,
+              cp.sp_type,
+              cp.sp_date,
+              cp.harvest_start_date,
+              cp.harvest_end_date
+            from agg_stems_green sg
+            full outer join agg_white w
+              on w.cycle_key = sg.cycle_key
+             and w.iso_week_id = sg.iso_week_id
             left join lateral (
               select parent_block, variety, sp_type,
                      sp_date, harvest_start_date, harvest_end_date
               from slv.camp_dim_cycle_profile_scd2
-              where cycle_key = cw.cycle_key
+              where cycle_key = coalesce(sg.cycle_key, w.cycle_key)
+                and is_valid = true
               order by valid_from desc nulls last
               limit 1
             ) cp on true
@@ -1096,35 +1170,19 @@ export async function getFenogramaDashboardData(
               nullif(mv.parent_block, '') as block,
               nullif(mv.variety, '') as variety,
               nullif(mv.sp_type, '') as sp_type,
-              to_char(coalesce(cp_dates.cp_sp_date, mv.sp_date), 'YYYY-MM-DD') as sp_date,
-              to_char(coalesce(cp_dates.cp_harvest_start_date, mv.harvest_start_date), 'YYYY-MM-DD') as harvest_start_date,
-              to_char(coalesce(cp_dates.cp_harvest_end_date, mv.harvest_end_date), 'YYYY-MM-DD') as harvest_end_date,
+              to_char(mv.sp_date,             'YYYY-MM-DD') as sp_date,
+              to_char(mv.harvest_start_date,  'YYYY-MM-DD') as harvest_start_date,
+              to_char(mv.harvest_end_date,    'YYYY-MM-DD') as harvest_end_date,
               case
                 when mv.sp_date >= current_date then 'planned'
                 when coalesce(mv.harvest_end_date, mv.harvest_start_date, mv.sp_date) >= current_date then 'active'
                 else 'history'
               end as lifecycle_status,
               mv.iso_week_id,
-              coalesce(mv.stems_count, 0)        as stems_count,
-              coalesce(prg.green_weight_kg, 0)   as green_weight_kg,
-              coalesce(prp.post_weight_kg, 0)    as post_weight_kg
-            from mv_unified mv
-            left join gld.mv_prod_productivity_green_cur prg
-              on prg.cycle_key   = mv.cycle_key
-              and prg.iso_week_id = mv.iso_week_id
-            left join gld.mv_prod_productivity_post_cur prp
-              on prp.cycle_key   = mv.cycle_key
-              and prp.iso_week_id = mv.iso_week_id
-            left join lateral (
-              select
-                sp_date           as cp_sp_date,
-                harvest_start_date as cp_harvest_start_date,
-                harvest_end_date   as cp_harvest_end_date
-              from slv.camp_dim_cycle_profile_scd2 cp2
-              where cp2.cycle_key = mv.cycle_key
-              order by cp2.valid_from desc nulls last
-              limit 1
-            ) cp_dates on true
+              mv.stems_count,
+              mv.green_weight_kg,
+              mv.post_weight_kg
+            from mv
             ${whereClause}
           )
           select

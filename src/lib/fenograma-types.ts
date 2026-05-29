@@ -12,7 +12,43 @@ export type FenogramaFilters = {
   spType: string;
   startWeek: string;
   endWeek: string;
+  /**
+   * Solo aplica cuando la métrica activa es `whiteBoxes`.
+   * - "event_date": agrupar cajas blanco por la semana del corte de tallos (canon coherente con tallos y verde).
+   * - "post_event_at": agrupar cajas blanco por la semana del procesado en balanza (canon legacy de gld.mv_prod_productivity_post_cur).
+   * Default: "event_date".
+   */
+  whiteBoxesBasis?: FenogramaWhiteBoxesBasis;
 };
+
+/**
+ * Base de fecha para asignar `iso_week_id` al campo `whiteBoxes` (cajas blanco)
+ * en el query del Fenograma.
+ *
+ * Las otras métricas (tallos, cajas verde, peso/tallo) SIEMPRE agrupan por
+ * `event_date` (semana del corte). Solo cajas blanco soporta el toggle.
+ */
+export type FenogramaWhiteBoxesBasis = "event_date" | "post_event_at";
+
+export const FENOGRAMA_WHITE_BOXES_BASIS_DEFAULT: FenogramaWhiteBoxesBasis = "event_date";
+
+export const WHITE_BOXES_BASIS_META: Record<
+  FenogramaWhiteBoxesBasis,
+  { label: string; hint: string }
+> = {
+  event_date: {
+    label: "Fecha corte",
+    hint: "Semana del corte de tallos — coherente con tallos y cajas verde",
+  },
+  post_event_at: {
+    label: "Fecha balanza",
+    hint: "Semana del procesado en balanza (post_event_at) — canon de productividad POST",
+  },
+};
+
+export function isValidWhiteBoxesBasis(value: unknown): value is FenogramaWhiteBoxesBasis {
+  return value === "event_date" || value === "post_event_at";
+}
 
 export type BlockModalRow = {
   block: string;

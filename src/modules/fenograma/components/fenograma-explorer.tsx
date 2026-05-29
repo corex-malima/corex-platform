@@ -11,6 +11,7 @@ import { useBlockProfileModal } from "@/hooks/use-block-profile-modal";
 import { FenogramaMetricSelector } from "@/modules/fenograma/components/fenograma-metric-selector";
 import { FenogramaPivotTable } from "@/modules/fenograma/components/fenograma-pivot-table";
 import { FenogramaWeeklyBarsChart } from "@/modules/fenograma/components/fenograma-weekly-bars-chart";
+import { FenogramaWhiteBoxesBasisToggle } from "@/modules/fenograma/components/fenograma-white-boxes-basis-toggle";
 import { Button } from "@/shared/ui/button";
 import { formatDate, formatInteger, formatIsoWeekLabel } from "@/shared/lib/format";
 import { MultiSelectField } from "@/shared/filters/multi-select-field";
@@ -22,7 +23,12 @@ import { SingleSelectField } from "@/shared/filters/single-select-field";
 import { ToggleChipGroup } from "@/shared/filters/toggle-chip-group";
 import { EmptyState } from "@/shared/data-display/empty-state";
 import { fetchJson } from "@/lib/fetch-json";
-import { FENOGRAMA_METRIC_DEFAULT, type FenogramaMetric } from "@/lib/fenograma-types";
+import {
+  FENOGRAMA_METRIC_DEFAULT,
+  FENOGRAMA_WHITE_BOXES_BASIS_DEFAULT,
+  type FenogramaMetric,
+  type FenogramaWhiteBoxesBasis,
+} from "@/lib/fenograma-types";
 import type {
   FenogramaDashboardData,
   FenogramaFilters,
@@ -33,7 +39,7 @@ import type {
 const fenogramaFetcher = (url: string) =>
   fetchJson<FenogramaDashboardData>(url, "No se pudo filtrar el fenograma.");
 
-function buildQueryString(filters: FenogramaFilters) {
+function buildQueryString(filters: FenogramaFilters, metric: FenogramaMetric) {
   const params = new URLSearchParams();
   params.set("includeActive", String(filters.includeActive));
   params.set("includePlanned", String(filters.includePlanned));
@@ -43,6 +49,12 @@ function buildQueryString(filters: FenogramaFilters) {
   params.set("spType", filters.spType);
   params.set("startWeek", filters.startWeek);
   params.set("endWeek", filters.endWeek);
+  // El backend SOLO cambia el SQL de cajas blanco según basis. Para que el
+  // cache SWR no se fragmente cuando el usuario navega otras métricas,
+  // propagamos el parámetro únicamente cuando whiteBoxes está activo.
+  if (metric === "whiteBoxes" && filters.whiteBoxesBasis) {
+    params.set("whiteBoxesBasis", filters.whiteBoxesBasis);
+  }
   return params.toString();
 }
 
@@ -68,9 +80,26 @@ export function FenogramaExplorer({ initialData }: { initialData: FenogramaDashb
    * de los filtros. La métrica activa se propaga a tabla y chart.
    */
   const [metric, setMetric] = useState<FenogramaMetric>(FENOGRAMA_METRIC_DEFAULT);
+  /**
+   * Sub-toggle aplicable únicamente cuando `metric === "whiteBoxes"`.
+   * Controla la base de fecha del agrupamiento de cajas blanco:
+   * - "event_date"    (default) → semana del corte de tallos.
+   * - "post_event_at"           → semana del procesado en balanza.
+   *
+   * Tampoco se resetea con `Restablecer` (mismo patrón que `metric`).
+   */
+  const [whiteBoxesBasis, setWhiteBoxesBasis] = useState<FenogramaWhiteBoxesBasis>(
+    FENOGRAMA_WHITE_BOXES_BASIS_DEFAULT,
+  );
   const deferredFilters = useDeferredValue(filters);
-  const initialFilterKey = useMemo(() => buildQueryString(initialData.filters), [initialData.filters]);
-  const filterKey = useMemo(() => buildQueryString(deferredFilters), [deferredFilters]);
+  const initialFilterKey = useMemo(
+    () => buildQueryString(initialData.filters, FENOGRAMA_METRIC_DEFAULT),
+    [initialData.filters],
+  );
+  const filterKey = useMemo(
+    () => buildQueryString({ ...deferredFilters, whiteBoxesBasis }, metric),
+    [deferredFilters, whiteBoxesBasis, metric],
+  );
   const {
     data: dashboardData,
     error: dashboardError,
@@ -128,7 +157,17 @@ export function FenogramaExplorer({ initialData }: { initialData: FenogramaDashb
         title="Fenograma"
         subtitle="Pivot semanal por dimensiones con rango manual, estados operativos y apertura a la ficha completa del ciclo."
         icon={<Sprout className="size-6" aria-hidden="true" />}
-        actions={<FenogramaMetricSelector value={metric} onChange={setMetric} />}
+        actions={(
+          <div className="flex flex-wrap items-center gap-3">
+            <FenogramaMetricSelector value={metric} onChange={setMetric} />
+            {metric === "whiteBoxes" ? (
+              <FenogramaWhiteBoxesBasisToggle
+                value={whiteBoxesBasis}
+                onChange={setWhiteBoxesBasis}
+              />
+            ) : null}
+          </div>
+        )}
       >
         <FilterPanel>
           <ToggleChipGroup
