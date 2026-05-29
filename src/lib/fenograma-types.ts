@@ -37,8 +37,8 @@ export const WHITE_BOXES_BASIS_META: Record<
   { label: string; hint: string }
 > = {
   event_date: {
-    label: "Fecha corte",
-    hint: "Semana del corte de tallos — coherente con tallos y cajas verde",
+    label: "Fecha cosecha",
+    hint: "Semana de la cosecha (event_date) — coherente con tallos y cajas verde",
   },
   post_event_at: {
     label: "Fecha balanza",
