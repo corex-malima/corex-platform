@@ -1050,7 +1050,46 @@ export async function getFenogramaDashboardData(
       const optionsPromise = getFenogramaFilterOptions();
       const result = await query<FenogramaQueryRow>(
         `
-          with filtered as (
+          with cycle_weeks as (
+            -- Union de TODAS las (cycle_key, iso_week_id) que existen en cualquiera
+            -- de las 3 MVs (fenograma, productivity_green, productivity_post).
+            -- Esto recupera kg verde / kg blanco "huerfanos": ciclos cuyo POST
+            -- (balanza) o GREEN cae en una iso_week posterior al ultimo corte
+            -- de tallos. Antes el LEFT JOIN partia desde fenograma y los perdia.
+            select cycle_key, iso_week_id from ${FENOGRAMA_SOURCE}
+            union
+            select cycle_key, iso_week_id from gld.mv_prod_productivity_green_cur
+            union
+            select cycle_key, iso_week_id from gld.mv_prod_productivity_post_cur
+          ),
+          mv_unified as (
+            -- Reconstruye el alias "mv" con todas las columnas que AREA_SQL,
+            -- AREA_ALIAS_SQL y buildWhereClause esperan. Para los huerfanos
+            -- (sin fila en fenograma), las dimensiones vienen del SCD2 del ciclo.
+            select
+              cw.cycle_key,
+              cw.iso_week_id,
+              coalesce(fen.parent_block, cp.parent_block) as parent_block,
+              coalesce(nullif(fen.variety, ''), nullif(cp.variety, '')) as variety,
+              coalesce(nullif(fen.sp_type, ''), nullif(cp.sp_type, '')) as sp_type,
+              coalesce(fen.sp_date,            cp.sp_date)            as sp_date,
+              coalesce(fen.harvest_start_date, cp.harvest_start_date) as harvest_start_date,
+              coalesce(fen.harvest_end_date,   cp.harvest_end_date)   as harvest_end_date,
+              fen.stems_count
+            from cycle_weeks cw
+            left join ${FENOGRAMA_SOURCE} fen
+              on fen.cycle_key   = cw.cycle_key
+              and fen.iso_week_id = cw.iso_week_id
+            left join lateral (
+              select parent_block, variety, sp_type,
+                     sp_date, harvest_start_date, harvest_end_date
+              from slv.camp_dim_cycle_profile_scd2
+              where cycle_key = cw.cycle_key
+              order by valid_from desc nulls last
+              limit 1
+            ) cp on true
+          ),
+          filtered as (
             select
               nullif(mv.cycle_key, '') as cycle_key,
               ${AREA_SQL} as area,
@@ -1069,7 +1108,7 @@ export async function getFenogramaDashboardData(
               coalesce(mv.stems_count, 0)        as stems_count,
               coalesce(prg.green_weight_kg, 0)   as green_weight_kg,
               coalesce(prp.post_weight_kg, 0)    as post_weight_kg
-            from ${FENOGRAMA_SOURCE} mv
+            from mv_unified mv
             left join gld.mv_prod_productivity_green_cur prg
               on prg.cycle_key   = mv.cycle_key
               and prg.iso_week_id = mv.iso_week_id
