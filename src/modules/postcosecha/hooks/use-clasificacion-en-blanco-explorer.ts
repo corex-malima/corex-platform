@@ -25,7 +25,7 @@ import {
   POSCOSECHA_CLASIFICACION_RUN_MODES,
   SOLVER_DATE_KEYS,
 } from "@/lib/postcosecha-clasificacion-en-blanco-types";
-import { buildRecipeInput, orderTotal, toFloat, toInteger } from "@/modules/postcosecha/components/solver-utils";
+import { buildRecipeInputFromResult, orderTotal, toFloat, toInteger } from "@/modules/postcosecha/components/solver-utils";
 import {
   buildHydratedDraftState,
   clearSolverDraft,
@@ -364,15 +364,19 @@ export function useClasificacionEnBlancoExplorer(
   }
 
   async function handleOpenRecipe(sku: string) {
+    const result = activeResult?.result;
     const orderRow = resultOrderRowsBySku.get(sku);
-    const netStemValues = netStemValuesBySku.get(sku);
 
-    if (!orderRow || !netStemValues) {
+    if (!result || !orderRow) {
       toast.error("No se encontro el detalle del SKU para construir la receta.");
       return;
     }
 
-    const recipePayload = buildRecipeInput(orderRow, netStemValues, availability);
+    // Fuente CANÓNICA: el mismo builder que usan las exportaciones PDF / XLSX,
+    // leyendo del snapshot del resultado (tallos netos + pesos seed que
+    // produjeron la solución). Garantiza que la receta visible coincida
+    // exactamente con la exportada.
+    const recipePayload = buildRecipeInputFromResult(result, orderRow);
     if (!recipePayload) {
       toast.error("El SKU seleccionado no tiene suficiente informacion para construir la receta.");
       return;
