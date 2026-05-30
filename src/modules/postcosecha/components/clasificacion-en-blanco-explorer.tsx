@@ -9,6 +9,7 @@ import type { PoscosechaClasificacionBootData } from "@/lib/postcosecha-clasific
 import { formatInteger, formatPercent } from "@/shared/lib/format";
 import { SolverInputsSection, SolverPrecheckSection } from "@/modules/postcosecha/components/solver-capture-sections";
 import { SolverExportPdfButton } from "@/modules/postcosecha/components/solver-export-pdf-button";
+import { SolverExportXlsxButton } from "@/modules/postcosecha/components/solver-export-xlsx-button";
 import { SolverLotSlotOverlay } from "@/modules/postcosecha/components/solver-lot-slot-overlay";
 import { SolverMetricTile } from "@/modules/postcosecha/components/solver-feedback-states";
 import { SolverModeSelector } from "@/modules/postcosecha/components/solver-mode-selector";
@@ -169,7 +170,12 @@ export function PoscosechaClasificacionEnBlancoExplorer({
         hasResult={resultBundle !== null}
         isResultStale={isResultStale}
         isRunning={isRunning}
-        exportAction={resultBundle ? <SolverExportPdfButton runs={resultBundle} /> : null}
+        exportAction={resultBundle ? (
+          <>
+            <SolverExportXlsxButton runs={resultBundle} />
+            <SolverExportPdfButton runs={resultBundle} />
+          </>
+        ) : null}
         onClearResults={clearResults}
         onRun={() => void handleRunSolver()}
       />
